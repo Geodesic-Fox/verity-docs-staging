@@ -2519,10 +2519,6 @@
    "honest": ["Pous.Claims.StreamedWipeMeetsDisk_meets"],
    "nontrivial": "Pous.Claims.StreamedWipeMeetsDisk_fails"
   },
-  "Pouw.SecurityProofs.OnsiteFreed": {
-   "nontrivial": "Pouw.SecurityProofs.OnsiteFreed_nontrivial",
-   "kind": "exclusion"
-  },
   "Pouw.SecurityProofs.Dither.FleetSound": {
    "honest": ["Pouw.SecurityProofs.Dither.FleetSound_honest"],
    "nontrivial": "Pouw.SecurityProofs.Dither.FleetSound_nontrivial"
