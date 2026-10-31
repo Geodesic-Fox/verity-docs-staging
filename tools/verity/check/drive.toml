@@ -41,6 +41,11 @@ after_landing_no_cache = false
 # "auto:MAX") runs it as the shard planner's N runs (`train.sh --shard auto`, `check.py --shard-plan` shows the plan): N the
 # fewest that reach the critical path, at most MAX (`shards.MAX_SHARDS`)
 after_landing_shards = 3
+# the task executor (`research.executor`): "off"; "shadow", each tip the after-landing run checks has its task graph (`verity tasks
+# list --json --kind after-landing`) enqueued too, at priority 1, and its verdicts compared with the run's, a record per tip
+# that `research queue shadow-report` prints; "on" (once 3 tips in a row agree fully) launches no run: the executor's verdicts
+# alone verify the tip, and `main` follows once every task passed
+executor = "off"
 # the most review-landing Lean checks running at once: one, and those stacked above it on `next` for Lean changes it doesn't hold
 max_lean_checks = 10
 # a sync merges PRs that change no Lean below Lean changes, so they don't wait for a Lean check (members on `next` never move)

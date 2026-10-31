@@ -99,6 +99,12 @@ waits on train.sh, which takes minutes to print a Lean check's run ids.  A later
 tick reads the ids from its log (`launched`, `_resolve`); until then the launch counts as running for every rule that counts
 running checks (the hold on `next`, `max_lean_checks`, the waits), and a train.sh that exits without them registered no run.
 
+The task executor (`research.executor`, drive.toml's `executor`): "shadow" lists the task graph of each tip an after-landing run
+checks (`verity tasks list --json --kind after-landing`, detached in a worktree of the tip: `list_tasks`), enqueues it at
+priority 1, and once the run ended and every task has a verdict records how they compare (`_follow_shadow`), changing nothing
+else; "on" launches no run: the executor's verdicts alone verify the tip (`_follow_tasks`), and `main` follows once every task
+passed.  A failed task marks the tip failed and is told to `CI`; no culprit is named or reverted from it yet.
+
 State (launches, refusals told) is the queue's `state.json`, under `drive`."""
 from __future__ import annotations
 
@@ -118,6 +124,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
+from .executor import (AFTER_LANDING_PRIORITY, FAIL, PENDING, SHADOW_WAIT_S, Executor, QueueTransport, check_id, compare,
+                       old_verdicts)
 from .queue import (IDENTITY, PR, Entry, Member, Queue, QueueError, StoreLabels,
                     _git, _out, built_on, changed, forces_cold, hold, lean_change, lean_hold, unreviewed)
 
@@ -297,6 +305,48 @@ def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None 
     return {"dir": d, "pid": p.pid}
 
 
+#: a tip's task graph (`list_tasks`): a worktree of the tip ($2) in the queue's clone, synced as a worker syncs (AGENTS.md),
+#: `verity tasks list` there to `graph.json` in the listing's directory ($1), the worktree removed after
+LIST_JOB = ('set -e; r=$PWD; t="$1/tree"; git worktree add -q --detach "$t" "$2"; trap \'cd "$r"; git worktree remove --force "$t"\' '
+            'EXIT; cd "$t"; uv run -q --frozen --all-packages --extra torch-cpu verity tasks list --json --kind after-landing '
+            '> "$1/graph.json"')
+
+
+def list_tasks(repo: Path, tip: str) -> dict:
+    """List ``tip``'s after-landing task graph in the background (`LIST_JOB`, `detach`), its venv kept between listings; the
+    record `listed_tasks` reads."""
+    root = Path(tempfile.gettempdir()) / LAUNCHES
+    root.mkdir(parents=True, exist_ok=True)
+    out = tempfile.mkdtemp(prefix="tasks-", dir=root)
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "UV_PROJECT_ENVIRONMENT": str(root / "tasks-venv")}
+    return {**detach(repo, ["sh", "-c", LIST_JOB, "sh", out, tip], env), "out": out}
+
+
+def listed_tasks(rec: dict) -> tuple[dict | None, str | None]:
+    """(the tasks/v1 graph a `list_tasks` listing wrote, None) once it exited 0; (None, why) once it failed or its process is
+    gone with no exit; (None, None) while it runs.  An ended listing's directories are removed."""
+    d, out = Path(rec["dir"]), Path(rec["out"])
+    if not (d / "rc").is_file():
+        try:
+            os.kill(int(rec["pid"]), 0)
+        except ProcessLookupError:
+            return None, "its process is gone with no exit written (a restart of the pod)"
+        except (PermissionError, ValueError, TypeError, KeyError):
+            pass
+        return None, None
+    try:
+        rc = (d / "rc").read_text().strip()
+        tail = (d / "log").read_text(errors="replace").strip()[-600:]
+        graph = json.loads((out / "graph.json").read_text()) if rc == "0" else None
+    except (OSError, ValueError) as e:
+        rc, tail, graph = "?", f"{type(e).__name__}: {e}", None
+    shutil.rmtree(d, ignore_errors=True)
+    shutil.rmtree(out, ignore_errors=True)
+    if isinstance(graph, dict) and graph.get("schema") == "tasks/v1":
+        return graph, None
+    return None, f"`verity tasks list` exited {rc}: {tail}"
+
+
 def shard_machines(on: str, n: int) -> list[str]:
     """Each of ``n`` shards' machines (train.sh's MACHINES) from ``on``'s: shard K gets every Nth from the Kth, so no machine is
     in two shards and each keeps `on`'s order; with fewer machines than shards, shard K gets the ((K-1) mod M)th of the M,
@@ -307,7 +357,8 @@ def shard_machines(on: str, n: int) -> list[str]:
 
 def _ids(rec: dict) -> str:
     """A launch record's run ids, for a message, while its train.sh runs detached too."""
-    return " ".join(rec.get("ids") or ()) or ("(launching)" if rec.get("launch") or rec.get("shards") else "(no run)")
+    return " ".join(rec.get("ids") or ()) or ("(launching)" if rec.get("launch") or rec.get("shards") else
+                                              "(the executor)" if rec.get("tasks") else "(no run)")
 
 
 def launched(launch: dict) -> tuple[list[str] | None, str]:
@@ -749,8 +800,13 @@ class Driver:
                  ready_by: Callable[[int, str], str | None] | None = None, max_lean_checks: int = 2,
                  stale_days: int = 0, stale_close_days: int = 0, stale_keep: tuple[int, ...] = (),
                  after_landing_shards: int | str = 1, lowrisk_lane: bool = False, lowrisk_per_tick: int = 20,
-                 lowrisk_excludes: tuple[str, ...] = ()):
+                 lowrisk_excludes: tuple[str, ...] = (), executor: str = "off", tasks: Executor | None = None):
         self.q, self.on = q, on
+        #: drive.toml's `executor`: "off", "shadow" (beside the after-landing run: `_follow_shadow`) or "on" (in its place:
+        #: `_follow_tasks`); ``tasks``, the executor (default: infra's queue, `QueueTransport`), and how a tip's graph is listed
+        self.executor, self._tasks = executor, tasks
+        self.list_tasks: Callable[[Path, str], dict] = list_tasks
+        self.listed_tasks: Callable[[dict], tuple[dict | None, str | None]] = listed_tasks
         #: drive.toml's low-risk lane (`land_lowrisk`): on, its most landings a tick, and what keeps a change off it (`lowrisk`)
         self.lowrisk_lane, self.lowrisk_per_tick, self.lowrisk_excludes = lowrisk_lane, lowrisk_per_tick, lowrisk_excludes
         #: the after-landing run as this many runs at once, shard K of ci.toml's plan with N shards each, or "auto[:MAX]", the
@@ -792,6 +848,12 @@ class Driver:
         self.launch, self.states, self.post, self.now, self.cancel, self.evidence = launch, states, post, now, cancel, evidence
         self.repo, self.dry_run, self._seen, self._prs, self._ev = q.workdir, False, {}, None, {}
         self._drive: dict | None = None
+
+    @property
+    def tasks(self) -> Executor:
+        if self._tasks is None:
+            self._tasks = Executor(QueueTransport(self.q.store))
+        return self._tasks
 
     # -- what the store says of a commit
 
@@ -923,6 +985,9 @@ class Driver:
         `CI`, and launched again."""
         if not (pl := drive.get("postland")) or not (run := pl.get("run")):
             return
+        if "tasks" in run:
+            self._follow_tasks(drive, pl, run)
+            return
         if run.get("shards") and not self._shards_launched(drive, pl, run):
             return
         if (tail := self._resolve(run, f"the post-landing run of `{self.q.into}` {run['tip'][:12]}")) is not None:
@@ -953,6 +1018,7 @@ class Driver:
         if not early and self._every_shard(run, states, lambda rc: rc == 0):
             pl["run"] = None
             self._gate_passed(pl, run)
+            self._shadow_old(drive, run)
             if unrun := self._unrun(run["ids"], [s for s in pl.get("steps") or AFTER_LANDING if s not in run.get("skip", ())]):
                 if run.get("baseline"):
                     self._red_baseline(drive, pl, run, f"it passed without passing {', '.join(unrun)}")
@@ -993,7 +1059,142 @@ class Driver:
                                       for _, rc, *_ in states.values())
         self._gate_passed(pl, run)
         self._postland_failed(drive, pl, run, why, signalled)
+        if not pl.get("resend"):
+            self._shadow_old(drive, run)
         pl["run"] = None
+
+    # -- the task executor (`research.executor`): `drive["executor"]` {tip: {"at", "listing": a `list_tasks` record while it
+    #    lists, "keys": {task id: key}, "check", "enqueued", "old": the run's verdicts by part, "run": its ids}}, in shadow mode;
+    #    in "on" mode the after-landing run's record is {"tip", "at", "tasks": {"listing" | "keys", "check"}, ...}
+
+    def _listed(self, tip: str, listing: dict) -> tuple[dict | None, str | None]:
+        """`listed_tasks`, a graph of another commit than ``tip`` refused."""
+        graph, why = self.listed_tasks(listing)
+        if graph is not None and graph.get("commit") != tip:
+            return None, f"it lists commit {graph.get('commit')}, not {tip}"
+        return graph, why
+
+    def _shadow_list(self, drive: dict, tip: str) -> None:
+        """`executor = "shadow"`: list ``tip``'s task graph beside its after-landing run, once."""
+        if self.executor == "shadow" and tip not in (tips := drive.setdefault("executor", {})):
+            tips[tip] = {"at": self.now(), "listing": self.list_tasks(self.repo, tip)}
+
+    def _shadow_old(self, drive: dict, run: dict) -> None:
+        """The after-landing run of a shadowed tip ended: its verdicts by part (`executor.old_verdicts`)."""
+        if (rec := (drive.get("executor") or {}).get(run["tip"])) is not None and "old" not in rec:
+            rec["old"] = old_verdicts(self._evidence(Verdict("failed", " ".join(run["ids"]))))
+            rec["run"] = " ".join(run["ids"])
+
+    def _follow_shadow(self, drive: dict) -> None:
+        """Each shadowed tip: its graph, once listed, enqueued at `AFTER_LANDING_PRIORITY`; once its after-landing run ended and
+        every task has a verdict, or `SHADOW_WAIT_S` after the enqueue, how they compare (`executor.compare`) is recorded as an
+        `executor_shadow` label on `commit:<tip>` (`_shadow_record`), and the tip leaves the state.  A listing or an enqueue that
+        fails, or a run that never ends within `SHADOW_WAIT_S`, is recorded as its error.  Nothing here lands, launches a check,
+        reverts or tells anyone."""
+        tips = drive.get("executor") or {}
+        if not tips or self.dry_run or self.q.shadow:
+            return
+        for tip, rec in list(tips.items()):
+            if "listing" in rec:
+                graph, why = self._listed(tip, rec["listing"])
+                if graph is None and why is None:
+                    if self.now() - rec["at"] <= SHADOW_WAIT_S:
+                        continue
+                    why = f"still listing {SHADOW_WAIT_S // 3600} h after it began"
+                del rec["listing"]
+                if graph is not None:
+                    try:
+                        rec["keys"], rec["check"], rec["enqueued"] = (self.tasks.enqueue(graph, AFTER_LANDING_PRIORITY),
+                                                                      check_id(graph), self.now())
+                    except Exception as e:  # noqa: BLE001  (a shadow never stops drive: the error is its record)
+                        why = f"enqueueing its task graph failed: {type(e).__name__}: {e}"
+                    else:
+                        self.q.log(f"research queue drive: shadow: enqueued {len(rec['keys'])} tasks of {rec['check']}")
+                if why is not None:
+                    self._shadow_record(tip, {"error": f"listing its task graph: {why}", "run": rec.get("run", "")})
+                    del tips[tip]
+                    continue
+            if "old" not in rec:
+                if self.now() - rec["at"] > SHADOW_WAIT_S:
+                    self._shadow_record(tip, {"error": "its after-landing run never ended", "check": rec.get("check", "")})
+                    del tips[tip]
+                continue
+            v = self.tasks.verdicts(rec["keys"].values())
+            if PENDING in v.values() and self.now() - rec["enqueued"] <= SHADOW_WAIT_S:
+                continue
+            self._shadow_record(tip, {"check": rec["check"], "run": rec["run"], **compare(rec["keys"], rec["old"], v)})
+            del tips[tip]
+
+    def _shadow_record(self, tip: str, value: dict) -> None:
+        from .store import vocab
+        from .store.cli import _label_write_through
+
+        target = f"commit:{tip}"
+        said = "no store"
+        if self.q.store is not None:
+            self.q.store.add_label(target, vocab.EXECUTOR_SHADOW, value, "drive", ref=value.get("run") or None)
+            said, _ = _label_write_through(self.q.store, target)
+        what = value.get("error") or (f"{value['agree']}/{value['units']} agree, {len(value['disagree'])} disagree"
+                                      + (f", {len(value['pending'])} pending" if value["pending"] else ""))
+        self.q.log(f"research queue drive: shadow: `{self.q.into}` {tip[:12]}: {what} ({target}; {said})")
+
+    def _start_tasks(self, pl: dict, tip: str, base: bool) -> None:
+        """`executor = "on"`: the after-landing check of ``tip`` is its task graph on the executor's queue (`_follow_tasks`)."""
+        if self.dry_run or self.q.shadow:
+            self.q.log(f"research queue drive: would list and enqueue the task graph of {tip[:12]}")
+            return
+        pl["steps"] = list(AFTER_LANDING)
+        pl.pop("resend", None)
+        pl["run"] = {"ids": [], "tip": tip, "at": self.now(), "tasks": {"listing": self.list_tasks(self.repo, tip)},
+                     **({"baseline": True} if base else {}), "as": {"steps": list(AFTER_LANDING), "no_cache": False}}
+        self.q.log(f"research queue drive: the after-landing check of `{self.q.into}` {tip[:12]} is the executor's: listing its "
+                   f"task graph; {len(pl['pending'])} landing(s) since {pl['verified'][:12]}")
+
+    def _follow_tasks(self, drive: dict, pl: dict, run: dict) -> None:
+        """`executor = "on"`: the after-landing check of ``run["tip"]`` by the executor alone.  Its graph, once listed, is
+        enqueued at `AFTER_LANDING_PRIORITY`; once every task's verdict is pass the tip is verified, each red record at or below
+        it ends, and `_promote` moves `main` there; once one is fail the tip is failed, `main` stays and `CI` is told which;
+        while any is pending it waits.  A listing or an enqueue that fails is told to `CI`, and the next tick lists again."""
+        tip, t = run["tip"], run["tasks"]
+        if self.dry_run or self.q.shadow:
+            return
+        if "listing" in t:
+            graph, why = self._listed(tip, t["listing"])
+            if graph is None and why is None:
+                return
+            if graph is not None:
+                try:
+                    t["keys"], t["check"] = self.tasks.enqueue(graph, AFTER_LANDING_PRIORITY), check_id(graph)
+                except Exception as e:  # noqa: BLE001  (told, and tried again)
+                    why = f"enqueueing it failed: {type(e).__name__}: {e}"
+            if why is not None:
+                pl["run"] = None
+                self.refuse(drive, f"launch:postland:{tip}", f"the task graph of `{self.q.into}` {tip[:12]} wasn't put on the "
+                                                             f"executor's queue: {why}. The next tick lists it again")
+                return
+            del t["listing"]
+            self.q.log(f"research queue drive: the after-landing check {t['check']}: {len(t['keys'])} tasks enqueued")
+        v = self.tasks.verdicts(t["keys"].values())
+        failed = sorted(i for i, k in t["keys"].items() if v[k] == FAIL)
+        if failed:
+            pl["run"], pl["failed"] = None, tip
+            self.refuse(drive, f"postland:{tip}", f"the executor's after-landing check {t['check']} failed {len(failed)} of "
+                                                  f"{len(t['keys'])} tasks: {', '.join(failed[:10])}"
+                                                  + (f" and {len(failed) - 10} more" if len(failed) > 10 else "")
+                                                  + f". `main` stays below {tip[:12]}, and nothing was reverted: fix it, and the "
+                                                  "next landing's check checks it again")
+            return
+        if PENDING in v.values():
+            return
+        pl["run"] = None
+        pl["verified"], pl["verified_run"] = tip, ""
+        pl["verified_as"] = {"steps": list(AFTER_LANDING), "no_cache": False, "executor": t["check"]}
+        pl["pending"] = [p for p in pl["pending"] if not self._ancestor(p, tip)]
+        pl["landed_at"] = {p: x for p, x in (pl.get("landed_at") or {}).items() if p in pl["pending"]}
+        for key in list(pl.get("red") or {}):
+            self._green(pl, key, tip)
+        self.q.log(f"research queue drive: `{self.q.into}` {tip[:12]} verified: every one of the {len(t['keys'])} tasks of "
+                   f"{t['check']} passed")
 
     def _gating(self, commit: str) -> list[str]:
         """The after-landing steps `main` waits for at ``commit`` (`_promote`): every step but those a run skips by name
@@ -1452,6 +1653,9 @@ class Driver:
         base = not self._baselined(pl)                            # the first run: `main` itself (`_unbaselined`)
         if not base and (not pl["pending"] or main == pl.get("failed") or main == pl["verified"]):
             return
+        if self.executor == "on":
+            self._start_tasks(pl, main, base)
+            return
         pl["steps"] = list(AFTER_LANDING)
         steps = ",".join(pl["steps"])
         # it sends the upstream build when the landings since the last verified `main` change what lean-agreement checks (as
@@ -1501,6 +1705,7 @@ class Driver:
                      "as": {"steps": [s for s in AFTER_LANDING if s not in skip], "no_cache": extra["no_cache"]}}
         q.log(f"research queue drive: post-landing run of `{self.q.into}` {main[:12]} ({steps}): {_ids(rec)}; "
               f"{len(pl['pending'])} landing(s) since {pl['verified'][:12]}")
+        self._shadow_list(drive, main)
 
     def _owner(self, m: Member) -> str | None:
         """The owning lane of a PR the queue landed: its open PR's (`_handle`), else the one its merge's `Owner` names."""
@@ -1690,7 +1895,9 @@ class Driver:
                   "tries again")
             return
         members = self.landed_since(main, v)
-        q.log(f"research queue drive: `main` fast-forwarded to {v[:12]}, which its after-landing run {run or '(ci baseline)'} "
+        by = run or (f"(the executor's {ex})" if v == pl.get("verified") and (ex := (pl.get("verified_as") or {}).get("executor"))
+                     else "(ci baseline)")
+        q.log(f"research queue drive: `main` fast-forwarded to {v[:12]}, which its after-landing run {by} "
               f"passed on every step on the merge gate: {' '.join(f'#{x.pr}' for x in members) or 'no PR'} since {main[:12]}")
         self._on_main(drive, members, main, v, run)
 
@@ -2927,6 +3134,7 @@ class Driver:
             drive.pop(gone, None)
         self._drive = drive
         self.follow_postland(drive)
+        self._follow_shadow(drive)
         return self._review(state, drive, dry_run)
 
     def _sweep(self, drive: dict, dry_run: bool) -> None:
