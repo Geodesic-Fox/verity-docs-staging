@@ -66,7 +66,7 @@ def test_compact_layout_is_the_library_layout(seed, split, tmp_path, monkeypatch
     C = _build(CST.CompactCircuit(), seed, n)
     assert C.compact() and len(C._spool.blocks) > 10
     lay = CST.layout(C, list(IN), list(OUT), in_split=split)
-    assert isinstance(lay, IL.Layout)
+    assert isinstance(lay, IL.LoweredUnit)
     assert (list(lay.rows_a), list(lay.rows_b)) == (lib.rows_a, lib.rows_b)
     assert [lay.rows_a[i] for i in range(lay.useful)] == lib.rows_a and lay.rows_b[-3:] == lib.rows_b[-3:]
     assert (lay.const, lay.in_groups, lay.out_groups, lay.counts) == (lib.const, lib.in_groups, lib.out_groups, lib.counts)

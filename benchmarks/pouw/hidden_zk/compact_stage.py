@@ -351,7 +351,7 @@ class _Rows:
         yield from lay.tail[self.side]
 
 
-class CompactLayout(IL.Layout):
+class CompactLayout(IL.LoweredUnit):
     """`fast_stage.ands_layout`'s layout of a `CompactCircuit`: the input region's copy rows (``head_in``), the live ANDs' rows
     in the spool's blocks, then the assert, output and constant rows (``tail``, lists as the library's)."""
 
