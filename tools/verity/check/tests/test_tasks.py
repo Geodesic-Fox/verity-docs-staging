@@ -56,7 +56,8 @@ def tree(tmp_path: Path) -> Path:
 
 
 def _tasks(tree: Path, *args: str) -> subprocess.CompletedProcess:
-    env = {**os.environ, "VERITY_TEST_CACHE": str(tree.parent / "test-cache")}
+    env = {**os.environ, "HOME": str(tree.parent / "home"), "CHECK_CACHE": str(tree.parent / "check-cache"),
+           "VERITY_TEST_CACHE": str(tree.parent / "test-cache")}
     return subprocess.run([sys.executable, str(tree / "tools" / "verity" / "check" / "tasks.py"), *args], cwd=tree, env=env,
                           capture_output=True, text=True)
 
