@@ -1443,10 +1443,11 @@ def auto_plan(costs: tuple[dict, dict, dict], max_shards: int = SHARDS.MAX_SHARD
               n: int | None = None, given: dict[str, float] | None = None) -> dict:
     """The auto plan (`shards.plan`) of this tree's parts (`auto_parts`: of the jobs on the gate, or with ``deferred``, of those
     steps and what they need) at ``costs`` (`measure`'s suites, audits and steps, `shards.priced`), ``given``'s {part: seconds}
-    over them."""
+    over them, read as steps' seconds too (a job's whole, spread over its parts)."""
     jobs = DECLARATION.needed(JOBS, [s for s in deferred.split(",") if s]) if deferred else None
     names = auto_parts(deferred is None, jobs)
-    measured = {**SHARDS.priced(names, *costs), **{p: float(s) for p, s in (given or {}).items() if p in names}}
+    given = {p: float(s) for p, s in (given or {}).items()}
+    measured = {**SHARDS.priced(names, costs[0], costs[1], {**costs[2], **given}), **{p: s for p, s in given.items() if p in names}}
     return SHARDS.plan(SHARDS.tasks(names, measured), job_needs(), max_shards, n)
 
 
