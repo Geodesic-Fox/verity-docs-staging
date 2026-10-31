@@ -12,7 +12,8 @@ the merge gate (`gate = false`: circuit-check, ratchet-gate), which run after la
                                                             --deferred`), recorded as `DEFERRED_KIND`, which no gate takes;
                                                             with --shard K/N, only those of shard K's parts, the last
                                                             shard's with those no shard holds (ratchet-gate) (drive's
-                                                            `after_landing_shards`: one run per shard, at once)
+                                                            `after_landing_shards`: one run per shard, at once, once the
+                                                            records step passed: `--cc-records`)
     ... --no-regenerate                                     lean-audit fails on a lock record difference rather than passing on
                                                             a regenerated record (drive's after-landing run)
     ... --no-cache [--circuit-cache]                        reuse no pass, and run every job, those off the gate too (the
@@ -69,6 +70,13 @@ the merge gate (`gate = false`: circuit-check, ratchet-gate), which run after la
     uv run python tools/verity/check/check.py --record --combine RUN...
                                                             the shards RUN..., one per K, recorded as one check of this commit
                                                             when they are together a passing one (`research merge` reads them)
+    uv run python tools/verity/check/check.py --record --cc-records --on M
+                                                            circuit-check's records step (`cc_records`): every catalog binding's
+                                                            record built once and tarred into the run's $OUT, recorded without
+                                                            the tool; drive's sharded after-landing run runs it before its
+                                                            shards and gives each its artifact (`--cc-records-from ART@SHA256`:
+                                                            unpacked into circuit-check's cache, and the shard refused unless
+                                                            its bytes have that sha256 and it was built from this tree)
 
 Sharding.  `check.py --shard K/N` runs the preflight and then only shard K's parts of the plan with N shards that `ci.toml`
 declares (`declaration.py`: each job in one shard, `lean-audit` split by Lake package, `circuit-check` into its `shards`, its
@@ -103,8 +111,11 @@ running after `STEP_BUDGET_S`, is stopped the same way (SIGTERM, then SIGKILL) a
 budget`, so a hung test can't hold a check slot for a day; each suite is bounded first by its own `--timeouts`.
 The steps stay in this process's group, which a runner's timeout and a manual stop signal as a whole. Each step's record is
 appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run, and mirrored
-as a trace/v1 span line in `spans.jsonl` (`spans.py`: the run opens a root span, each step is a completed child, the run's end
-completes the root), the frozen shape the observability watcher reads.  A SIGTERM
+as a trace/v1 span line in `spans.jsonl` (`spans.py`: the run opens a root span, each step a child as it starts that its
+record completes, the run's end completes the root), the frozen shape the observability watcher reads.  The run's live record
+(`live.py`, `check-live.json`) holds every planned step's state, elapsed time and progress, and a recorded run publishes it on the
+store's remote with its custody key as each step ends and every few minutes, so `verity ci ls` and `verity ci inspect RUN` read a
+running check from anywhere without its node.  A SIGTERM
 (`research cancel`, a runner's timeout) stops the steps the same way (a step it reaches first and kills is `stopped` too, not
 failed), and a recorded run still writes its result, validation `not_run`, and the pack of the passes its steps stored before
 it, then exits 143: a cancelled check's passes are reused.
@@ -211,6 +222,7 @@ input or contract that doesn't resolve fails there; only a check `fixtures.toml`
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.util
 import json
@@ -222,6 +234,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tarfile
 import tempfile
 import threading
 import time
@@ -281,6 +294,8 @@ VERDICTS = _load("verdicts")
 COMMON = _load("common")
 #: trace/v1 spans over the run (`spans.py`): `spans.jsonl` beside `steps.jsonl`, the frozen shape the watcher reads
 SPANS = _load("spans")
+#: the run's live record (`live.py`): `check-live.json` beside `steps.jsonl`, published on the store's remote as the run goes
+LIVE = _load("live")
 #: the test runner (`suites.py`), for where the steps' Python imports this tree's packages from
 SUITES = _load("suites")
 cache_dir = COMMON.cache_dir
@@ -946,7 +961,7 @@ def landable(base: str) -> bool:
 
 def pool_env(pool: str | None, on: str | None, priority: bool) -> list[str]:
     """The `research run` options that put a `--record --on MACHINE --pool NAME` check in a slot of MACHINE's NAME pool, the
-    pool `research run --pool NAME` takes (`slot_only.POOLS`), rather than its merge-check slots, which on the CPU nodes are
+    pool `research run --pool NAME` takes (`slot_only.pool_slots`), rather than its merge-check slots, which on the CPU nodes are
     only=trains: slot.py reads the pool's slots file from CHECK_SLOTS.  The command stays `slot_wrap`'s around the declared one,
     not `slot_only.in_pool`'s (`env ... nice -n 19`), so `research merge` and `gather_verdicts` read the attempt as a check of its
     commit.  ValueError when the pool can't be taken so."""
@@ -954,14 +969,15 @@ def pool_env(pool: str | None, on: str | None, priority: bool) -> list[str]:
         return []
     from research.pods.nebius import slot_only
 
-    if pool not in slot_only.POOLS:
-        raise ValueError(f"{pool}: no such pool; the pools are {', '.join(sorted(slot_only.POOLS))}")
+    if not slot_only.POOL_NAME.fullmatch(pool):
+        raise ValueError(f"{pool}: no such pool; a pool is a name of letters, digits, '_' or '-' (the pools every node may have are "
+                         f"{', '.join(sorted(slot_only.POOLS))}; a node's own are under {slot_only.LOCKS})")
     if not on or on == "auto" or "," in on:
         raise ValueError(f"{pool} needs --on MACHINE, the one machine whose pool it waits in (`--on {LANE_POOL[0]} --pool "
                          f"{LANE_POOL[1]}`); --on auto and lists choose among merge-check slots")
     if priority:
         raise ValueError(f"{pool} takes no --priority: that is the lander's train checks' place in the merge-check slots' line")
-    return ["--env", f"CHECK_SLOTS={slot_only.POOLS[pool]}"]
+    return ["--env", f"CHECK_SLOTS={slot_only.pool_slots(pool)}"]
 
 
 def nested_record(argv: list[str]) -> str:
@@ -1008,10 +1024,13 @@ def record(argv: list[str]) -> int:
         print(f"check: --pool {e}", file=sys.stderr)
         return 2
     combining = rest[:1] == ["--combine"]
+    records = "--cc-records" in rest
     parts = None
     deferred = rest[rest.index("--deferred") + 1] if "--deferred" in rest[:-1] else None
     try:
-        if "--shard" in rest[:-1]:
+        if records:                                    # circuit-check's records alone: its memory, no Lean
+            parts = ["circuit-check"]
+        elif "--shard" in rest[:-1]:
             parts = shard(rest[rest.index("--shard") + 1], gated=deferred is None)["parts"]
             if deferred is not None:
                 parts = [p for p in parts if p in deferred_parts(deferred)]
@@ -1056,8 +1075,8 @@ def record(argv: list[str]) -> int:
     # a post-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it.  On a machine
     # every run of a commit shares the shipped tree <root>/src/<sha>, and two checks' Lake builds there broke each other's .lake,
     # so each runs in its own clone of it
-    cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None else []), "--project", "verity",
-           "--cwd", "clone" if on else "source", *(x for p in PACK_FILES for x in ("--declared-output", p)), *pooled,
+    cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None and not records else []), "--project", "verity",
+           "--cwd", "clone" if on else "source", *(x for p in DECLARED for x in ("--declared-output", p)), *pooled,
            *(["--env", f"{SLOT.MIN_MEM_ENV}={min_mem}"] if on and min_mem else [])]
     env = dict(os.environ)
     if "lean-agreement" in need:
@@ -1091,7 +1110,7 @@ def record(argv: list[str]) -> int:
     if on and (combining or parts is not None):
         (d / SHARD_PARTS).write_text(json.dumps(parts or []))
         cmd += ["--send", str(d / SHARD_PARTS)]
-    if not combining and ("--no-cache" not in rest or "--circuit-cache" in rest):
+    if not combining and not records and ("--no-cache" not in rest or "--circuit-cache" in rest):
         given = None
         if "--verdicts-in" in rest[:-1]:
             i = rest.index("--verdicts-in")
@@ -1157,6 +1176,8 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
 #: those it found before they ran (`Reused`)
 REUSED_PACK = "verdicts-reused.tar.xz"
 PACK_FILES = ("verdicts.tar.gz", REUSED_PACK)
+#: what `record` declares outputs, which custody uploads however the run ends: the packs and the final live record
+DECLARED = (*PACK_FILES, LIVE.LIVE_FILE)
 
 
 def attempt_pack(store, rid: str, d: Path, name: str = "verdicts.tar.gz") -> Path | None:
@@ -1241,6 +1262,98 @@ def circuit_shards(only: list[str] | None) -> list[str] | None:
     held = [p.partition(":")[2] for p in only if p.partition(":")[0] == "circuit-check" and p.partition(":")[2]]
     every = DECLARATION.job_parts(next(j for j in JOBS if j.name == "circuit-check"), {}) or []
     return held if held and sorted(held) != sorted(every) else None
+
+
+#: the records step (`--cc-records`): every catalog binding's record, built once (`circuit-check --all --records-only`) and tarred
+#: under the run's $OUT with the tree it was built from (`CC_RECORDS_TREE`), its sha256 in the result (`CC_RECORDS_KIND`'s
+#: ``records``); drive's sharded after-landing run builds it before the shards and gives each its artifact
+#: (`--cc-records-from ART@SHA256`), so no shard's circuit-check builds the bindings itself
+CC_RECORDS = "out/circuit-records.tar.gz"
+CC_RECORDS_KIND = "circuit-records/v1"
+CC_RECORDS_TREE = "tree"
+
+
+def cc_records(run_dir: Path, n: int | None = None) -> int:
+    """`--cc-records`, inside a recorded run: `circuit-check --all --records-only` into a fresh cache, its report
+    `circuit-records.json`, then the cache and this tree's id tarred to `CC_RECORDS`, and ``result.json`` (`CC_RECORDS_KIND`)
+    naming the tarball's path, sha256 and tree; exit circuit-check's, and no tarball unless it passed."""
+    tree, t0 = _rev("HEAD^{tree}"), time.monotonic()
+    d = Path(tempfile.mkdtemp(prefix="check-cc-records-"))
+    try:
+        gb = slot_mem_gb()
+        cmd = [sys.executable, "-m", "circuit_check", "--all", "--records-only", "-q", "--cache", str(d / "cache"),
+               "--jobs", str(n or cores()), *(["--mem-gb", str(gb)] if gb is not None else []),
+               "--out", str(run_dir / "circuit-records.json")]
+        rc = subprocess.run(cmd, cwd=ROOT, env=env()).returncode
+        records = None
+        if rc == 0 and tree:
+            (d / CC_RECORDS_TREE).write_text(tree + "\n")
+            (tar := run_dir / CC_RECORDS).parent.mkdir(parents=True, exist_ok=True)
+            with tarfile.open(tar, "w:gz") as t:
+                t.add(d / CC_RECORDS_TREE, CC_RECORDS_TREE)
+                t.add(d / "cache", "cache")
+            records = {"path": CC_RECORDS, "sha256": _sha256(tar), "tree": tree}
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    secs = round(time.monotonic() - t0, 1)
+    doc = {"schema": "research/result/v0.1", "kind": CC_RECORDS_KIND, "run_id": SETTINGS.require("RESEARCH_RUN_ID"),
+           "workload_fingerprint": {"tree": tree},
+           "validation": {"status": "passed" if records else "failed", "checker": "tools/verity/check/check.py --cc-records",
+                          "detail": f"circuit-check --all --records-only exited {rc}" + ("" if tree else "; no tree")},
+           "measurements": [{"name": "circuit-records_wall", "value": secs, "unit": "s"}],
+           "artifacts": [p for p in (CC_RECORDS, "circuit-records.json") if (run_dir / p).exists()],
+           **({"records": records} if records else {})}
+    (run_dir / "result.json.tmp").write_text(json.dumps(doc, indent=1) + "\n")
+    os.replace(run_dir / "result.json.tmp", run_dir / "result.json")
+    print(f"check: --cc-records: {'records ' + records['sha256'][:12] + ' in ' + CC_RECORDS if records else 'FAILED'} in {secs} s",
+          flush=True)
+    return 0 if records else rc or 1
+
+
+def fetch_records(art: str, d: Path) -> Path:
+    """The records tarball (`CC_RECORDS`) of the run record ``art``, fetched under ``d`` through the run's custody key (the
+    module docstring's "The evidence store") or, outside a recorded run, this machine's store."""
+    from research.store.custody import custody_env
+    from research.store.local import LocalStore
+
+    with custody_env(c) if (c := custody_dir()) else contextlib.nullcontext():
+        return Path(LocalStore().fetch(art, d, paths=[CC_RECORDS])) / CC_RECORDS
+
+
+def cc_records_in(spec: str, cache: Path, fetch=fetch_records) -> str | None:
+    """`--cc-records-from ART@SHA256`: the records step's tarball (`cc_records`), from the run record ART, unpacked into
+    circuit-check's cache ``cache`` once its bytes have that sha256 and the tree it was built from is this one; else why it is
+    refused, and nothing unpacked.  Each record goes in by rename, so a circuit-check reading the cache meanwhile sees it whole
+    or not at all, and one counts only while its own reads still match (`circuit_check.units`)."""
+    art, _, sha = spec.partition("@")
+    if not art.startswith("art:") or not re.fullmatch(r"[0-9a-f]{64}", sha):
+        return f"{spec} is not ART@SHA256"
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    d = Path(tempfile.mkdtemp(prefix="cc-records-", dir=cache.parent))
+    try:
+        try:
+            tar = fetch(art, d)
+        except Exception as e:  # noqa: BLE001  (refused, and the reason named)
+            return f"{art} can't be fetched ({type(e).__name__}: {e})"
+        if (got := _sha256(tar)) != sha:
+            return f"its bytes' sha256 is {got}, not {sha}"
+        with tarfile.open(tar) as t:
+            try:
+                built = t.extractfile(CC_RECORDS_TREE).read().decode().strip()
+            except (KeyError, AttributeError):
+                return f"it holds no {CC_RECORDS_TREE}, the tree it was built from"
+            if built != (tree := _rev("HEAD^{tree}")):
+                return f"it was built from tree {built[:12]}, and this tree is {(tree or 'unknown')[:12]}"
+            t.extractall(d / "x", filter="data")
+        n = 0
+        for p in sorted((d / "x" / "cache").rglob("*.json")):
+            (to := cache / p.relative_to(d / "x" / "cache")).parent.mkdir(parents=True, exist_ok=True)
+            os.replace(p, to)
+            n += 1
+        print(f"check: circuit-check: {n} binding record(s) from {art} ({sha[:12]}) into {cache}", flush=True)
+        return None
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def slot_mem_gb() -> int | None:
@@ -1959,10 +2072,12 @@ class Reused:
 class Steps:
     """The steps of one run: their processes while they run, so that the first failure stops the others (unless ``keep_going``,
     and a step in `HALTS`, or one `HALTS_ON` marks `halts`, stops them even then), and each step's record appended to `STEPS_LOG`
-    as it ends."""
+    as it ends, and each start and end to the run's live record (`LIVE`)."""
 
-    def __init__(self, out: Path, keep_going: bool = False, packs: Packs | None = None, reused: Reused | None = None):
+    def __init__(self, out: Path, keep_going: bool = False, packs: Packs | None = None, reused: Reused | None = None,
+                 live=None):
         self.log, self.keep_going, self.packs, self.reused = out / STEPS_LOG, keep_going, packs, reused
+        self.live = live or LIVE.Live(out)
         self.lock = threading.RLock()
         self.running: dict[str, subprocess.Popen] = {}
         self.stopped: set[str] = set()
@@ -1993,6 +2108,8 @@ class Steps:
             if self.stopping:
                 return None
             self.running[name] = p = subprocess.Popen(argv, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT)
+            self.spans.open(name)
+            self.live.started(name)
             return p
 
     def end(self, rec: dict) -> dict:
@@ -2004,6 +2121,7 @@ class Steps:
             with open(self.log, "a") as f:
                 f.write(json.dumps(rec) + "\n")
             self.spans.step(rec)
+            self.live.ended(rec)
             if self.packs is not None:
                 self.packs.request()
             if self.reused is not None:
@@ -2075,10 +2193,10 @@ PREBUILD = ("try:\n    from verity.ml.definitions.numerics import twins\nexcept 
 
 def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = False,
         only: list[str] | None = None, packs: Packs | None = None, reused: Reused | None = None,
-        regenerate: bool = True, circuit_cache: bool | None = None) -> tuple[bool, list[dict]]:
+        regenerate: bool = True, circuit_cache: bool | None = None, live=None) -> tuple[bool, list[dict]]:
     n = n or cores()
     urls = take_lean_deps_urls(out)
-    steps = Steps(out, keep_going, packs, reused)
+    steps = Steps(out, keep_going, packs, reused, live)
 
     ended: dict[str, threading.Event] = {}
     status: dict[str, str] = {}
@@ -2104,12 +2222,16 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
         return done
 
     try:
-        results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in preflight()]
+        pre = preflight()
+        steps.live.plan([name for name, _, _ in pre])
+        results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in pre]
         if not steps.stopping and all(r["status"] == "passed" for r in results):
             subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
             if reused is not None:
                 reused.start()
             gs = groups(out, n, cache, urls, only=only, regenerate=regenerate, circuit_cache=circuit_cache)
+            steps.live.plan([name for g in gs for name, _, _ in g])
+            steps.live.request()
             ended.update({name: threading.Event() for g in gs for name, _, _ in g})
             beside = [ended[name] for g in gs if all(s[0] != "circuit-check" for s in g) for name, _, _ in g]
             grant = None
@@ -2216,7 +2338,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                                     + "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
            "steps": done, "artifacts": [p for p in ("suites.json", "suites-lean.json", "suites/", "circuit-check.json", f"{CC_SHARDS}/", "lean-audit/",
-                                                    *PACK_FILES, STEPS_LOG, SPANS.SPANS_LOG,
+                                                    *PACK_FILES, STEPS_LOG, SPANS.SPANS_LOG, LIVE.LIVE_FILE,
                                                     *(s.get("log") for s in done), *agreement_verdicts(run_dir))
                                         if p and (run_dir / p).exists()]}
     if shard:
@@ -2230,6 +2352,22 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
     tmp = run_dir / "result.json.tmp"
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     os.replace(tmp, run_dir / "result.json")
+
+
+def live_record(out: Path, run_dir: Path | None, sharded: dict | None, picked: list[str]):
+    """The run's `LIVE.Live`: what it checks (a shard, a post-landing run's steps, parts, or the whole check) of which commit, published
+    with the run's custody key when it has one (`custody_dir`)."""
+    what = (f"shard {sharded['k']}/{sharded['n']}" if sharded and "k" in sharded else
+            f"deferred {','.join(sharded['deferred'])}" if sharded and sharded.get("deferred") else
+            f"parts {','.join(picked)}" if picked else "check")
+    put, custody = None, custody_dir() if run_dir is not None else None
+    if custody is not None:
+        try:
+            put = LIVE.custody_put(custody)
+        except Exception as e:  # noqa: BLE001  (unpublished, the record stays in the run dir)
+            print(f"check: live: no publishing ({type(e).__name__}: {e}); {LIVE.LIVE_FILE} stays in the run dir", flush=True)
+    run_id = custody.parent.name if custody is not None else run_dir.name if run_dir is not None else None
+    return LIVE.Live(out, run_id=run_id, put=put, commit=_rev("HEAD"), what=what)
 
 
 def main(argv: list[str]) -> int:
@@ -2269,6 +2407,12 @@ def main(argv: list[str]) -> int:
     run_dir = Path(d) if (d := SETTINGS.RESEARCH_RUN_DIR) else None
     if argv[:1] == ["--combine"] and len(argv) > 1:
         return combine(argv[1:], run_dir)
+    if "--cc-records" in argv:
+        if [a for a in argv if a not in ("--cc-records", "--keep-going")] or run_dir is None:
+            print("check: --cc-records takes no other flag and runs inside a recorded run: `check.py --record --cc-records --on M`",
+                  file=sys.stderr)
+            return 2
+        return cc_records(run_dir)
     cache = "--no-cache" not in argv
     circuit_cache = cache or "--circuit-cache" in argv
     keep_going = "--keep-going" in argv
@@ -2278,6 +2422,10 @@ def main(argv: list[str]) -> int:
     if "--verdicts-in" in rest and rest.index("--verdicts-in") + 1 < len(rest):
         i = rest.index("--verdicts-in")
         pack, rest = Path(rest[i + 1]), rest[:i] + rest[i + 2:]
+    records = None
+    if "--cc-records-from" in rest and rest.index("--cc-records-from") + 1 < len(rest):
+        i = rest.index("--cc-records-from")
+        records, rest = rest[i + 1], rest[:i] + rest[i + 2:]
     sharded = None
     if "--shard" in rest and rest.index("--shard") + 1 < len(rest):
         i = rest.index("--shard")
@@ -2343,6 +2491,12 @@ def main(argv: list[str]) -> int:
         print(f"check: off the merge gate, left to the after-landing run (`--deferred`): {', '.join(OFF_GATE)}", flush=True)
     out = run_dir or Path(tempfile.mkdtemp(prefix="check-"))
     verdicts = {"in": verdicts_in(pack, run_dir, None if cache else CIRCUIT_ENTRIES)} if pack and circuit_cache else {}
+    if records is not None and (only is None or any(p.partition(":")[0] == "circuit-check" for p in only)):
+        why = (cc_records_in(records, cache_dir() / "circuit-check") if circuit_cache
+               else "circuit-check reuses no cache here (--no-cache without --circuit-cache)")
+        if why:
+            print(f"check: --cc-records-from {records} refused: {why}", file=sys.stderr, flush=True)
+            return 2
     before = VERDICTS.snapshot() if run_dir is not None and circuit_cache else None
     t0 = time.monotonic()
     TERMINATED.clear()
@@ -2350,8 +2504,10 @@ def main(argv: list[str]) -> int:
     prior = signal.signal(signal.SIGTERM, _terminated) if main_thread else None
     packs = Packs(run_dir / "verdicts.tar.gz", before) if before is not None else None
     reused = Reused(run_dir, before, None if cache else CIRCUIT_ENTRIES) if before is not None else None
+    live = live_record(out, run_dir, sharded, picked)
+    live.start()
     try:
-        ok, done = run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache)
+        ok, done = run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache, live)
     finally:
         if main_thread:
             signal.signal(signal.SIGTERM, prior)
@@ -2371,6 +2527,8 @@ def main(argv: list[str]) -> int:
             if (got := reused.close()) is not None:
                 verdicts["reused"] = {"file": REUSED_PACK, "entries": got}
         write_result(run_dir, ok, done, verdicts, bad, flaky, sharded, stopped_by)
+    # after the result: a cancel's SIGKILL follows its SIGTERM in seconds, and the publish may take that long
+    live.close("stopped" if stopped_by else "passed" if ok else "failed")
     print("\n".join(reuse_lines(reuse(out, done))), flush=True)
     if stopped_by:
         print(f"check: stopped by {stopped_by} in {time.monotonic() - t0:.1f} s"

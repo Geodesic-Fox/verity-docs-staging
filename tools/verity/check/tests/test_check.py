@@ -534,8 +534,8 @@ def test_record_sends_the_verdicts_it_gathers_with_a_pack_given_added_unless_no_
     launched.clear()
     assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(given_to) == 3
     head = launched[0][:launched[0].index("--")]
-    assert [head[i + 1] for i, x in enumerate(head) if x == "--declared-output"] == list(CHECK.PACK_FILES), \
-        "custody uploads the packs however the run ends, never trimming them as undeclared"
+    assert [head[i + 1] for i, x in enumerate(head) if x == "--declared-output"] == [*CHECK.PACK_FILES, "check-live.json"], \
+        "custody uploads the packs and the live record however the run ends, never trimming them as undeclared"
 
 
 def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path, monkeypatch, capsys):
@@ -1685,6 +1685,30 @@ def test_train_sh_runs_with_priority_and_posts_a_launch_that_registers_no_run(tm
     (tmp_path / "bin" / "sleep").write_text("#!/bin/sh\n")                # the fetch's backoffs: nothing launches to wait for
     p = train("HEAD", "vy-x")
     assert p.returncode == 1 and "git fetch origin failed" in (tmp_path / "posted").read_text()
+
+
+def test_train_sh_launches_the_records_step_alone_and_hands_a_shard_its_artifact(tmp_path):
+    """Drive's sharded after-landing run: `--cc-records` launches circuit-check's records step alone, in a worktree of its own,
+    and `--cc-records-from ART@SHA256` reaches a shard's check.py; either is refused where it doesn't belong."""
+    git, train, argv = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "landing")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x", "--cc-records")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--keep-going"):] == ["--keep-going", "--cc-records"], (p.stderr, args)
+    assert f"train-{git('rev-parse', 'HEAD')[:12]}-records.log" in p.stdout, p.stdout
+    art = f"art:{'a' * 64}@{'b' * 64}"
+    p = train("HEAD", "vy-x", "--deferred", "pytest,circuit-check", "--shard", "1/4", "--cc-records-from", art)
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--cc-records-from"):args.index("--cc-records-from") + 2] == ["--cc-records-from", art]
+    argv.unlink()
+    for flags, why in ((["--cc-records", "--deferred", "pytest"], "--cc-records refused with another flag"),
+                       (["--cc-records", "--agreement"], "--cc-records refused with another flag"),
+                       (["--deferred", "pytest", "--cc-records-from", art], "--cc-records-from refused without --shard"),
+                       (["--deferred", "pytest", "--shard", "1/4", "--cc-records-from", "art:x"], "--cc-records-from needs ART@SHA256")):
+        p = train("HEAD", "vy-x", *flags)
+        assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
 
 
 def test_train_sh_hands_check_the_base_below_the_tip_that_drive_sends(tmp_path):
