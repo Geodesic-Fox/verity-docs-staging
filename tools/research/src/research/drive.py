@@ -1410,9 +1410,9 @@ class Driver:
 
     def _fix_wait(self, drive: dict, tip: str) -> str | None:
         """Why the after-landing run of ``tip`` waits (`start_postland`), or None: a red suite or step on `checked`, not reverted,
-        has a fix (`_red_fix`) marked ready at its head under `FIX_WAIT_S` ago and not landed, whose merge onto ``tip`` is
-        low-risk, so the low-risk lane lands it even under a running Lean check (`land_lowrisk`): a run without it would go
-        red again, for hours.  A mark whose time can't be read holds nothing."""
+        has a fix (`_red_fix`) on `next`, marked ready at its head under `FIX_WAIT_S` ago and not landed, whose merge onto
+        ``tip`` is low-risk, so the low-risk lane lands it even under a running Lean check (`land_lowrisk`): a run without it
+        would go red again, for hours.  A mark whose time can't be read holds nothing."""
         from .merge import CHECKED
         from .queue import lowrisk
         from .stale import _ts
@@ -1422,10 +1422,12 @@ class Driver:
         if not [r for r in ((drive.get("postland") or {}).get("red") or {}).values() if not r.get("reverted")]:
             return None
         hold_label = self.q.rules().hold_label
-        for p in sorted(self._open().values(), key=lambda p: p.number):
-            if hold_label in p.labels or self._ancestor(p.head, tip) or not self.q.ready(p.number, p.head):
+        for m in self._chain()[1]:
+            if (p := self._open().get(m.pr)) is None or p.head != m.head or hold_label in p.labels:
                 continue
-            if (key := self._red_fix(drive, p, lambda p=p: self._pr_files(p))) is None:
+            if self._ancestor(p.head, tip) or not self.q.ready(p.number, p.head):
+                continue
+            if (key := self._red_fix(drive, p, lambda m=m: self._own(m))) is None:
                 continue
             if (at := _ts(self.q.marked_at(p.number, p.head))) is None or (age := self.now() - at) >= FIX_WAIT_S:
                 continue
