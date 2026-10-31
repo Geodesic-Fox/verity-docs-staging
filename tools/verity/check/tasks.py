@@ -100,11 +100,13 @@ def digest(doc) -> str:
 
 @contextlib.contextmanager
 def _unplaced():
-    saved = {k: os.environ.pop(k) for k in PLACED if k in os.environ}
+    saved = os.environ.copy()
+    for k in PLACED:
+        os.environ.pop(k, None)
     try:
         yield
     finally:
-        os.environ.update(saved)
+        os.environ.update({k: saved[k] for k in PLACED if k in saved})
 
 
 def _normal(argv: list[str]) -> list[str]:
