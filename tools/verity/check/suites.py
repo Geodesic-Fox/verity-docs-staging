@@ -1838,7 +1838,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     (logs / f"{slug}.part.json").unlink(missing_ok=True)
     if part is not None:
         base = "" if suite.path == "." else suite.path + "/"
-        (logs / f"{slug}.part.json").write_text(json.dumps({"ks": list(part.ks), "m": part.m,
+        (logs / f"{slug}.part.json").write_text(json.dumps({"dir": str(ROOT / suite.path), "ks": list(part.ks), "m": part.m,
                                                             "mine": [f.removeprefix(base) for f in part.files],
                                                             "every": [f.removeprefix(base) for f in part.every]}))
         env[PART_ENV] = str(logs / f"{slug}.part.json")

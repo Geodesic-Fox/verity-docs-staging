@@ -56,7 +56,8 @@ SLOW_S = 5.0
 STORE_UNREACHABLE = "the evidence store is not reachable"
 _STORE_REQUIRED = os.environ.get("VERITY_STORE_REQUIRED") == "1"
 _KEY = "verity_suite_guard"
-_ACTIVE = bool(os.environ.get("VERITY_SUITE_ROOT") and os.environ.get("VERITY_SUITE_REPORT"))
+_REPORT = os.environ.get("VERITY_SUITE_REPORT")
+_ACTIVE = bool(os.environ.get("VERITY_SUITE_ROOT") and _REPORT)
 
 _root = os.path.realpath(os.environ.get("VERITY_SUITE_ROOT", ""))
 _watch = frozenset(os.path.normpath(os.path.join(_root, p)) for p in json.loads(os.environ.get("VERITY_SUITE_WATCH", "[]")))
@@ -288,12 +289,12 @@ def pytest_collection_modifyitems(session, config, items) -> None:
         items[:] = [items[i] for i in order]
 
 
-def _load_part() -> tuple[set[int], int, frozenset, frozenset] | None:
+def _load_part() -> tuple[str, tuple[set[int], int, frozenset, frozenset]] | None:
     if not (_ACTIVE and (f := os.environ.get("VERITY_SUITE_PART"))):
         return None
     with open(f) as fh:
         p = json.load(fh)
-    return set(p["ks"]), p["m"], frozenset(p["mine"]), frozenset(p["every"])
+    return p["dir"], (set(p["ks"]), p["m"], frozenset(p["mine"]), frozenset(p["every"]))
 
 
 _part = _load_part()
@@ -313,8 +314,8 @@ def pytest_ignore_collect(collection_path, config):
     name = collection_path.name
     if _part is None or not name.endswith(".py") or not (name.startswith("test_") or name.endswith("_test.py")):
         return None
-    rel = os.path.relpath(collection_path, os.environ["VERITY_SUITE_DIR"]).replace(os.sep, "/")
-    return None if in_part(rel, *_part) else True
+    rel = os.path.relpath(collection_path, _part[0]).replace(os.sep, "/")
+    return None if in_part(rel, *_part[1]) else True
 
 
 def _ours(name: str) -> bool:
@@ -425,5 +426,5 @@ def pytest_sessionfinish(session, exitstatus) -> None:
                           "watched": sorted(_watched), "passed": passed, "failed": sorted(_failed), "reads": reads, **used,
                           "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(untraced.items())}},
                          indent=1)
-    with open(os.environ["VERITY_SUITE_REPORT"], "w") as f:
+    with open(_REPORT, "w") as f:
         f.write(payload)
