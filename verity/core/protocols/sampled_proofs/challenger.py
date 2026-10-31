@@ -3,7 +3,7 @@
 
 Coins are indexed by label and index, and named by no protocol.  A layout is a scheme, an epoch (the client's session the
 coins are for) and its families ``(label, count)`` in order: coin ``(label, i)`` sits at its family's offset plus i, at
-most `MAX_COINS` coins.  Before the epoch the challenger draws every coin and its hm96 salt from its own generator and
+most `MAX_COINS` coins.  Before the epoch the challenger samples every coin and its hm96 salt from its own generator and
 publishes the coin commitment:
 
     x_p     = SHA-512(scheme || 0x00 || coin_p)                                     coin_p: 64 fresh bytes (`COIN_BYTES`)
@@ -13,8 +13,8 @@ publishes the coin commitment:
 
 The hm96 leaves keep every unopened coin statistically hidden; binding rests on SHA-512's collision resistance.  The
 challenger opens coin ``(label, i)`` once, after the verifier recorded the root the coin follows (`LiveOpening.after`),
-and never twice: a retry never redraws.  There is no beacon and no Fiat–Shamir: a coin is the challenger's own bytes, and
-a client derives what it draws from the opened coin (`verity.ml.randomness.derive`).  The coins are live and the verifier
+and never twice: a retry never resamples.  There is no beacon and no Fiat–Shamir: a coin is the challenger's own bytes, and
+a client derives what it samples from the opened coin (`verity.ml.randomness.derive`).  The coins are live and the verifier
 designated: an outcome convinces the auditor, who trusts its own challenger, and no third party.
 
 **Every coin source is named by a claim instance**: its ``claim``, a ``uniform/<instance>`` assumption of
@@ -27,6 +27,13 @@ Timing is a trust assumption, not a check.  `after` binds an opening to the root
 the coin was released after it: that rests on the challenger releasing coin i only once it has received root i.  The
 challenger is auditor-trusted, the auditor's device on a machine the prover doesn't control, under the named assumption
 `trusted-host`.  The record keeps the release order with its own time (`LiveRecord.log`).
+
+**A withheld session** (`remote.open_session(..., withhold=True)`, the auditor's choice, its ledger open's body
+`withheld: true`) keeps its commitment on the challenger's host until the prover's commitments are in: while it runs, the
+challenger releases each coin's raw bytes and nothing else (no root, salt or path), and once its signed close is written
+it releases the commitment and every opened coin's salt and path.  So nothing the prover sees before a coin depends on a
+coin not yet released, and soundness takes no hiding premise on the root.  One-stage's draw reads only a withheld
+session's coins (`withheld_on`, in `coins.draw_coins`).
 
 `live_reason` is the verifier's check of one opening and `order_reason` of a family's openings against the roots it
 recorded, in order: coin i opened after root i, each once, none before its root is recorded, and every recorded root's
@@ -64,6 +71,26 @@ however it ends, it signs the log at its key's next leaf and writes the close re
 own (`record_message`), which binds the close to the commitment and host.  `session_of` is the verifier's read of a
 session: the record under its key, the close signed under it, the log the one the close signs, line for line, and a
 session its client closed; then the roots it received (`released_roots_of`).  A session that ends unclosed is no window's.
+
+**A recursive run's interactive-run record** (`RunRecord`, `RUN_KIND`) is the challenger's log of one recursive
+statement's run, which `flock-verify rec-compose --rec-run` reads (`Flock.RecCompose.checkRun`, C10 `OneRun`).  Its
+parts' sessions are proved separately, each on its own keyed coin tree, so only this record shows they are one run:
+
+    record  = {events, kind}                                       kind: RUN_KIND
+    stage   = {event: "stage", rec_rows_sha512, rec_shared}        first, once: V*'s shared rows and the shared set
+    open    = {event: "open", session, rec_part, coin_key}         each Hello answered for the run's parts, in order
+    close   = {event: "close"}                                     last, once
+
+The challenger stages before any session opens, logs every session it opens for the run's parts at the prover's
+`Hello`, before the answer that carries the session's fresh coin key, a retry's as any other's, and closes the record
+when the run ends.  `rec-compose` refuses unless each part has exactly one session and the sessions are the composed
+parts', so a retried part shows and is refused, never hidden.  The record holds no coin: each session's coins are its
+coin tree's, drawn at its `Hello` (fresh per round, never committed before the run, unlike an epoch's coins above).
+The verifier reads the record from the challenger's host, never from the prover's bundle; that it logs every `Hello`
+it answers is the auditor-trusted challenger's (`trusted-host`).  The live challenger keeps it one event a line: its
+operator stages the record before any session and closes it after the last, and C-Flock's `flock-circuit serve --zk
+--rec-run FILE --rec-part J` appends each `open` in one write before the `Hello`'s answer leaves, refusing a `Hello` it
+can't log (`flock_live::run_record`); `RunRecord` is the same record in memory.
 
 **The auditor's ledger** names the one challenger session each window's coins come from (`audited_session`).  The
 auditor (`benchmarks/live_challenger/auditor.py` on the challenger's host, run by the host's operator) appends a signed
@@ -104,7 +131,7 @@ the one pinned key, so a ledger whose key changes is refused: no entry, signed u
 new one.  `ledger_line` writes an entry as the auditor does.
 
 **A window counts toward its period** only when it proves the circuit the period's open committed (`credited_session`):
-the period's `circuit` is the declared circuit's SHA-512 (`circuit_of`), and the verifier holds the descriptor of the
+the period's `circuit` is the registered circuit's SHA-512 (`circuit_of`), and the verifier holds the descriptor of the
 circuit the window's sessions prove, its canonical JSON without annotations (the bytes `program_digest` hashes), so the
 check is one SHA-512 over the descriptor, never a walk over the circuit it unrolls to (`circuit_reason`).  A window in
 no period, in a period that committed no circuit, or whose descriptor hashes to another circuit counts toward none.
@@ -128,7 +155,7 @@ its open names is the auditor-trusted host's word (`trusted-host`).  Every path 
 through `pinned_session`: `credited_session` (the pin first, then the circuit) and `trusted_session_of`.
 `audited_session` checks no pin and credits nothing.
 
-The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its draw and
+The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its sample and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
 `verity.ml.commitments` and `verity.core.claims`, so any client calls it as it is.
 """
@@ -753,7 +780,7 @@ def root_of(e: dict) -> str:
 
 
 def circuit_of(s: Any) -> str:
-    """A period's circuit as its open records it: the declared circuit's SHA-512 (128 hex digits, kept in lowercase),
+    """A period's circuit as its open records it: the registered circuit's SHA-512 (128 hex digits, kept in lowercase),
     never a Program's id; ValueError otherwise."""
     if type(s) is not str or not CIRCUIT.fullmatch(s):
         raise ValueError(f"--circuit {s!r}: the declared circuit's SHA-512 (128 hex digits), not a Program's id")
@@ -1016,6 +1043,20 @@ def _ledger_entry(line: Any) -> dict | None:
         ok = (_period(b.get("period")) and _period(b.get("lane")) and type(windows) is list
               and all(_outcome(w) for w in windows) and type(b.get("complete")) is bool)
     return e if ok else None
+
+
+WITHHELD = ("the session the auditor's ledger opens on the window does not withhold its coin commitment until it closes "
+            "(its open's body has no `withheld: true`: `remote.open_session(..., withhold=True)`)")
+
+
+def withheld_on(ledger: Any, window: str) -> bool:
+    """Lean `Challenger.withheldOn`: the ledger `ledger` (its lines) opens `window` (its open root), and every open of it
+    marks its session withheld (`withheld: true` in its body): a session whose challenger released only its coins' raw
+    bytes while it ran, and its commitment, salts and paths once it closed (`remote.serve`)."""
+    opens = [e for e in map(_ledger_entry, ledger if type(ledger) is list else []) if e is not None
+             and e["kind"] == "open" and isinstance(e["body"].get("window"), dict)
+             and e["body"]["window"].get("root") == window]
+    return bool(opens) and all(e["body"].get("withheld") is True for e in opens)
 
 
 def _checked(ledger: Any, key: ChallengerKey, verify: Verify) -> tuple[dict[str, dict], dict[str, dict]]:
@@ -1301,7 +1342,7 @@ def pinned_session(ledger: Any, window: Any, key: ChallengerKey, pins: Any, main
     session the auditor opened on a commit main's check passed; `pouw.credit` layers on it that the pin is recent and no
     older than its period's open (the freshness floor and the period pin), which this function doesn't check.  Every path
     that credits a session reads it here: PoUW's `credited_session` and `trusted_session_of`, and memory-accounting's
-    remote bandwidth audit (`remote_bandwidth.coins`).  `audited_session` alone checks no pin and credits
+    PoUB (`remote_bandwidth.coins`).  `audited_session` alone checks no pin and credits
     nothing.  Only the open's pin is held: a repin of the host after the open neither helps nor harms the session, which
     is credited by the commit its open sealed, the pins log only growing past it."""
     audited, opened = _audited(ledger, window, key, verify)
@@ -1313,7 +1354,7 @@ def pinned_session(ledger: Any, window: Any, key: ChallengerKey, pins: Any, main
 
 
 class LiveChallenger:
-    """The challenger's side of one epoch's coins.  It draws every coin and hm96 salt of the layout from `entropy` and
+    """The challenger's side of one epoch's coins.  It samples every coin and hm96 salt of the layout from `entropy` and
     commits to them at construction, before the epoch; `open` releases coin (`label`, `index`) once, after the verifier
     recorded `after`.  `entropy` has no default, so nothing here reads the operating system: a served challenger's is the
     Lean verifier's read of it (`IO.getRandomBytes`, A3).  `claim` is the claim instance naming `entropy`
@@ -1337,6 +1378,7 @@ class LiveChallenger:
         self._tree = MerkleTree(live_domain(scheme, epoch, families),
                                 {p: live_leaf(scheme, *c) for p, c in enumerate(self._coins)}, lambda _: scheme)
         self.commitment = LiveCommitment(scheme, epoch, families, self._tree.commitment.root)
+        self.families = families
         self._opened: set[tuple[str, int]] = set()
         self.record: ChallengerRecord | None = None
 
@@ -1368,13 +1410,22 @@ class LiveChallenger:
         return [self.open(label, index, after) for label, index, after in requests]
 
 
+def _count(challenger: Any, label: str) -> int | None:
+    """How many coins family `label` of `challenger`'s layout holds: from its commitment, or from its layout while a
+    withheld session's commitment is still on the challenger's host (`remote.RemoteChallenger`)."""
+    if challenger.commitment is not None:
+        return challenger.commitment.family(label)
+    return next((n for name, n in challenger.families if name == label), None)
+
+
 class LiveRecord:
     """The verifier's record of one family of an epoch's coins, in order: `record(root)` records the family's next root and
     only then asks the challenger for its coin, after that root; `reason` is `order_reason` over the record.  `clock` is
-    the record's clock in seconds, and `log` the release order on it."""
+    the record's clock in seconds, and `log` the release order on it.  On a withheld session (`remote.serve`) its openings
+    are the coins' raw bytes until the session closes, and `reason` waits for the close."""
 
     def __init__(self, challenger: LiveChallenger, label: str, clock: Callable[[], float] = time.monotonic) -> None:
-        if challenger.commitment.family(label) is None:
+        if _count(challenger, label) is None:
             raise CoinError(f"the epoch's coins have no {label} family")
         self.challenger, self.label, self._clock = challenger, label, clock
         self.roots: list[bytes] = []
@@ -1395,7 +1446,7 @@ class LiveRecord:
         return opening
 
     def _root(self, root: bytes) -> tuple[str, int, bytes]:
-        if len(self.roots) == self.challenger.commitment.family(self.label):
+        if len(self.roots) == _count(self.challenger, self.label):
             raise CoinError(f"every {self.label} coin of the epoch is open")
         i = len(self.roots)
         self.roots.append(bytes(root))
@@ -1409,7 +1460,11 @@ class LiveRecord:
                           "released_at": self._clock()})
 
     def reason(self) -> str | None:
-        return order_reason(self.challenger.commitment, self.label, self.roots, self.openings)
+        if self.challenger.commitment is None:
+            return "the challenger withholds its coin commitment until its session closes"
+        opened = getattr(self.challenger, "opened", None) or {}
+        return order_reason(self.challenger.commitment, self.label, self.roots,
+                            [opened.get((o.label, o.index), o) for o in self.openings])
 
 
 def record_many(asks: Sequence[tuple[LiveRecord, bytes]]) -> list[LiveOpening]:
@@ -1423,13 +1478,80 @@ def record_many(asks: Sequence[tuple[LiveRecord, bytes]]) -> list[LiveOpening]:
     if any(r.challenger is not challenger for r, _ in asks):
         raise CoinError("a batch's coins are one challenger's")
     for r, _ in asks:
-        if len(r.roots) + sum(q is r for q, _ in asks) > challenger.commitment.family(r.label):
+        if len(r.roots) + sum(q is r for q, _ in asks) > _count(challenger, r.label):
             raise CoinError(f"every {r.label} coin of the epoch is open")
     requests = [r._root(root) for r, root in asks]
     openings = challenger.open_many(requests)
     for (r, _), (_, i, _), opening in zip(asks, requests, openings):
         r._release(i, opening)
     return openings
+
+
+#: the interactive-run record of one recursive run (module docstring), which `flock-verify rec-compose --rec-run` reads
+RUN_KIND = "verity/rec-run/v1"
+
+
+class RunRecord:
+    """The challenger's interactive-run record of one recursive run (module docstring, "A recursive run's interactive-run
+    record"): `stage` once, before any session opens; `open` at each `Hello` the challenger answers for the run's parts,
+    before the answer; `close` once the run ends.  It refuses what would make the log not one run's: a second staging, a
+    session before the staging or after the close, a session id or coin key twice.  It never refuses a second session
+    for a part: that is the retry the record exists to show, and `rec-compose` refuses it."""
+
+    def __init__(self) -> None:
+        self._events: list[dict[str, Any]] = []
+        self._sessions: set[str] = set()
+        self._keys: set[str] = set()
+        self.closed = False
+
+    def stage(self, rows_sha512: str, shared: dict[str, Any]) -> None:
+        """V*'s statements staged: the SHA-512 of the shared rows file (`--rec-rows`) and the shared set every part reads
+        (`rec_shared`, as `verify --rec-part` names it)."""
+        if self._events:
+            raise CoinError("a run's statements are staged once, before its first session's Hello")
+        if not _digest_hex(rows_sha512) or not isinstance(shared, dict):
+            raise CoinError("a staging is the rows file's SHA-512, 128 lowercase hex, and the shared set's object")
+        self._events.append({"event": "stage", "rec_rows_sha512": rows_sha512, "rec_shared": json.loads(json.dumps(shared))})
+
+    def open(self, session: str, part: int, coin_key: str) -> None:
+        """Session `session` opened for part `part` at its prover's `Hello`, whose answer carries the fresh coin key
+        `coin_key` (the session's `coin_tree.key`, 256 bytes in lowercase hex)."""
+        if not self._events:
+            raise CoinError("a session opens only after the run's statements are staged")
+        if self.closed:
+            raise CoinError("the run's record is closed: no session opens after it")
+        if not _session_id(session):
+            raise CoinError(f"a session id is 1 to {MAX_SESSION_ID} ASCII letters, digits, '-', '.' and '_'")
+        if type(part) is not int or part < 0:
+            raise CoinError("a session's part is a natural number")
+        if not _digest_hex(coin_key, 512):
+            raise CoinError("a session's coin key is 256 bytes in lowercase hex")
+        if session in self._sessions:
+            raise CoinError(f"session {session} is already in the run's record")
+        if coin_key in self._keys:
+            raise CoinError("a session key is never reused")
+        self._sessions.add(session)
+        self._keys.add(coin_key)
+        self._events.append({"event": "open", "session": session, "rec_part": part, "coin_key": coin_key})
+
+    def close(self) -> dict[str, Any]:
+        """The run ended: no session opens after this.  The record."""
+        if not self._events:
+            raise CoinError("a run's record closes after its staging")
+        if self.closed:
+            raise CoinError("the run's record is closed once")
+        self.closed = True
+        self._events.append({"event": "close"})
+        return self.to_json()
+
+    def to_json(self) -> dict[str, Any]:
+        return {"events": [dict(e) for e in self._events], "kind": RUN_KIND}
+
+    def write(self, path: str | os.PathLike) -> None:
+        """The closed record, on the challenger's host."""
+        if not self.closed:
+            raise CoinError("a run's record is written once it is closed")
+        Path(path).write_text(json.dumps(self.to_json(), sort_keys=True, separators=(",", ":")) + "\n")
 
 
 __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "CLOSE_ROLE", "COIN_BYTES",
@@ -1439,11 +1561,12 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "LOG_MALFORMED", "LOG_TAG", "LiveChallenger", "LiveCommitment", "LiveOpening", "LiveRecord", "MAX_COINS",
            "MAIN_FORM", "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_SESSION_ID", "MINUTES", "NO_AUDIT", "NO_CLOSE",
            "NO_MAIN", "NO_PINS", "NO_RECORD", "OPENING_FORM", "PERIOD_KINDS", "PINS_FORM", "PUBLIC_BYTES", "RECORD_FILE",
+           "RUN_KIND", "RunRecord",
            "RECORD_FORM", "RECORD_ROLE",
-           "RESERVED", "SEALED_FILES", "SESSION_FORM", "SESSION_KINDS", "Verify", "WINDOW_FORM", "audited_session",
+           "RESERVED", "SEALED_FILES", "SESSION_FORM", "SESSION_KINDS", "Verify", "WINDOW_FORM", "WITHHELD", "audited_session",
            "cap_of", "circuit_of", "circuit_reason", "close_message", "credited_session", "extends", "first_parent_reason", "key_of_record", "lane_of", "later", "layout_problem",
            "leaf_of", "ledger_head", "ledger_line", "pin_line", "pinned_session", "pins_reason", "pins_seal",
            "ledger_message", "ledger_text", "live_domain", "live_leaf", "live_reason", "log_chain", "log_digest",
            "order_reason", "record_many", "record_message", "record_reason", "released_roots_of", "root_of",
            "session_named", "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
-           "verify_periods", "write_record"]
+           "verify_periods", "withheld_on", "write_record"]

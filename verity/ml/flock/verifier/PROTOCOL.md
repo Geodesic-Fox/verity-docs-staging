@@ -159,7 +159,7 @@ The server commits to a seed at `Hello` (`coin-commit/sha512`) and derives every
 `verity.ml.randomness` v2; `flock-circuit replay-coins` audits the commitment and the derivation. The verifier still
 reads the coins from the record; with a seed, soundness also assumes the commitment hides it and SHA-512 is a PRF.
 
-### 7.3 The unit draw
+### 7.3 The unit sample
 
 `Flock.Draw`, `flock-verify draw`. After serving registers its roots and before the session, the verifier draws the
 sampled units from its own OS randomness with `verity.ml.randomness`'s exact samplers, in the clear and under no hash.
@@ -438,7 +438,10 @@ with `refused: <why>: a statement form the soundness proof does not cover`. The 
 Also refused: a draw by a design no claim covers (bernoulli, work, a work draw with a closure, and a subset draw without
 `--zk` at public outputs; under `--plain-tables` the subset design alone), a session without a draw, a session verified
 without the verifier's own `--program`, and under `--rec-inner` a V* session that does not draw every unit of its one
-full table (`RecSetup.fullDraw`, `RecSetup.oneFull`); a recursive session without `--rec-inner` is refused too.
+full table (`RecSetup.fullDraw`, `RecSetup.oneFull`), over an inner session whose record holds no draw
+(`RecSetup.innerDrawn`), or at a holo or sparse inner shape (`RecSetup.denseOnly`: `RecursiveKS` covers the dense form
+only, and the compiled model refuses the same sessions, `RecDeploy.acc_dense`); a recursive session without `--rec-inner`
+or without `--zk` (`RecSetup.zkOnly`) is refused too.
 `flock-verify rec-compose` (`Flock.RecCompose`) gives a recursive statement's verdict from its parts' verdicts.
 
 ### 16.16 Plain leaves
@@ -488,7 +491,7 @@ Merkle trees, the hiding leaves, the round digests and the statement binding (wi
 the pinned circuits meaning what the statement says, which the lowering proofs cover against their reference functions;
 and the verifier's custody of the record and the proofs.
 
-### 17.3 Trusted components
+### 17.3 Trusted code
 
 Lean's kernel, for the theorems. Lean's compiler, runtime and the C compiler, for the running binary: the agreement tests
 of §17.1 narrow that trust (an independent implementation must agree on the corpus and on fuzzed mutations), they don't
