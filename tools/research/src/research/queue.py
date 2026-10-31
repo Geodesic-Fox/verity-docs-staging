@@ -1150,8 +1150,6 @@ class Queue:
         self.unlock: Callable[[], None] = lambda: None
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.state_path = self.workdir.parent / f"{self.workdir.name}.state.json"
-        #: whether git takes `--attr-source` (`_merge`), until it refuses it once
-        self._attr_source = True
         #: the files each merge commit of `next` changed (`touched_by`)
         self._touched: dict[str, set[str]] = {}
         #: main's registry as `handle` reads it (its handles, {agent id: handle}), until the next `fetch`
@@ -1556,16 +1554,13 @@ class Queue:
         without the checkout: `git merge-tree` merges, with ``tip``'s merge drivers (`merged_tree`), and `git commit-tree`
         makes the merge commit, so a candidate that conflicts costs one call (merging each candidate in the worktree, with
         many of them conflicting, takes tens of minutes).  A merge whose every conflict is in a pin is kept, each pin rebuilt
-        from the merged tree (`repinned`).  A git without `--attr-source` (before 2.40) merges in the worktree
-        (`_merge_in_worktree`), which refuses any conflict.  ``head``: the commit merged in its place, its head restacked
-        through a move (`_merge_through`), under the same message."""
+        from the merged tree (`repinned`).  A git without `--attr-source` (before 2.40) raises: merging without it would leave
+        out every PR whose only conflict is a pin (drive refuses its tick before, `Driver._old_git`).  ``head``: the commit
+        merged in its place, its head restacked through a move (`_merge_through`), under the same message."""
         head = head or pr.head
-        if not self._attr_source:
-            return self._merge_in_worktree(tip, pr, members, head)
         tree, files, r = merged_tree(self.workdir, tip, head, plain=False)
         if r.returncode == 129 and "attr-source" in r.stderr:
-            self._attr_source = False
-            return self._merge_in_worktree(tip, pr, members, head)
+            raise QueueError(f"this git has no `--attr-source`, which merging `{self.branch}` needs: install git >= 2.40")
         if tree is None:
             return None, self._unmerged(r, files, members)
         if files:
@@ -1722,17 +1717,6 @@ class Queue:
         if not unjudged:
             verdicts[key] = refused
         return refused, unjudged
-
-    def _merge_in_worktree(self, tip: str, pr: PR, members: list[Member], head: str | None = None) -> tuple[str | None, str]:
-        """`_merge` by `git merge --no-ff` in the clone's worktree, checked out at ``tip``."""
-        _git(self.workdir, "checkout", "-q", "--detach", tip)
-        r = _git(self.workdir, "merge", "--no-ff", "--no-edit", "-m", _message(pr), head or pr.head, check=False, env=IDENTITY)
-        if r.returncode == 0:
-            return _out(self.workdir, "rev-parse", "HEAD"), ""
-        files = _out(self.workdir, "diff", "--name-only", "--diff-filter=U").split()
-        _git(self.workdir, "merge", "--abort", check=False)
-        _git(self.workdir, "reset", "-q", "--hard", tip)
-        return None, self._unmerged(r, files, members)
 
     def _unmerged(self, r: subprocess.CompletedProcess, files: list[str], members: list[Member]) -> str:
         if not files:
