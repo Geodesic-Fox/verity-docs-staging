@@ -22,7 +22,8 @@ For `suites.py`'s per-test verdicts it also records each test that passed (every
 seconds, each test that failed, and which of the suite's `test_*.py` files were opened while a test module was collected or
 its tests ran (under `"*"` when neither: a session fixture, a conftest). It deselects the tests `VERITY_SUITE_REUSE` names,
 whose passes `suites.py` reuses, and in an xdist worker it moves the longest tests (`VERITY_SUITE_HEAVY`) to the heads of the
-workers' shares: an order only, which parallel suites declare their outcomes don't depend on. It sets `VERITY_SUITE_MODULE` while a test module is collected or run, so the Pythons a test starts
+workers' shares: an order only, which parallel suites declare their outcomes don't depend on. Under `suites.py --files` it
+collects only the test files of the run's part (`VERITY_SUITE_PART`, `in_part`). It sets `VERITY_SUITE_MODULE` while a test module is collected or run, so the Pythons a test starts
 trace their own reads (`child/`), and in a child this process forks it writes each such read at once to `VERITY_SUITE_READS`
 (`child/verity_suite_reads.py`): a fork's memory never comes back, and one that ends through `os._exit` flushes nothing.
 
@@ -36,6 +37,7 @@ Two kinds of skip fail instead: one for an unreachable evidence store under a re
 from __future__ import annotations
 
 import atexit
+import hashlib
 import importlib.metadata
 import importlib.util
 import json
@@ -284,6 +286,35 @@ def pytest_collection_modifyitems(session, config, items) -> None:
         with open(heavy) as f:
             order = heavy_first([i.nodeid for i in items], json.load(f), workers)
         items[:] = [items[i] for i in order]
+
+
+def _load_part() -> tuple[set[int], int, frozenset, frozenset] | None:
+    if not (_ACTIVE and (f := os.environ.get("VERITY_SUITE_PART"))):
+        return None
+    with open(f) as fh:
+        p = json.load(fh)
+    return set(p["ks"]), p["m"], frozenset(p["mine"]), frozenset(p["every"])
+
+
+_part = _load_part()
+
+
+def in_part(rel: str, ks: set[int], m: int, mine: frozenset, every: frozenset) -> bool:
+    """Whether test file ``rel`` (from the suite's directory) is in parts ``ks`` of ``m``: by `suites.partition`'s assignment
+    (``mine`` of ``every``), and a file pytest collects that it doesn't list by its path's hash, so every file the suite's own
+    collection finds runs in exactly one part."""
+    if rel in every:
+        return rel in mine
+    return int(hashlib.sha256(rel.encode()).hexdigest()[:8], 16) % m + 1 in ks
+
+
+def pytest_ignore_collect(collection_path, config):
+    """Under `suites.py --files` (`VERITY_SUITE_PART`): a test file outside the run's part isn't collected, nor imported."""
+    name = collection_path.name
+    if _part is None or not name.endswith(".py") or not (name.startswith("test_") or name.endswith("_test.py")):
+        return None
+    rel = os.path.relpath(collection_path, os.environ["VERITY_SUITE_DIR"]).replace(os.sep, "/")
+    return None if in_part(rel, *_part) else True
 
 
 def _ours(name: str) -> bool:
