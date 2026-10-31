@@ -239,8 +239,6 @@ DRIVE_FLAGS = "tools/verity/check/drive.toml"
 #: the pins tool, whose `PINS` names the generated files a merge rebuilds (`repinned`): after the repository move, and before it
 PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
 MARK_TIME_RE = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
-#: drive.toml's `after_landing_shards` for the shard planner's N: "auto", or "auto:MAX" (train.sh's `--shard`)
-AUTO_SHARDS_RE = re.compile(r"auto(:[1-9]\d*)?")
 IDENTITY = {"GIT_AUTHOR_NAME": "research queue", "GIT_AUTHOR_EMAIL": "queue@research.invalid",
             "GIT_COMMITTER_NAME": "research queue", "GIT_COMMITTER_EMAIL": "queue@research.invalid"}
 DATES = ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE")
@@ -443,9 +441,8 @@ class DriveFlags:
     #: PRs the stale rule never judges: their owners keep them open with a reason
     stale_keep: tuple[int, ...] = ()
     #: the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`drive.Driver.start_postland`):
-    #: 1, or a plan's N; it takes about its longest shard rather than every step on one slot; "auto" or "auto:MAX", the shard
-    #: planner's N (`tools/verity/check/shards.py`), at most MAX (default its MAX_SHARDS): `train.sh --shard auto:MAX`
-    after_landing_shards: int | str = 1
+    #: 1, or a plan's N; it takes about its longest shard rather than every step on one slot
+    after_landing_shards: int = 1
     #: the keys drive's command line may override (`override`), of `COMMAND_LINE`; any other flag given there refuses the tick
     command_line: tuple[str, ...] = ("on", "first")
     #: each tick, after the reviewed prefix, land up to `lowrisk_per_tick` members of `next` whose change is `lowrisk` on their
@@ -491,11 +488,9 @@ class DriveFlags:
                 raise bad("on", "at least one machine (train.sh's: a machine, or `auto`)")
             got["on"] = ",".join(on)
         if "after_landing_shards" in doc:
-            v = doc["after_landing_shards"]
-            if not (isinstance(v, str) and AUTO_SHARDS_RE.fullmatch(v)) and (type(v) is not int or v < 1):
-                raise bad("after_landing_shards", "a whole number, 1 or a shard plan's N in tools/verity/check/ci.toml, or "
-                                                  "\"auto\" or \"auto:MAX\" (the shard planner's N, at most MAX)")
-            got["after_landing_shards"] = v
+            if type(doc["after_landing_shards"]) is not int or doc["after_landing_shards"] < 1:
+                raise bad("after_landing_shards", "a whole number, 1 or a shard plan's N in tools/verity/check/ci.toml")
+            got["after_landing_shards"] = doc["after_landing_shards"]
         if "max_lean_checks" in doc:
             if type(doc["max_lean_checks"]) is not int or doc["max_lean_checks"] < 1:
                 raise bad("max_lean_checks", "a whole number, 1 or more")

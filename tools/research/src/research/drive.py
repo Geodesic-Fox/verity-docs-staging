@@ -74,9 +74,7 @@ verified `checked` commit, below the tip, for ratchet-gate to judge the
 landings above; with drive.toml's `after_landing_shards` N, as N runs at once (`--shard K/N` each, on machines of `on` no other
 shard has while there are N: `shard_machines`), passed once every shard passed, a run ci launched in place of a shard's twin
 counting once `/data/infra/drive.sh queue drive-shard-add TIP K RUN_ID` adds it to shard K (`queue.drive_shard_add`: only a
-run whose own record is shard K/N of TIP's commit; cancel the twin after); with `after_landing_shards = "auto[:MAX]"`, as the
-shard planner's N runs (`train.sh --shard auto:MAX`: one launch, which plans once and launches each shard on one machine of
-`on`, its N run ids then one shard each), passed once every shard passed;
+run whose own record is shard K/N of TIP's commit; cancel the twin after);
 `--no-cache --circuit-cache` while `after_landing_no_cache` (no pass reused but circuit-check's per-target ones), and
 `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `checked`
 itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
@@ -748,13 +746,12 @@ class Driver:
                  after_landing_no_cache: bool = False, reviews: Callable[[int, str], list] | None = None,
                  ready_by: Callable[[int, str], str | None] | None = None, max_lean_checks: int = 2,
                  stale_days: int = 0, stale_close_days: int = 0, stale_keep: tuple[int, ...] = (),
-                 after_landing_shards: int | str = 1, lowrisk_lane: bool = False, lowrisk_per_tick: int = 20,
+                 after_landing_shards: int = 1, lowrisk_lane: bool = False, lowrisk_per_tick: int = 20,
                  lowrisk_excludes: tuple[str, ...] = ()):
         self.q, self.on = q, on
         #: drive.toml's low-risk lane (`land_lowrisk`): on, its most landings a tick, and what keeps a change off it (`lowrisk`)
         self.lowrisk_lane, self.lowrisk_per_tick, self.lowrisk_excludes = lowrisk_lane, lowrisk_per_tick, lowrisk_excludes
-        #: the after-landing run as this many runs at once, shard K of ci.toml's plan with N shards each, or "auto[:MAX]", the
-        #: shard planner's N (`start_postland`)
+        #: the after-landing run as this many runs at once, shard K of ci.toml's plan with N shards each (`start_postland`)
         self.after_landing_shards = after_landing_shards
         #: the review landing's Lean checks that may run at once, a lower one and those stacked above it (`lean_stack`)
         self.max_lean_checks = max_lean_checks
@@ -934,9 +931,6 @@ class Driver:
             return
         if "launch" in run:
             return
-        if run.get("auto") and "groups" not in run:
-            # an auto plan's launch prints its N shards' runs, one each (train.sh cancels them all unless N launched)
-            run["groups"] = [[r] for r in run["ids"]]
         tip = run["tip"]
         states = self._states(run["ids"])
         if self._lost(run, states):
@@ -1469,16 +1463,11 @@ class Driver:
                  _git(self.repo, "rev-parse", "--verify", "-q", f"{main}^1", check=False).stdout.strip()) or None
         flags = (f" --base {below[:12]}" if below else "") + "".join(f" --{k.replace('_', '-')}" for k, on in extra.items() if on)
         n = self.after_landing_shards
-        auto = isinstance(n, str)
         if self.dry_run or q.shadow:
             q.log(f"research queue drive: would launch train.sh {main[:12]} {self.on} --deferred {steps}{flags}"
-                  + (f" --shard {n}" if auto else f" as {n} shards" if n > 1 else ""))
+                  + (f" as {n} shards" if n > 1 else ""))
             return
-        if auto:
-            rec, tail = self._started(self.launch_postland(self.repo, main, self.on, steps, base=below, **extra, shard=n))
-            if rec is not None:
-                rec["auto"] = True
-        elif n == 1:
+        if n == 1:
             rec, tail = self._started(self.launch_postland(self.repo, main, self.on, steps, base=below, **extra))
         else:
             if len(self.on.split(",")) < n:
@@ -1493,8 +1482,7 @@ class Driver:
                 rec = None
         if rec is None:
             self.refuse(drive, f"launch:postland:{main}", f"train.sh {main[:12]} {self.on} --deferred {steps}{flags}"
-                                                          + (f" --shard {n}" if auto else f" (as {n} shards)" if n > 1 else "")
-                                                          + f" registered no run: {tail}")
+                                                          + (f" (as {n} shards)" if n > 1 else "") + f" registered no run: {tail}")
             return
         pl["run"] = {**rec, "tip": main, "at": self.now(), **({"resend": True} if pl.pop("resend", False) else {}),
                      **({"skip": skip} if skip else {}), **({"baseline": True} if base else {}),

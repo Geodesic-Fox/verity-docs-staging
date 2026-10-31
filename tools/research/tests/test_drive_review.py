@@ -156,35 +156,6 @@ def test_a_sharded_after_landing_run_verifies_main_only_once_every_shard_passed(
     assert pl["verified"] == main and pl["run"] is None, world.logs
 
 
-def test_an_auto_sharded_after_landing_run_is_one_launch_of_the_planners_n_shards_each_of_which_must_pass(world, monkeypatch):
-    """`after_landing_shards = "auto:MAX"`: one `train.sh --shard auto:MAX`, which plans once and prints the N shards' runs, one
-    run per shard; `main` is verified only once every one of them passed, not when one did (as twins would)."""
-    h = Review(world, monkeypatch)
-    h.d.after_landing_shards = "auto:5"
-    ids = ["r-auto-1", "r-auto-2", "r-auto-3"]
-
-    def launch(repo, commit, machine, steps, **kw):
-        h.posted.append((commit, steps, kw))
-        h.run_state.update({r: ("running", None, None) for r in ids})
-        return ids, ""
-
-    h.d.launch_postland = launch
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.review(1)
-    assert h.tick().startswith("landed #1"), world.logs
-    main = _main(world)
-    assert [(c, kw.get("shard")) for c, _, kw in h.posted] == [(main, "auto:5")]
-    h.run_state.update({"r-auto-1": ("done", 0, None), "r-auto-2": ("running", None, None), "r-auto-3": ("done", 0, None)})
-    h.evidence = [_steps_run(world.tmp, "r-auto-1", {s: "passed" for s in AFTER_LANDING})]
-    h.tick()
-    pl = h.postland()
-    assert pl["run"]["groups"] == [[r] for r in ids] and pl["verified"] != main, "one shard runs on"
-    h.run_state["r-auto-2"] = ("done", 0, None)
-    h.tick()
-    pl = h.postland()
-    assert pl["verified"] == main and pl["run"] is None and len(h.posted) == 1, world.logs
-
-
 @pytest.mark.parametrize("on, n, want", [
     ("m1,m2,m3,m4,m5", 3, ["m1,m4", "m2,m5", "m3"]),
     ("m1,m2,m3", 3, ["m1", "m2", "m3"]),

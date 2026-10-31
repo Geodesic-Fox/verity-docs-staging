@@ -30,7 +30,7 @@ from dataclasses import dataclass
 KIND = "check-shard-plan/v1"
 #: how far over the best bound a packing may be and still be taken
 SLACK = 0.05
-#: the most shards an auto plan uses unless told otherwise (`--shard auto:MAX`, drive.toml's `after_landing_shards = "auto:MAX"`)
+#: the most shards an auto plan uses unless told otherwise (`check.py --shard-plan --max-shards M`)
 MAX_SHARDS = 6
 #: a build costing at most this is run again on each shard that reads it; a costlier one holds its readers on its own shard
 CHEAP_S = 300.0
