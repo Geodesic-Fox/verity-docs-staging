@@ -8,7 +8,8 @@ the circuit back.
     - the unit circuit is a `compact_stage.CompactCircuit`: its ANDs' operands go to a spool under ``scratch`` as int32, and
       `compact_stage.layout` lays it out from there (a circuit it does not take gets the library's lists back, and the
       layout below). `compact_stage.lower` lowers into it, dropping each IR wire after its last read
-    - the unit's netlist (`ir_lower.netlist`'s text) is rendered once for its hash and once into circuit.txt: `compose`
+    - a stager without ``circuit`` (`stage_unit`'s; one with it has `circuit.compose_to` stream the netlist into its file):
+      the unit's netlist (`ir_lower.netlist`'s text) is rendered once for its hash and once into circuit.txt: `compose`
       builds it as one string, which `Lowering.sha256_of` hashes with the LEAVES and CUT lines. `compose` gets in its
       place a string of as many newlines (and `sha256_of` the netlist's hash), and the circuit text it returns stands for
       that text with the netlist in the newlines' place: its digests (`circuit.digest`, `circuit.class_digest`) and
@@ -343,6 +344,8 @@ def install(scratch: Path) -> None:
         return expanded(lay, name)
 
     def compose_(low, *a, **k):
+        if k.get("out") is not None:
+            return compose(low, *a, **k)
         text = compose(low, *a, **k)
         e = _units.get((id(low.layout), low.name))
         if e is not None and text.startswith(f"{FC.FORMAT} "):
