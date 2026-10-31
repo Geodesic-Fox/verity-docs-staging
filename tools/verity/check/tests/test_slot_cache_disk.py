@@ -2,14 +2,14 @@
 from __future__ import annotations
 
 import importlib.util
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 spec = importlib.util.spec_from_file_location("repo_slot_cache_disk", ROOT / "tools" / "verity" / "check" / "slot.py")
 SLOT = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(SLOT)
-NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 def test_the_cache_disk_is_its_nearest_existing_directory(monkeypatch, tmp_path):
