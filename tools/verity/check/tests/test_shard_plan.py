@@ -27,6 +27,20 @@ def _module(name: str, path: Path):
 
 CHECK = _module("repo_check_for_shard_plan", ROOT / "tools" / "verity" / "check" / "check.py")
 S = CHECK.SHARDS
+LA = CHECK._lean_audit()
+#: the packages' `proved_in` as their policies name them: reading every package's lean-audit.json would make each one an input
+PROVERS = {"Security": ["Security/Proofs"], "Security/Properties": ["Security/Proofs"]}
+
+
+@pytest.fixture(autouse=True)
+def _provers(monkeypatch):
+    class Audit:
+        provers = staticmethod(lambda p: PROVERS.get(p, []))
+
+        def __getattr__(self, name):
+            return getattr(LA, name)
+
+    monkeypatch.setattr(CHECK, "_lean_audit", Audit)
 
 
 def _ts(costs: dict[str, float]) -> list:
@@ -100,8 +114,7 @@ def _write(tmp_path: Path, doc: dict) -> Path:
     return f
 
 
-def test_an_auto_plan_of_this_tree_runs_each_gated_part_in_one_shard_and_a_stale_plan_is_refused(tmp_path, monkeypatch):
-    monkeypatch.delenv(CHECK.AUTO_PLAN_ENV, raising=False)
+def test_an_auto_plan_of_this_tree_runs_each_gated_part_in_one_shard_and_a_stale_plan_is_refused(tmp_path):
     doc = CHECK.auto_plan(({}, {}, {}), 4, n=3)
     want = CHECK.auto_parts()
     assert sorted(doc["all"]) == sorted(want) and not any(p.partition(":")[0] in CHECK.OFF_GATE for p in want)
