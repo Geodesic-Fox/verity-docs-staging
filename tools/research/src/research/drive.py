@@ -19,7 +19,7 @@ syncs `next` (`Queue.sync`: admit and drop PRs, rebuild on a moved `checked`), t
 mark's author doesn't count: `queue.unreviewed`), a fast-forward of `checked` (`_land`); once `main` reaches it, `merge.caught_up`
 (the spec DM, node 1's mirror, the post-train regression, the Lean cache publish, the landing post) and the sweep (`_on_main`).
 While `next`'s lowest member waits at its head for a land verdict, unheld, holding every landing above it, `BOTTOM_WAIT_S`
-since it became the lowest or since its ready mark, whichever is later, @ci (who staffs the reviewers) and @top are rung,
+since it became the lowest or since its ready mark, whichever is later, `CI` (who staffs the reviewers) and `TOP` are rung,
 and again every `BOTTOM_WAIT_S` while it waits (`_bottom`).
 A `main` pushed outside drive (a pure move, on its own check) is merged into `checked` (`_absorb`).  Two gates cut the prefix
 first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, or a Lean source outside `Security/`
