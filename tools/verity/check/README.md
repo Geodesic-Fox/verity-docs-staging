@@ -51,7 +51,8 @@ in `ci.toml`, as drive's after-landing run checks it; `--kind preflight` is the 
 `--changed BASE` keeps the tasks whose inputs the change from BASE's merge-base with HEAD touches, by `suites.py --changed`'s
 rule for a suite and by input paths for the rest, and the tasks they depend on. `--circuit-shards M` splits circuit-check into M
 tasks (default: its ci.toml `shards`). The document is `{"schema": "tasks/v1", "commit", "tree", "kind", "circuit_shards",
-"changed": {"base", "files"} or null, "costs": [notes], "tasks": [...]}`, and each task is:
+"changed": {"base": the merge-base, "files": how many files changed} or null, "costs": [notes], "tasks": [...]}`, and each
+task is:
 
 | Field | What it is |
 | --- | --- |
@@ -69,7 +70,7 @@ tasks (default: its ci.toml `shards`). The document is `{"schema": "tasks/v1", "
 | `key` | SHA-512 over its id, argv, cwd and what it reads; null when it has none |
 | `unkeyed` | null, or why `key` is null |
 
-A task's key hashes the components a suite's key hashes (`suites.components`: each input's git object id, its fixtures, the
+A task's key hashes what a suite's key hashes (`suites.components`: each input's git object id, its fixtures, the
 resolved lock entries and installed versions, Python, the platform, the base image and the `VERITY_*`/`FLOCK_*` variables) under
 the environment check gives that step; a Lake package's, `lean_audit.components` (its content and its path dependencies' and
 provers', the auditor's files, the toolchain pin) with Python and the base image; a job in `check.STEP_KEYS`, that step's key.
