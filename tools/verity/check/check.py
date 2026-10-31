@@ -1434,9 +1434,12 @@ def auto_parts(gated: bool = True, jobs: set[str] | None = None) -> list[str]:
                         (FLOCK_LEAN / "lakefile.toml").exists())
 
 
-def job_needs() -> dict[str, list[str]]:
-    """Each job's `needs` and `after`: what must share its shard (`shards.units`)."""
-    return {j.name: [*j.needs, *([j.after] if j.after else [])] for j in JOBS}
+def shard_needs() -> dict[str, list[str]]:
+    """What a shard runs beside a part (`shards.builds`): each job's `needs` and `after`, and each audited package's provers
+    (`lean_audit.provers`, the packages its `proved_in` names, which its audit audits beside it)."""
+    la = _lean_audit()
+    return {**{j.name: [*j.needs, *([j.after] if j.after else [])] for j in JOBS},
+            **{f"lean-audit:{p}": [f"lean-audit:{q}" for q in qs] for p in _parts_of()["lean-audit"] if (qs := la.provers(p))}}
 
 
 def auto_plan(costs: tuple[dict, dict, dict], max_shards: int = SHARDS.MAX_SHARDS, deferred: str | None = None,
@@ -1448,7 +1451,7 @@ def auto_plan(costs: tuple[dict, dict, dict], max_shards: int = SHARDS.MAX_SHARD
     names = auto_parts(deferred is None, jobs)
     given = {p: float(s) for p, s in (given or {}).items()}
     measured = {**SHARDS.priced(names, costs[0], costs[1], {**costs[2], **given}), **{p: s for p, s in given.items() if p in names}}
-    return SHARDS.plan(SHARDS.tasks(names, measured), job_needs(), max_shards, n)
+    return SHARDS.plan(SHARDS.tasks(names, measured), shard_needs(), max_shards, n)
 
 
 def measured_costs(check_roots: list[Path], test_roots: list[Path]) -> tuple[dict[str, float], dict[str, float]]:

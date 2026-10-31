@@ -48,7 +48,7 @@ while [ $# -gt 0 ]; do
       shard=$2; shift ;;
     --base) [ $# -ge 2 ] || { echo "train: --base needs REF" >&2; exit 2; }
       below=$2; shift ;;
-    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS, --base REF and --shard K/N alone" >&2; exit 2 ;;
+    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS, --base REF and --shard K/N or auto[:MAX] alone" >&2; exit 2 ;;
   esac
   shift
 done

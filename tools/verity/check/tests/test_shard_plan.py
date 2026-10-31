@@ -80,6 +80,18 @@ def test_a_shard_plan_keeps_each_part_with_its_build_and_charges_a_shard_that_ru
     assert owner["builds"] == []
     assert doc["floor_s"] == 80.0 and doc["floor"][0] == "lean-build" and doc["floor"][1].startswith("lean-suites:")
     assert S.builds(["a", "b", "c"], {"c": ["b"], "b": ["a"]}) == {"a": [], "b": ["a"], "c": ["a", "b"]}, "deepest first"
+    assert S.builds(["j:x", "j:y", "k"], {"j:x": ["j:y"], "j": ["k"]}) == {"j:x": ["k", "j:y"], "j:y": ["k"], "k": []}, \
+        "a part's own needs (a spec's provers) and its job's"
+    assert S.builds(["a", "b"], {"a": ["b"], "b": ["a"]}) == {"a": ["b"], "b": ["a"]}
+
+
+def test_a_shard_plan_holds_the_readers_of_a_costly_build_on_its_shard_rather_than_running_it_again():
+    costly = S.CHEAP_S * 4
+    ts = _ts({"proofs": costly, "spec": costly / 2, "small": 10, "x": costly, "y": costly})
+    doc = S.plan(ts, {"spec": ["proofs"], "small": ["proofs"]}, max_shards=3, n=3)
+    [holder] = [s for s in doc["shards"] if "proofs" in s["parts"]]
+    assert holder["parts"] == ["proofs", "spec", "small"] and not any(s["builds"] for s in doc["shards"])
+    assert (doc["floor_s"], doc["floor"]) == (costly * 1.5 + 10, ["proofs", "spec", "small"])
 
 
 def _write(tmp_path: Path, doc: dict) -> Path:
@@ -95,6 +107,12 @@ def test_an_auto_plan_of_this_tree_runs_each_gated_part_in_one_shard_and_a_stale
     assert sorted(doc["all"]) == sorted(want) and not any(p.partition(":")[0] in CHECK.OFF_GATE for p in want)
     assert {"pytest", "lean-suites"}.isdisjoint(want), "the test steps are split by suite"
     assert all(p.partition(":")[2] in CHECK.AFTER_LEAN for p in want if p.startswith("lean-suites:"))
+    needs = CHECK.shard_needs()
+    for spec in ("lean-audit:Security", "lean-audit:Security/Properties"):
+        assert needs[spec] == ["lean-audit:Security/Proofs"], "a spec's audit audits its provers beside it"
+    costly = CHECK.auto_plan(({}, {"Security/Proofs": S.CHEAP_S * 2}, {}), 4, n=3)
+    [s] = [s for s in costly["shards"] if "lean-audit:Security/Proofs" in s["parts"]]
+    assert {"lean-audit:Security", "lean-audit:Security/Properties"} <= set(s["parts"]), "held on its shard, not audited again"
     f = _write(tmp_path, doc)
     got = [CHECK.shard(f"auto:{k}/3", plan_file=f) for k in (1, 2, 3)]
     assert sorted(p for g in got for p in g["parts"]) == sorted(want)
