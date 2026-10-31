@@ -4,6 +4,10 @@
     verity check PART... [ARGS]     only those parts of it, tests, circuits or lean (their jobs in check/ci.toml)
     verity check --record [ARGS]    the check recorded as an Attempt (check.py --record; a lane's own: --on M --pool NAME)
     verity check move BASE HEAD     certify a pure move (check/move_check.py)
+    verity tasks list --json [--kind after-landing|preflight] [--changed BASE]
+                                    the check's task graph of this checkout (`tasks/v1`, check/tasks.py; its README's "Tasks")
+    verity tasks run ID [--out FILE]
+                                    run one task here as check runs it, and print its verdict, outputs, seconds and key
     verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
     verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
                                     a deployment configuration's parties on this machine, and its verdict (run.py)
@@ -151,6 +155,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args[0] == "check":
         return _check(args[1:])
+    if args[0] == "tasks":
+        return _run([sys.executable, str(HERE / "check" / "tasks.py"), *args[1:]])
     if args[0] == "bench":
         return _runner("benchmarks", "bench", args[1:])
     if args[0] in ("run", "config"):

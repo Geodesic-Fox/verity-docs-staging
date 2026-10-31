@@ -225,6 +225,7 @@ input or contract that doesn't resolve fails there; only a check `fixtures.toml`
 """
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import importlib.util
 import json
@@ -1422,10 +1423,11 @@ AUTO_SHARD = re.compile(r"auto:([1-9]\d*)/([1-9]\d*)")
 AUTO_LAUNCH = re.compile(r"auto(?::([1-9]\d*))?")
 
 
-def auto_parts(gated: bool = True, jobs: set[str] | None = None) -> list[str]:
+def auto_parts(gated: bool = True, jobs: set[str] | None = None, circuit_shards: int | None = None) -> list[str]:
     """The auto plan's parts on this tree (`shards.parts`): those of the jobs on the gate (or, not ``gated``, of every job),
-    of ``jobs`` alone when given."""
-    js = [j for j in (DECLARATION.gated(JOBS) if gated else JOBS) if jobs is None or j.name in jobs]
+    of ``jobs`` alone when given; circuit-check in ``circuit_shards`` parts when given, else its ci.toml `shards`."""
+    js = [dataclasses.replace(j, shards=circuit_shards) if circuit_shards and j.name == "circuit-check" else j
+          for j in (DECLARATION.gated(JOBS) if gated else JOBS) if jobs is None or j.name in jobs]
     return SHARDS.parts(DECLARATION.all_parts(js, _parts_of()), [s.name for s in SUITES.discover()], list(AFTER_LEAN),
                         (FLOCK_LEAN / "lakefile.toml").exists())
 
@@ -2341,7 +2343,8 @@ PREBUILD = ("try:\n    from verity.ml.definitions.numerics import twins\nexcept 
 
 def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = False,
         only: list[str] | None = None, packs: Packs | None = None, reused: Reused | None = None,
-        regenerate: bool = True, circuit_cache: bool | None = None) -> tuple[bool, list[dict]]:
+        regenerate: bool = True, circuit_cache: bool | None = None, with_preflight: bool = True) -> tuple[bool, list[dict]]:
+    """The preflight (unless not ``with_preflight``: a task of `tasks.py` other than its `preflight`), then the groups."""
     n = n or cores()
     urls = take_lean_deps_urls(out)
     steps = Steps(out, keep_going, packs, reused)
@@ -2370,7 +2373,7 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
         return done
 
     try:
-        results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in preflight()]
+        results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in (preflight() if with_preflight else [])]
         if not steps.stopping and all(r["status"] == "passed" for r in results):
             subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
             if reused is not None:
