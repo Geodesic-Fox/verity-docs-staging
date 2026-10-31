@@ -19,8 +19,8 @@ soundness-path Python), merges with no conflict, contains no PR not landed, and 
 The after-landing run checks them with the rest, and `main` follows only a checked commit; never with `land_into = "main"`.
 Its landing rebuilds `next` on `checked`, and each Lean check of `next` that runs or passed moves to the commit of the same
 member, as its trees differ in no file `lowrisk_excludes` names (`_keep_lean`); the lane waits only while one can't move, and
-even then lands each fix of a red on `checked` above every such check's prefix whose merge changes nothing a Lean check reads
-(`_fix_only`), onto `checked`'s tip without rebuilding `next`: the next sync rebuilds it, and the check's verdict moves with its
+even then lands each fix of a red on `checked` above every such check's prefix whose change touches nothing a Lean check reads
+(`_land_fixes`), onto `checked`'s tip without rebuilding `next`: the next sync rebuilds it, and the check's verdict moves with its
 prefix (`_rekey_lean`, across trees that differ in no file `lowrisk_excludes` names).
 
 Review landing, of every change the low-risk lane (above) doesn't take.  `main` holds only fully checked commits: PRs land
@@ -1438,6 +1438,38 @@ class Driver:
                     f"launches once that lands, or {FIX_WAIT_S // 60} min after its mark")
         return None
 
+    def _land_fixes(self, drive: dict, entries: dict[int, Entry], running: set[str], dry_run: bool,
+                    chain: list[Member]) -> list[Member]:
+        """The low-risk lane while a Lean check of `next` can't move across its landing (`land_lowrisk`): land, by the lane's
+        rules, each member of ``chain`` that is a fix of a red on `checked`, not reverted (`_red_fix`), unless it lies in the
+        prefix of a Lean check that passed, or runs and isn't stacked (`_stack_lean`, which reaches `next`'s top and is
+        cancelled by any change to its prefix), which lands it and which its landing would rebuild, or its change touches what
+        a Lean check reads (`LEAN_INPUTS`, `LEAN_TOOLING`), which `lowrisk_excludes` should have kept off the lane; each such
+        refusal is logged.  The landed members."""
+        lean = drive.get("lean") or {}
+        held = (running - set(lean)) | {c for c, rec in lean.items()
+                                        if rec.get("state") == "passed" or rec.get("state") is None and not rec.get("stacked")}
+        low = {m.pr for m in chain[:max((i + 1 for i, m in enumerate(chain) if m.commit in held), default=0)]}
+        fixes: list[Member] = []
+        refused: list[str] = []
+        for m in chain:
+            if (p := self._open().get(m.pr)) is None or (key := self._red_fix(drive, p, lambda m=m: self._own(m))) is None:
+                continue
+            if m.pr in low:
+                refused.append(f"#{m.pr} (a fix of {key}, in the prefix of a Lean check of `{self.q.branch}`, which lands it)")
+            elif read := sorted(f for f in self._own(m) if f.endswith(LEAN_INPUTS) or f.startswith(LEAN_TOOLING)):
+                refused.append(f"#{m.pr} (a fix of {key}, but its change touches what a Lean check reads: {', '.join(read[:3])})")
+            else:
+                fixes.append(m)
+        if refused:
+            self.q.log(f"research queue drive: low-risk lane, for fixes of reds only, skipped {', '.join(refused)}")
+        if not fixes or not (landed := self.land_lowrisk(drive, entries, running, dry_run, fixes)):
+            return []
+        self.q.log(f"research queue drive: low-risk lane landed {' '.join(f'#{m.pr}' for m in landed)}, each a fix of a red on "
+                   f"`{self.q.into}`, without rebuilding `{self.q.branch}`: the next sync rebuilds it, and each Lean check of it "
+                   "moves with its prefix")
+        return landed
+
     def _pr_files(self, p) -> set[str]:
         """The files an open PR's head changes against `main` (from their merge base), read once per tick; none when its head
         can't be fetched."""
@@ -2248,7 +2280,8 @@ class Driver:
             self._carry(drive, chain, t, lock)
         return got, "" if got else f"{prs} reviewed but not landed (see above)" + (f"; {stop}" if stop else "")
 
-    def land_lowrisk(self, drive: dict, entries: dict[int, Entry] | None, running: set[str], dry_run: bool) -> list[Member]:
+    def land_lowrisk(self, drive: dict, entries: dict[int, Entry] | None, running: set[str], dry_run: bool,
+                     fixes: list[Member] | None = None) -> list[Member]:
         """The low-risk lane (drive.toml's `lowrisk_lane`): after the reviewed prefix lands, or when nothing does, land up to
         `lowrisk_per_tick` members of `next`, in its order, onto `checked`'s tip (never `main`) on their ready mark alone, each
         as one `Queue: #N` merge, when the files that merge changes against that tip are `lowrisk`.  Each still needs its ready
@@ -2258,33 +2291,56 @@ class Driver:
         before it left.  The after-landing run of `checked` checks them as it checks reviewed landings, and a red one reverts
         its culprit (`_red`).  A landing off `next` moves `checked` off its base, so a Lean check of `next` that runs or passed
         moves to the rebuilt `next` (`_keep_lean`); the lane waits only while one can't, and while no sync ran this tick (no
-        ``entries``).  While one can't, it still lands each member that is a fix of a red on `checked` (`_fix_only`), onto
-        `checked`'s tip without rebuilding `next`: the next sync rebuilds it, as after any landing, and the check's verdict
-        moves with its prefix (`_rekey_lean`), as the fix changes nothing it reads.  The landed members."""
+        ``entries``).  While one can't, it still lands the ``fixes`` of reds on `checked` `_land_fixes` picks, onto `checked`'s
+        tip without rebuilding `next`: the next sync rebuilds it, as after any landing, and the check's verdict moves with its
+        prefix (`_rekey_lean`), as a fix changes nothing it reads.  The landed members."""
         from .merge import CHECKED
-        from .queue import gates_at
+        from .queue import _message, gate_refusal, gates_at, lowrisk
 
         q = self.q
         if not (self.lowrisk_lane and self.lowrisk_excludes) or q.into != CHECKED or entries is None:
             return []
-        start = _out(self.repo, "rev-parse", q.base)
-        gates = gates_at(self.repo, start)
+        start = tip = _out(self.repo, "rev-parse", q.base)
+        gates = gates_at(self.repo, tip)
+        hold_label = q.rules().hold_label
+        landed: list[tuple[Member, str]] = []
+        skipped: list[str] = []
         chain = self._chain()[1]
-        landed, tip = self._lowrisk_merges(chain, entries, start, gates)
+        for m in chain if fixes is None else fixes:
+            if len(landed) >= self.lowrisk_per_tick:
+                break
+            if not lowrisk(self._own(m), self.lowrisk_excludes) or self._ancestor(m.head, tip):
+                continue
+            if why := self._lowrisk_held(m, entries, hold_label, tip):
+                skipped.append(f"#{m.pr} ({why})")
+                continue
+            p = self._open()[m.pr]
+            tree, why = self._clean_merge(tip, m.head)
+            if tree is None:
+                skipped.append(f"#{m.pr} ({why})")
+                continue
+            files = set(_out(self.repo, "diff", "--name-only", "--no-renames", tip, tree).split())
+            if not lowrisk(files, self.lowrisk_excludes):
+                skipped.append(f"#{m.pr} (its merge onto `{q.into}`'s tip is no low-risk change)")
+                continue
+            commit = _git(self.repo, "commit-tree", tree, "-p", tip, "-p", m.head, "-m", _message(p), env=IDENTITY).stdout.strip()
+            refused, unjudged = gate_refusal(self.repo, tip, commit, gates, onto=q.into) if gates else ([], [])
+            if refused or unjudged:
+                skipped.append(f"#{m.pr} (landing gate: {' | '.join(refused + unjudged)[:300]})")
+                continue
+            if bad := py_errors(self.repo, tip, commit):
+                skipped.append(f"#{m.pr} (compile: {'; '.join(f'{f}: {e}' for f, e in bad)[:300]})")
+                continue
+            landed.append((m, commit))
+            tip = commit
+        if skipped:
+            q.log(f"research queue drive: low-risk lane skipped {', '.join(skipped)}")
         if not landed:
             return []
         gone = {m.pr for m, _ in landed}
-        top, moves = self._keep_lean(drive, chain, gone, tip, running)
+        top, moves = self._keep_lean(drive, chain, gone, tip, running) if fixes is None else ("", {})
         if top is None:
-            fixes = [m for m in chain if (p := self._open().get(m.pr)) and self._red_fix(drive, p, lambda m=m: self._own(m))]
-            landed, tip = (self._lowrisk_merges(fixes, entries, start, gates, self._fix_only(drive, chain, running)) if fixes
-                           else ([], start))
-            if not landed:
-                return []
-            top, moves = "", {}
-            q.log(f"research queue drive: low-risk lane lands {' '.join(f'#{m.pr}' for m, _ in landed)}, each a fix of a red on "
-                  f"`{q.into}`, without rebuilding `{q.branch}`: the next sync rebuilds it, and each Lean check of it moves with "
-                  "its prefix")
+            return self._land_fixes(drive, entries, running, dry_run, chain)
         if dry_run or q.shadow:
             for m, commit in landed:
                 q.log(f"research queue drive: would land #{m.pr} on `{q.into}` (low-risk lane: no Lean, lock or soundness-path "
@@ -2303,76 +2359,8 @@ class Driver:
             self._after_landing(drive, commit, below)
             below = commit
         if moves:
-            self._move_lean(drive, {m.pr for m, _ in landed}, tip, top, moves)
+            self._move_lean(drive, gone, tip, top, moves)
         return [m for m, _ in landed]
-
-    def _fix_only(self, drive: dict, chain: list[Member], running: set[str]) -> Callable[[Member, set[str]], str | None]:
-        """The low-risk lane's rule while a Lean check of `next` can't move (`land_lowrisk`): for ``m`` and the files its merge
-        onto `checked`'s tip changes, None when it lands (a fix of a red on `checked`, not reverted: `_red_fix`), "" when it
-        isn't such a fix, else why such a fix doesn't: it lies in the prefix of a Lean check that passed, or runs and isn't
-        stacked (`_stack_lean`, which reaches `next`'s top and is cancelled by any change to its prefix), which lands it and
-        which its landing would rebuild, or its merge touches what a Lean check reads (`LEAN_INPUTS`, `LEAN_TOOLING`), which
-        `lowrisk_excludes` should have kept off the lane."""
-        lean = drive.get("lean") or {}
-        held = (running - set(lean)) | {c for c, rec in lean.items()
-                                        if rec.get("state") == "passed" or rec.get("state") is None and not rec.get("stacked")}
-        low = {m.pr for m in chain[:max((i + 1 for i, m in enumerate(chain) if m.commit in held), default=0)]}
-
-        def only(m: Member, files: set[str]) -> str | None:
-            if (key := self._red_fix(drive, self._open()[m.pr], lambda: files | self._own(m))) is None:
-                return ""
-            if m.pr in low:
-                return f"a fix of {key}, in the prefix of a Lean check of `{self.q.branch}`, which lands it"
-            if read := sorted(f for f in files if f.endswith(LEAN_INPUTS) or f.startswith(LEAN_TOOLING)):
-                return f"a fix of {key}, but its merge changes what a Lean check reads: {', '.join(read[:3])}"
-            return None
-        return only
-
-    def _lowrisk_merges(self, chain: list[Member], entries: dict[int, Entry], start: str, gates: tuple,
-                        only: Callable[[Member, set[str]], str | None] | None = None) -> tuple[list[tuple[Member, str]], str]:
-        """([(member, its `Queue: #N` merge)], the tip they leave) of the low-risk lane's members of ``chain``, in its order,
-        each merged onto the one before from ``start`` (`land_lowrisk`), and of those only the ones ``only`` passes (`_fix_only`);
-        what it skips is logged."""
-        from .queue import _message, gate_refusal, lowrisk
-
-        q, tip = self.q, start
-        hold_label = q.rules().hold_label
-        landed: list[tuple[Member, str]] = []
-        skipped: list[str] = []
-        for m in chain:
-            if len(landed) >= self.lowrisk_per_tick:
-                break
-            if not lowrisk(self._own(m), self.lowrisk_excludes) or self._ancestor(m.head, tip):
-                continue
-            if why := self._lowrisk_held(m, entries, hold_label, tip):
-                skipped.append(f"#{m.pr} ({why})")
-                continue
-            p = self._open()[m.pr]
-            tree, why = self._clean_merge(tip, m.head)
-            if tree is None:
-                skipped.append(f"#{m.pr} ({why})")
-                continue
-            files = set(_out(self.repo, "diff", "--name-only", "--no-renames", tip, tree).split())
-            if not lowrisk(files, self.lowrisk_excludes):
-                skipped.append(f"#{m.pr} (its merge onto `{q.into}`'s tip is no low-risk change)")
-                continue
-            if only is not None and (why := only(m, files)) is not None:
-                if why:
-                    skipped.append(f"#{m.pr} ({why})")
-                continue
-            commit = _git(self.repo, "commit-tree", tree, "-p", tip, "-p", m.head, "-m", _message(p), env=IDENTITY).stdout.strip()
-            refused, unjudged = gate_refusal(self.repo, tip, commit, gates, onto=q.into) if gates else ([], [])
-            if refused or unjudged:
-                skipped.append(f"#{m.pr} (landing gate: {' | '.join(refused + unjudged)[:300]})")
-                continue
-            if bad := py_errors(self.repo, tip, commit):
-                skipped.append(f"#{m.pr} (compile: {'; '.join(f'{f}: {e}' for f, e in bad)[:300]})")
-                continue
-            landed.append((m, commit))
-            tip = commit
-        if skipped:
-            q.log(f"research queue drive: low-risk lane{' (fixes of reds only)' if only else ''} skipped {', '.join(skipped)}")
-        return landed, tip
 
     def _keep_lean(self, drive: dict, chain: list[Member], gone: set[int], tip: str,
                    running: set[str]) -> tuple[str, dict[str, tuple[str, list[list]]]] | tuple[None, None]:
