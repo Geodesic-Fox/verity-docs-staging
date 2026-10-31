@@ -3304,11 +3304,24 @@ class RecordsRun:
         return [p for p in each if p in self.files]
 
 
+@dataclass
+class LeanCheck:
+    """A check of one commit whose result's `lean-audit` step passed, as `research run` published it: its attempt's state and
+    rc, its result's verdict, the step's parts (a shard's or a deferred run's share, `lean-audit:PKG`; None when unsharded) and
+    its run files, which hold the step's report (`lean-audit/audit.json`)."""
+    id: str
+    state: str | None
+    rc: int | None
+    verdict: str | None
+    parts: list[str] | None
+    art: str | None
+
+
 class RecordsGate:
     """`ready`'s records gate, before the preflight and the mark: a head whose change against `main` (from their merge base)
     touches a Lake package's lock (`lean-audit.json`) is refused unless the store holds, for each such package, a records run of
     that exact head in which the package passed on the head's own lock (as PKG, or as a requirer PKG's run audited), or a Lean
-    check of the head (a result whose `lean-audit` step passed without regenerating that lock).  A records run that printed
+    check of the head that audited the package and passed it on that lock (`_checked`).  A records run that printed
     `AUDIT: FAIL` still writes a record, which reads as a pass, and a head marked on it fails a train's Lean check, about 50
     minutes later.
 
@@ -3337,7 +3350,7 @@ class RecordsGate:
                  now: Callable[[], float] = time.time, lock_merge: Path | None = None):
         self.repo, self.remote, self.store, self.log, self.now = Path(repo), remote, store, log, now
         self.lock_merge = lock_merge or self.repo / "tools" / "verity" / "lean" / "merge.py"
-        self._runs: dict[str, tuple[list[RecordsRun], list[str]]] = {}
+        self._runs: dict[str, tuple[list[RecordsRun], list[LeanCheck]]] = {}
         self._merges: dict[str, bool] = {}
         self._since = ""
         self._candidates: dict[str, list[str]] = {}
@@ -3543,25 +3556,29 @@ class RecordsGate:
                 return f"a {how[0]} of {c[:12]} ({how[1]}) with identical inputs"
         return None
 
-    def _at(self, commit: str) -> tuple[list[RecordsRun], list[str]]:
-        """(the records runs of ``commit``, the ids of its attempts whose result's `lean-audit` step passed), newest first."""
+    def _at(self, commit: str) -> tuple[list[RecordsRun], list[LeanCheck]]:
+        """(the records runs of ``commit``, its attempts whose result's `lean-audit` step passed), newest first."""
         if commit in self._runs:
             return self._runs[commit]
         runs, checks = [], []
-        rows = self.store.index.sql("SELECT id, manifest_json FROM attempts WHERE source_commit = ? AND source_dirty = 0 "
+        rows = self.store.index.sql("SELECT id, manifest_json, state, rc FROM attempts WHERE source_commit = ? AND source_dirty = 0 "
                                     "ORDER BY start_utc DESC, id DESC", (commit,))
-        for rid, doc in rows:
+        for rid, doc, state, rc in rows:
             out = (json.loads(doc).get("outputs") if doc else None) or {}
             try:
                 meta = self.store.get_manifest(out["result"]).meta if out.get("result") else {}
+                step = next((s for s in meta.get("steps") or [] if isinstance(s, dict) and s.get("step") == LEAN_AUDIT_STEP), None)
                 if meta.get("kind") == FAST_KIND:
                     fp = meta.get("workload_fingerprint") or {}
                     files = {f["path"]: f["sha256"] for f in self.store.listing(out["run_files"])} if out.get("run_files") else {}
                     runs.append(RecordsRun(rid, str(fp.get("package")), (meta.get("validation") or {}).get("status") == "passed",
                                            str(fp.get("path") or "slot"), files, out.get("run_files")))
-                elif any(isinstance(s, dict) and s.get("step") == LEAN_AUDIT_STEP and s.get("status") == "passed"
-                         for s in meta.get("steps") or []):
-                    checks.append(rid)
+                elif step is not None and step.get("status") == "passed":
+                    sharded = any(isinstance(meta.get(k), dict) for k in ("shard", "deferred"))
+                    parts = step.get("parts")
+                    checks.append(LeanCheck(rid, state, rc, (meta.get("validation") or {}).get("status"),
+                                            [str(p) for p in parts] if isinstance(parts, list) else [] if sharded else None,
+                                            out.get("run_files") or out.get("run_record")))
             except Exception as e:  # noqa: BLE001  (a run whose records can't be read vouches for nothing; say so)
                 self.notes.append(f"{rid}'s result or files can't be read ({type(e).__name__})")
         self._runs[commit] = (runs, checks)
@@ -3636,21 +3653,45 @@ class RecordsGate:
         for run in runs:
             if self._audited(run, pkg)[0] and not (run.pkg == pkg and run.kept_record()):
                 return "records run", run.id, run.path
-        for rid in checks:
-            if self._checked(rid, pkg):
-                return "Lean check", rid, ""
+        for check in checks:
+            if self._checked(check, pkg)[0]:
+                return "Lean check", check.id, ""
         return None
 
-    def _checked(self, rid: str, pkg: str) -> bool:
-        """Whether Lean check ``rid`` passed ``pkg`` on the commit's own lock: it regenerated no record of it."""
-        from .merge import regenerated_records
+    def _checked(self, check: LeanCheck, pkg: str) -> tuple[bool, str | None]:
+        """(whether Lean check ``check`` passed ``pkg`` on the commit's own lock, why not when it ran but didn't).  Only what the
+        run's own records show counts: it ended by itself (not cancelled, killed or stopped by a signal), its step's parts, when
+        it is a shard or a deferred run, hold `lean-audit:PKG`, and its report (`lean-audit/audit.json`) lists ``pkg`` with no
+        failure and not passed on a regenerated record.  A package the run didn't audit, or a report that can't be read,
+        vouches for nothing."""
+        from .merge import AUDIT
 
+        if check.state not in ("done", "failed") or not isinstance(check.rc, int) or not 0 <= check.rc < 128 \
+                or check.verdict == "not_run":
+            return False, (f"the Lean check {check.id} didn't finish (state {check.state}, rc {check.rc}, verdict "
+                           f"{check.verdict}), so it vouches for nothing")
+        if check.parts is not None and f"{LEAN_AUDIT_STEP}:{pkg}" not in check.parts:
+            return False, (f"the Lean check {check.id} is a shard that audited only "
+                           f"{', '.join(p.partition(':')[2] for p in check.parts) or 'nothing'}, not {pkg}")
         try:
-            regen = regenerated_records(self.store, rid)
-        except Exception as e:  # noqa: BLE001  (`Unreadable`: vouches for nothing)
-            self.notes.append(f"the Lean check {rid}'s report can't be read ({type(e).__name__})")
-            return False
-        return regen is not None and pkg not in regen
+            if not check.art or AUDIT not in {f["path"] for f in self.store.listing(check.art)}:
+                return False, f"the Lean check {check.id} published no {AUDIT}"
+            with tempfile.TemporaryDirectory() as d:
+                audit = json.loads((self.store.fetch(check.art, Path(d), paths=[AUDIT]) / AUDIT).read_text())
+            reps = audit.get("packages")
+            regen = audit.get("regenerated") or {}
+            rep = next((r for r in reps if isinstance(r, dict) and r.get("package") == pkg), None) \
+                if isinstance(reps, list) else None
+        except Exception as e:  # noqa: BLE001  (a report that can't be read vouches for nothing)
+            self.notes.append(f"the Lean check {check.id}'s report can't be read ({type(e).__name__})")
+            return False, None
+        if rep is None:
+            return False, f"the Lean check {check.id}'s {AUDIT} lists no audit of {pkg}"
+        if rep.get("failures") != []:
+            return False, f"the Lean check {check.id} failed {pkg}"
+        if rep.get("settled") or not isinstance(regen, dict) or pkg in regen:
+            return False, f"the Lean check {check.id} passed {pkg} only on a record it regenerated, not the commit's lock"
+        return True, None
 
     def _main_merge(self, commit: str, ours: str, theirs: str) -> bool:
         """Whether ``commit`` only merges `main`'s ``theirs`` into ``ours``: each file it changes over ``ours`` is main's whole, a
@@ -3687,9 +3728,11 @@ class RecordsGate:
 
     def _failures(self, head: str, pkg: str) -> list[str]:
         """What the records runs of ``head`` say against ``pkg``: the newest failing run's first failure line, or a passing run whose
-        `--update` wrote a record the head doesn't hold."""
-        out = []
-        for run in self._at(head)[0]:
+        `--update` wrote a record the head doesn't hold; and why each Lean check of ``head`` whose `lean-audit` step passed
+        doesn't vouch for it."""
+        runs, checks = self._at(head)
+        out = [why for c in checks if (why := self._checked(c, pkg)[1])]
+        for run in runs:
             ok, line = self._audited(run, pkg)
             if ok and run.pkg == pkg and run.kept_record():
                 out.append(f"records run {run.id} of {head[:12]} passed {pkg} only with the record its `--update` wrote, which "
