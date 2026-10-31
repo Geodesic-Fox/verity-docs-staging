@@ -28,7 +28,7 @@ def _git(root: Path, *args: str) -> str:
 def tree(tmp_path: Path) -> Path:
     t = tmp_path / "tree"
     shutil.copytree(ROOT / "tools" / "verity" / "check", t / "tools" / "verity" / "check",
-                    ignore=shutil.ignore_patterns("tests", "__pycache__"))
+                    ignore=shutil.ignore_patterns("tests", "__pycache__", "*.md"))
     (t / "tools" / "verity" / "lean").mkdir(parents=True)
     for f in (ROOT / "tools" / "verity" / "lean").glob("*.py"):
         shutil.copy2(f, t / "tools" / "verity" / "lean" / f.name)
