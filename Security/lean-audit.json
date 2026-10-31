@@ -2520,7 +2520,6 @@
    "nontrivial": "Pous.Claims.StreamedWipeMeetsDisk_fails"
   },
   "Pouw.SecurityProofs.OnsiteFreed": {
-   "honest": ["Pouw.SecurityProofs.OnsiteFreed_honest"],
    "nontrivial": "Pouw.SecurityProofs.OnsiteFreed_nontrivial",
    "kind": "exclusion"
   },
@@ -2899,7 +2898,12 @@
   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote": "d62c6bacc00665d157782066142fd02a3b8a6c529750192555280ff7de20d723",
   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest": "aaa2fd1abb5a52576af40f1a97198026d334c5aa54e233bbb0b037fdd0777e11",
   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial": "ec89e03fd00fc725d5425102cdbd3540fa61b5db00a9f45ce5042a129f06325f",
-  "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial": "e0ba339ca7ad1c2f4ffd6f7b580fb7da37359d54a33636ca2c55ac29fac55eae"
+  "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial": "e0ba339ca7ad1c2f4ffd6f7b580fb7da37359d54a33636ca2c55ac29fac55eae",
+  "Pouw.SecurityProofs.OnsiteFreed": {
+   "type_hash": "ea838f92eb546fdbd1a46db535290a9613d0ffe4e5b81e20314587429ad64bdd",
+   "missing": "honest",
+   "why": "PRF-301 (Tue 3 Nov): its honest witness concludes LE.le under no definition of `meaning` at checked's statement; next restates it"
+  }
  },
  "layers": {
   "Definitions.Core": {
