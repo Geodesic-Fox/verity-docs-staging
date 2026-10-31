@@ -36,6 +36,23 @@ part reads something it doesn't declare, and the fix goes in the check.
 `suites.py`'s docstring is the full contract. The testing skill (`.agents/skills/testing/SKILL.md`) has the rules every test
 follows.
 
+## Running it
+
+Builds and tests run on the cluster's nodes, not on an agent VM. Ship the checkout with `research run` and sync its tree first:
+
+~~~sh
+R="research run --on auto --cwd source -- bash -lc"
+$R "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py flock"            # one suite
+$R "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py --changed origin/main --quick"
+$R "uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check"               # the whole check
+uv run tools/verity/check/suites.py --list                # each suite's inputs and whether a pass is cached (reads only)
+uv run tools/verity/check/suites.py --explain SUITE       # why a suite would run
+~~~
+
+`research run` returns once the job starts, and `research status RUN` checks back on it. To record a check of a clean
+commit as an Attempt, run `uv run python tools/verity/check/check.py --record --on vy-nebius-cpu-1 --pool research` from
+the checkout.
+
 ## Tasks (`tasks/v1`)
 
 The check is also a graph of tasks, the whole contract between Verity and an executor. `verity tasks` (`tasks.py`) has two
@@ -84,23 +101,6 @@ suite holds the lints.
 preflight), its `deps` beside it until artifacts are shared, and writes `{"schema", "id", "verdict": passed|failed|skipped,
 "key", "seconds", "outputs": {"dir", "files", "artifacts"}, "steps": [check's step records]}` to stdout or `--out`; the steps'
 progress goes to stderr. It exits 0 for passed or skipped, 1 for failed.
-
-## Running it
-
-Builds and tests run on the cluster's nodes, not on an agent VM. Ship the checkout with `research run` and sync its tree first:
-
-~~~sh
-R="research run --on auto --cwd source -- bash -lc"
-$R "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py flock"            # one suite
-$R "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py --changed origin/main --quick"
-$R "uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check"               # the whole check
-uv run tools/verity/check/suites.py --list                # each suite's inputs and whether a pass is cached (reads only)
-uv run tools/verity/check/suites.py --explain SUITE       # why a suite would run
-~~~
-
-`research run` returns once the job starts, and `research status RUN` checks back on it. To record a check of a clean
-commit as an Attempt, run `uv run python tools/verity/check/check.py --record --on vy-nebius-cpu-1 --pool research` from
-the checkout.
 
 ## Landing
 

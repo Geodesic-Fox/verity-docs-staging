@@ -109,6 +109,17 @@ def _unplaced():
         os.environ.update({k: saved[k] for k in PLACED if k in saved})
 
 
+@contextlib.contextmanager
+def _without_preflight():
+    """`check.run` with no preflight steps, which it reads from its module: the preflight is no task."""
+    was = C.preflight
+    C.preflight = lambda: []
+    try:
+        yield
+    finally:
+        C.preflight = was
+
+
 def _normal(argv: list[str]) -> list[str]:
     subs = [(sys.executable, "<python>"), (str(OUT), "<out>"), (str(C.cache_dir()), "<cache>"), (str(ROOT), "<tree>")]
 
@@ -294,8 +305,8 @@ def run(part: str, work: Path | None = None, circuit_shards: int | None = None) 
     work = work or Path(tempfile.mkdtemp(prefix="verity-task-"))
     work.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
-    with contextlib.redirect_stdout(sys.stderr):
-        ok, steps = C.run(work, min(rec["resources"]["cores"], C.cores()), only=[part], with_preflight=False)
+    with contextlib.redirect_stdout(sys.stderr), _without_preflight():
+        ok, steps = C.run(work, min(rec["resources"]["cores"], C.cores()), only=[part])
     seconds = round(time.monotonic() - t0, 1)
     own = [s for s in steps if s["step"] in own_steps(part)]
     if not ok or not own:
