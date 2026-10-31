@@ -19,6 +19,7 @@ shadow-report` prints the newest of them and whether `SWITCH_STREAK` tips in a r
 executor's verdicts alone decide the after-landing check."""
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -59,8 +60,6 @@ def check_id(graph: dict) -> str:
 
 
 def _digest(doc) -> str:
-    import hashlib
-
     return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
