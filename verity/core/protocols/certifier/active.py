@@ -71,7 +71,7 @@ its stream's server connection.
 
 **The salt** (`Proxy(salt=…)`, off by default) is `salt_bits` bits (512 by default) per PoUW window from the
 certifier's own randomness (`fresh_salt`), released into the block only. PoUW window p is the `pouw_window` = k
-certifier windows p·k … p·k + k − 1 (k = 1 by default). At p's first ingress tick, t_s, the certifier draws p's salt
+certifier windows p·k … p·k + k − 1 (k = 1 by default). At p's first ingress tick, t_s, the certifier samples p's salt
 and enqueues its own salt frame at the head of the queue, ahead of that bucket's arrivals and of any queue carried
 from the window before (`Bucketer(first=…)`), so it leaves in that bucket's slot 0: kind `SALT` on `SALT_STREAM`,
 its payload u64be p followed by `PLACEHOLDER`, 64 zero bytes. The frame and its slot are fixed by the window and the
@@ -84,15 +84,15 @@ side never sees the salt.
 The certifier's record cells are its grids and two sealed slots per PoUW window: `_salts[p]`, which holds the salt and
 is opened only by `reveal`, and `_weights[p]`, the 64-byte root of the weights PoUW's noise seed reads. The prover
 hands that root once (`commit_weights(p, root, signature)`), signed under the prover key registered with the
-certifier (`prover_key`, over `weights_message`), while p's first ingress tick, the salt's draw, is still ahead;
+certifier (`prover_key`, over `weights_message`), while p's first ingress tick, the salt's sample, is still ahead;
 `committed(p, registration)` opens it on `reveal`'s conditions. So the certifier's word orders the prover's weights
 before the salt, and no one else can fix them. The record's open cells (`Accounting.Attribution.openCells`) are the
 grids, a function of the traffic, and what the certifier sends into the block is a function of its record.
-`reveal(p, registration)` takes the PoUW window's registration as the proof service returned it
+`reveal(p, registration)` takes the PoUW window's registration as the proof system returned it
 (`sampled_proofs.service.Registration`) and fails closed without it: it refuses unless the receipt is that
 registration's (`one_stage.registration.receipt`) and `registered` reads p off the registration, while p's last
 ingress record is unpublished (t_d), once the certifier's clock is more than `reveal_deadline` past p's end (one PoUW
-window by default), for a window whose salt was never drawn, and for one it has revealed already. So the salt reaches
+window by default), for a window whose salt was never sampled, and for one it has revealed already. So the salt reaches
 one registration of p, made within the deadline after p's work. `check_salts` is the audit's read of it: p's first raw
 ingress record holds exactly one salt frame of p, the placeholder's, and the revealed salt has `salt_bits` bits.
 
@@ -100,11 +100,11 @@ ingress record holds exactly one salt frame of p, the placeholder's, and the rev
 the link, off the prover's node, and the auditor's challenger on an auditor host. With the keys, `reveal` and
 `committed` take the challenger's `request`: its LMS signature under `challenger_key`, the key the auditor's
 deployment record (never the prover's configuration) registered for it, over `reveal_request_message(signer.key_id,
-run_id, ingress link, p, registration.digest, SALT_KIND or WEIGHTS_KIND)`, where `run_id` is the 32 bytes the proxy drew
-at construction (`Proxy.run_id`). They refuse one that doesn't verify before reading anything else, so no one else
-spends p's one reveal, nor does a request for another certifier or another run, and a registration counts only if the
-challenger signed its digest, which binds its record. They answer a `Revealed`: the value, the certifier's key id and
-run id, and its own signature (`signer`, the network certifier's key) over `reveal_response_message`, which binds the
+run_id, ingress link, p, registration.digest, SALT_KIND or WEIGHTS_KIND)`, where `run_id` is the 32 bytes the proxy
+sampled at construction (`Proxy.run_id`). They refuse one that doesn't verify before reading anything else, so no one
+else spends p's one reveal, nor does a request for another certifier or another run, and a registration counts only if
+the challenger signed its digest, which binds its record. They answer a `Revealed`: the value, the certifier's key id
+and run id, and its own signature (`signer`, the network certifier's key) over `reveal_response_message`, which binds the
 value too, so a consumer can key p on the certifier run, (key id, run id, link) (`Proxy.certifier_run`, the same on a
 `RemoteCertifier`), where two proxies on one link name don't collide. The
 salt needs authenticity, not confidentiality: after t_d the block's server already holds it, and the verifier fills
@@ -248,7 +248,7 @@ def weights_message(link: str, window: int, root: bytes, context: bytes = b"") -
 REVEAL_REQUEST_TAG = "verity-network-certifier/reveal-request/v1"
 REVEAL_RESPONSE_TAG = "verity-network-certifier/reveal-response/v1"
 SALT_KIND, WEIGHTS_KIND = b"salt", b"weights"
-#: a proxy's run id, drawn at its construction (`Proxy.run_id`)
+#: a proxy's run id, sampled at its construction (`Proxy.run_id`)
 RUN_ID_BYTES = 32
 #: the longest request or answer line `serve_reveals` and `RemoteCertifier` read: a deployed LMS signature is 34,756
 #: bytes, twice that in hex, beside a registration
@@ -1124,14 +1124,14 @@ class Proxy:
       off a registration, by default `served_window`), its last ingress record is published, and the certifier's clock
       is no more than `reveal_deadline` past p's end (one PoUW window by default); with `prover_key`,
       `commit_weights(p, root, signature)` records the weights' root the prover signed (`weights_message`, under
-      `prover_context`) before p's salt is drawn, and `committed(p, registration)` gives it on `reveal`'s conditions;
+      `prover_context`) before p's salt is sampled, and `committed(p, registration)` gives it on `reveal`'s conditions;
     - with `challenger_key` and `signer`, both or neither, `reveal(p, registration, request)` and `committed(p,
       registration, request)` take only a request the auditor's challenger signed under `challenger_key`
       (`reveal_request_message`) and answer a `Revealed` that `signer`, the network certifier's own key, signed
       (`reveal_response_message`), which `serve_reveals` serves to a `RemoteCertifier`; without them they are the
       in-process calls, which take no request and return the value. `challenger_key` comes from the auditor's
       deployment record, never from the prover's configuration, and `trusted-host` covers that record's custody.
-      Both messages bind the signer's `key_id` and `run_id`, 32 bytes (`RUN_ID_BYTES`) the proxy draws from
+      Both messages bind the signer's `key_id` and `run_id`, 32 bytes (`RUN_ID_BYTES`) the proxy samples from
       `run_nonce` at construction (the certifier's own randomness by default), so a request or an answer of one run,
       or of another proxy on the same link name, is never taken in another;
     - with `start` and `position`, it is back from maintenance: it serves windows `start` … `windows` − 1, its first
@@ -1227,7 +1227,7 @@ class Proxy:
         self._salts: dict[int, bytes] = {}
         self._revealed: set[int] = set()
         self._weights: dict[int, bytes] = {}
-        self._seal = threading.Lock()  # `commit_weights` may run off the loop: the draw and the commit never interleave
+        self._seal = threading.Lock()  # `commit_weights` may run off the loop: the sample and the commit never interleave
         self._salt_out: asyncio.Queue | None = None
         self._salt_task: asyncio.Task | None = None
         self.salts_released = self.salts_delivered = 0
@@ -1488,12 +1488,12 @@ class Proxy:
 
     def reveal(self, window: int, registration: Registration | None,
                request: bytes | None = None) -> bytes | Revealed:
-        """PoUW window `window`'s salt, for the verifier, given the window's registration as the proof service returned
+        """PoUW window `window`'s salt, for the verifier, given the window's registration as the proof system returned
         it, once. It fails closed (`RuntimeError`): without a registration whose receipt is its own and off which
         `registered` reads `window`, while the window's last ingress record is unpublished (t_d), once the certifier's
-        clock is more than `reveal_deadline` past the window's end, for a window whose salt wasn't drawn (one this proxy
-        was down for at its start), and for a window whose salt it has revealed already. So a registration made after
-        the window's work, or a second one naming the same window, gets no salt.
+        clock is more than `reveal_deadline` past the window's end, for a window whose salt wasn't sampled (one this
+        proxy was down for at its start), and for a window whose salt it has revealed already. So a registration made
+        after the window's work, or a second one naming the same window, gets no salt.
 
         With a challenger key it first refuses a `request` that isn't the registered challenger's signature over
         `reveal_request_message(signer.key_id, run_id, ingress link, window, registration.digest, SALT_KIND)`, so no
@@ -1557,7 +1557,7 @@ class Proxy:
         certifier's word orders it before the window's salt. Only the registered prover's root is taken: `signature`
         verifies under `prover_key` over `weights_message(ingress link, window, root, prover_context)`. It refuses
         (`RuntimeError`) without a prover key, on a signature that doesn't verify, once the window's first ingress tick,
-        the salt's draw, has run or was missed (a proxy back from maintenance after it), and a second root for the
+        the salt's sample, has run or was missed (a proxy back from maintenance after it), and a second root for the
         window."""
         if self.salt is None:
             raise ValueError("the salt is off")

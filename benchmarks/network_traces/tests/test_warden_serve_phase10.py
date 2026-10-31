@@ -37,7 +37,7 @@ FIFO = "PHASE10_FIFO"
 
 
 def fixed_commit(link, direction, record, params, session, salts=None, wiring_salt=None):
-    """`Cells.of` under salts fixed by the link-window and the row (and the wiring), so two publishers' files can be
+    """`Cells.of` under salts fixed by the execution phase and the row (and the wiring), so two publishers' files can be
     compared."""
     def salt(name, n):
         return hashlib.shake_256(f"{link}/{record.window}/{name}".encode()).digest(n)
@@ -265,7 +265,7 @@ def test_a_process_killed_mid_window_fails_the_run_and_the_check_refuses_the_win
 def test_a_process_a_window_behind_moves_no_tick_and_keeps_every_record_whole(tmp_path, monkeypatch):
     """The process held at window 0's ingress commit until every tick of both windows has run: no tick is late, at
     most window 0's ingress record is certified by then, and once released the process keeps every record, whole:
-    the check accepts all six link-windows and four registrations."""
+    the check accepts all six execution phases and four registrations."""
     fifo = tmp_path / "fifo"
     os.mkfifo(fifo)
     monkeypatch.setenv(FIFO, str(fifo))
@@ -363,10 +363,10 @@ def test_the_close_marker_carries_the_records_grid_digest(tmp_path):
 
 @pytest.mark.parametrize("edit", [_shifted, _altered], ids=["shifted", "altered"])
 def test_a_row_lost_doubled_or_changed_between_the_processes_is_refused(tmp_path, edit):
-    """The process once trusted that the rows since the last marker were the sampling block's. With the marker's
-    digest it refuses sampling block 0's egress record when a row was lost and another doubled on the way (the count
+    """The process once trusted that the rows since the last marker were the execution phase's. With the marker's
+    digest it refuses execution phase 0's egress record when a row was lost and another doubled on the way (the count
     unchanged) or a frame's byte changed: the run fails with the process's refusal, nothing of that record is signed,
-    and the check refuses it. Sampling block 0's ingress record, kept before it, stays certified."""
+    and the check refuses it. Execution phase 0's ingress record, kept before it, stays certified."""
     (key,) = _key(tmp_path, "process-key")
     run = _drive(tmp_path / "run", key, process=True, transport=_egress_rows(edit()))
     first = run["failed"] or run["close_error"]

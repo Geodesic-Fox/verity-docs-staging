@@ -1,4 +1,4 @@
-"""The ingress tie through the proof service (`tie_service`): each bucket row of an ingress link-window of the warden's
+"""The ingress tie through the proof system (`tie_service`): each bucket row of an ingress execution phase of the warden's
 cells proved as IoTieRequest (a stand-in proof, `standin.prove_tie`, its rows read off the warden's root and decided by
 the verifier of record on its own lanes), and `advised.IoTieVerdict` built from the stream's outcomes of record alone.
 An honest link is tied, `advised.ends` reads the tie, and the advised link takes it only from `Ties`, the tie, its
@@ -306,9 +306,9 @@ def test_an_advice_whose_received_isnt_the_release_refuses_every_window(tmp_path
 
 
 def test_a_row_that_isnt_the_wardens_is_refused(tmp_path):
-    """Each unit's witness row is read off the warden's root at its own bucket (`warden_rows.bucket_port`): a proof on
-    another row (window 1's bucket 1, which IoTieRequest accepts on its own lanes) or on the window's rows read by
-    swapped units fails the registered read, and so do its sessions."""
+    """Each proof block's witness row is read off the warden's root at its own bucket (`warden_rows.bucket_port`): a
+    proof on another row (window 1's bucket 1, which IoTieRequest accepts on its own lanes) or on the window's rows read
+    by swapped proof blocks fails the registered read, and so do its sessions."""
     advice = _advice(SPAN)
     run = Run(tmp_path / "row")
     lanes = run.tie.lanes(advice, SERVED.releases, 0)
@@ -326,7 +326,7 @@ def test_a_row_that_isnt_the_wardens_is_refused(tmp_path):
 
 
 def test_a_head_of_another_window_is_refused(tmp_path):
-    """The verifier reads the registered root's head: a head of window 1 on window 0's draw, or a head of another
+    """The verifier reads the registered root's head: a head of window 1 on window 0's sample, or a head of another
     session's domain, refuses it."""
     run, advice = Run(tmp_path), _advice(SPAN)
     draw, delivered = run.prove(0, advice)
@@ -356,8 +356,8 @@ def test_the_tie_gate_names_its_pinned_circuit_digest():
 
 
 def test_an_unpinned_size_class_is_refused(tmp_path):
-    """IoTieRequest at L = 3 has no pinned circuit digest, so its gate names none and no proof of its unit is accepted,
-    even one Lean accepts."""
+    """IoTieRequest at L = 3 has no pinned circuit digest, so its gate names none and no proof of its proof block is
+    accepted, even one Lean accepts."""
     params = W.WardenParams(cell_bytes=B, slots=2, lanes=3, window=4, delay=1)
     served = _serve(params=params, windows=2)
     run, advice = Run(tmp_path, params=params, served=served), _advice(SPAN)
