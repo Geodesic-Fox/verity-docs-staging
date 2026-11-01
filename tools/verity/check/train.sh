@@ -25,15 +25,13 @@
 #
 # `--shard K/N`: shard K of ci.toml's plan with N shards (`check.py --shard`): with `--deferred`, only those steps' parts in
 # it (drive's `after_landing_shards`, one launch per shard); alone, a shard Attempt of the check, which `check.py --record
-# --combine` joins with the other N-1 into the commit's check. `--shard auto[:MAX]`: an auto plan of at most MAX shards
-# (`check.py --record --shard auto`, `shards.py`), planned once and launched as its N shards at once, one machine of MACHINE
-# each: RUN names N ids, shard K's Kth; when fewer than N launch, those that did are cancelled and nothing is printed.
+# --combine` joins with the other N-1 into the commit's check.
 #
 # Run it where the parent store key is (the Cursor secrets), from a Verity checkout with `machines.d` for MACHINE. It refuses a
 # temporary credential, which cannot mint the run's custody key, a shell that skips the store-backed tests, and a COMMIT that is
 # empty (its tree is its base's: where it leaves origin/main, or its parent for a commit on main) or that origin doesn't hold.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
 pass=() deferred= nocache= ccache= noregen= shard= below=
 while [ $# -gt 0 ]; do
@@ -44,11 +42,11 @@ while [ $# -gt 0 ]; do
     --no-regenerate) noregen=1 ;;
     --deferred) [[ $# -ge 2 && $2 =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ ]] || { echo "train: --deferred needs STEP,..." >&2; exit 2; }
       deferred=$2; shift ;;
-    --shard) [[ $# -ge 2 && $2 =~ ^([1-9][0-9]*/[1-9][0-9]*|auto(:[1-9][0-9]*)?)$ ]] || { echo "train: --shard needs K/N or auto[:MAX]" >&2; exit 2; }
+    --shard) [[ $# -ge 2 && $2 =~ ^[1-9][0-9]*/[1-9][0-9]*$ ]] || { echo "train: --shard needs K/N" >&2; exit 2; }
       shard=$2; shift ;;
     --base) [ $# -ge 2 ] || { echo "train: --base needs REF" >&2; exit 2; }
       below=$2; shift ;;
-    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS, --base REF and --shard K/N or auto[:MAX] alone" >&2; exit 2 ;;
+    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS, --base REF and --shard K/N alone" >&2; exit 2 ;;
   esac
   shift
 done
@@ -110,6 +108,9 @@ fi
   || die "${sha:0:12} is empty (its tree is its base ${base:0:12}'s): nothing to check"
 tree="${TMPDIR:-/tmp}/train-${sha:0:12}${shard:+-${shard/\//of}}"
 git -C "$root" worktree remove --force "$tree" 2>/dev/null || true
+# a tree git no longer lists as a worktree (half removed on the control pod's NFS TMPDIR) would refuse `worktree add`
+rm -rf "$tree" 2>/dev/null || rm -rf "$tree" || true
+git -C "$root" worktree prune
 git -C "$root" worktree add -q --detach "$tree" "$sha" 2>>"$why" || die "git worktree add $tree failed"
 exec 9>&-
 log="$tree.log"
@@ -129,9 +130,6 @@ for _ in $(seq $((launch_wait_s / 5))); do
   ids=$(grep -oE 'run r20[0-9]{6}-[0-9]{6}-[0-9a-f]{4} launched' "$log" | cut -d' ' -f2 | awk '!seen[$0]++' | tr '\n' ' ') || true
   on=$(grep -m1 -oE '^check: --on: twins [^ ]+ on [^:]+' "$log" | sed 's/^.* on //') || true
   [ -z "$on" ] || want=$(( $(tr -cd , <<<"$on" | wc -c) + 1 ))
-  # an auto plan's N shards, one machine each (no twins): N runs
-  n=$(grep -m1 -oE '^check: --shard auto: [0-9]+ shards' "$log" | grep -oE '[0-9]+') || true
-  [ -z "$n" ] || want=$n
   [ "$(wc -w <<<"$ids")" -ge "$want" ] && break
   grep -qE "refused|Traceback" "$log" && break
   sleep 5
@@ -152,13 +150,5 @@ if [ -z "${ids// /}" ] && ! kill -0 "$pid" 2>/dev/null; then
   exit $(( rc ? rc : 1 ))
 fi
 [ -n "${ids// /}" ] || die "no run launched; see $log"
-if [[ $shard == auto* ]] && [ "$(wc -w <<<"$ids")" -lt "$want" ]; then
-  # a shard missing would leave its parts unchecked: none counts
-  for id in $ids; do
-    uv run -q research cancel "$id" --reason "train: only $(wc -w <<<"$ids") of the auto plan's $want shards launched" \
-      --by "${TRAIN_AS:-ci}" > /dev/null 2>&1 || echo "train: could not cancel $id" >&2
-  done
-  die "only $(wc -w <<<"$ids") of the auto plan's $want shards launched (cancelled: $ids); see $log"
-fi
 [ "$(wc -w <<<"$ids")" -ge "$want" ] || echo "train: $want twins, but only these launched; see $log" >&2
 echo "RUN ${ids% }"

@@ -1,6 +1,6 @@
 """The shard planner (`shards.py`) and `check.py --shard auto`: tasks packed longest first, N the smallest that reaches the
 floor (or the cap's bound), a build kept with what reads it, an auto plan's shards read from the one plan and combined by the
-gate's own reading (`research.merge.shard_set`), and `--record --shard auto` launching the plan's N shards.  Synthetic costs."""
+gate's own reading (`research.merge.shard_set`).  Synthetic costs."""
 from __future__ import annotations
 
 import importlib.util
@@ -9,7 +9,6 @@ import os
 import shlex
 import subprocess
 import sys
-import types
 from pathlib import Path
 
 import pytest
@@ -237,34 +236,3 @@ def test_combine_refuses_auto_shards_of_two_plans_and_a_hand_plans_shard_running
     store, tree, head, ids, _ = _auto_shards(tmp_path / "hand", monkeypatch, no_plan)
     assert shard_set(store, tree, head, ids, "check", COMMAND) == (
         None, "the shards ran different steps outside their parts, or a job outside its parts")
-
-
-def test_record_shard_auto_plans_once_and_launches_the_plans_n_shards_one_machine_each(tmp_path, monkeypatch, capsys):
-    """What drive's `after_landing_shards = "auto:MAX"` runs through train.sh: `check.py --record --deferred ... --shard auto:MAX`."""
-    launched = []
-
-    class Proc:
-        def __init__(self, argv, cwd):
-            launched.append(argv)
-
-        def wait(self):
-            return 0
-
-    def mkdtemp(prefix):
-        (tmp_path / prefix).mkdir()
-        return str(tmp_path / prefix)
-
-    monkeypatch.setattr(CHECK, "measure", lambda d: (({}, {}, {}), ["synthetic"]))
-    monkeypatch.setattr(CHECK, "subprocess", types.SimpleNamespace(**{**vars(subprocess), "Popen": Proc}))
-    monkeypatch.setattr(CHECK.tempfile, "mkdtemp", mkdtemp)
-    assert CHECK.record_auto(["--deferred", "pytest", "--shard", "auto:3", "--on", "m1,m2"], "auto:3", "m1,m2", "pytest") == 0
-    out = capsys.readouterr().out
-    plan = tmp_path / "check-auto-plan-" / CHECK.AUTO_PLAN
-    doc = json.loads(plan.read_text())
-    n = doc["n"]
-    assert 1 <= n <= 3 and doc["max_shards"] == 3 and f"check: --shard auto: {n} shards (plan {plan})" in out
-    assert "check: shard plan: N = " in out and "predicted wall" in out and "floor" in out
-    assert all(p.startswith("pytest:") for p in doc["all"])
-    assert [a[1:] for a in launched] == [
-        [str(Path(CHECK.__file__).resolve()), "--record", "--deferred", "pytest", "--shard", f"auto:{k}/{n}", "--shard-plan-file",
-         str(plan), "--on", ("m1", "m2")[(k - 1) % 2]] for k in range(1, n + 1)]
