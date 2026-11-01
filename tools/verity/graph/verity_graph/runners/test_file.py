@@ -6,7 +6,8 @@ would fetch for the suite.
 The guard runs with no inputs declared to it, so it records every file of the tree the run opens, the test process's (a cached
 module as its source) and the Pythons its tests start; the runner holds them to the task's inputs. A read of none of them, of no
 file its env's spec names and, when the task reads the fixture registry, of no registered fixture is an undeclared read, which
-makes the run an error. A directory opened is no read, and nor is a file under the work directory. Programs that aren't Python
+makes the run an error. A directory opened is no read, nor is a name that is no file of the tree, nor a file under the work
+directory. Programs that aren't Python
 read what no tracer sees: they are `detail.untraced`, a fact the check can't hold the task to.
 
 Its status: pytest's exit 0, or 5 when the file holds no test to run, is a pass; 1 (a test failed) and 2 (collecting failed, or
@@ -135,14 +136,15 @@ def verdict(task: dict, rc: int, work: Path, tmp: Path, oom: bool) -> dict:
 
 def undeclared(task: dict, opened: set[str], scratch: list[Path]) -> list[str]:
     """The files of ``opened`` (paths from the root) outside the task's inputs, its env's spec files and, when it reads the
-    registry, the registered fixtures; directories and files under ``scratch`` aside."""
+    registry, the registered fixtures; files under ``scratch`` aside, and what is no file of the tree: a directory, or a name
+    the guard joined to the working directory that was opened relative to another (`shutil.rmtree`'s walk)."""
     inputs = set(task["inputs"])
     spec = graph.spec(ROOT)["env"][task["env"]]["spec"]
     fetched = ([v for k, v in json.loads((ROOT / REGISTRY).read_text()).items() if k.startswith("art:") and isinstance(v, str)]
                if REGISTRY in inputs else [])
     away = [str(d.resolve().relative_to(ROOT)) for d in scratch if d.resolve().is_relative_to(ROOT)]
     return sorted(p for p in opened if p not in inputs and not any(graph.matches(p, s) for s in spec)
-                  and not any(p == f or p.startswith(f + "/") for f in [*fetched, *away]) and not (ROOT / p).is_dir())
+                  and not any(p == f or p.startswith(f + "/") for f in [*fetched, *away]) and (ROOT / p).is_file())
 
 
 def oom_kills() -> int | None:
