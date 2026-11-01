@@ -1,9 +1,9 @@
 """Each served call's receipts, `Served.receipts` (BRIDGE2): one a proof block of the call in the window Program's tile order,
 its receipt, the row its call's ``receipt@<c>`` registers. A v1 window's is `h1tile.reference`'s receipt of the proof
 block's A and B rows, which `h1zy.reference` (without J10-R) returns too: the receipt a lanes-form K's combine statement
-holds its 32 lane partials to (`h1zy.combine_reference`). serve-openai's ``--h1-receipts`` (`serve_h1`) sets `Receipts` on
-each window's `Served`. Receipts are values: they are committed under hiding leaves in the window's record, and nothing
-here keeps or prints them.
+holds its 32 lane partials to (`h1zy.combine_reference`). serve-openai's ``--h1-receipts`` (`serve_h1`) sets
+`Receipts.serving` on each window's `Served`. Receipts are values: they are committed under hiding leaves in the window's
+record, and nothing here keeps or prints them.
 
 **The torch chain.** `eps1-sm120-h1fx1`'s unit (`pouw.circuit.h1tile`) as a side computation on a served int8 call,
 vectorized over the call's r × c tiles in torch, bit for bit `h1tile.reference`'s receipt.
@@ -58,6 +58,7 @@ torch chain, any 32 | K, K >= 64.
 from __future__ import annotations
 
 import ctypes as C
+import functools
 import hashlib
 import time
 from dataclasses import dataclass
@@ -177,6 +178,12 @@ class Cubin:
         stream = C.c_void_p(torch.cuda.current_stream().cuda_stream)
         self._ck(self.lib.cuLaunchKernel(fn, C.c_uint32(-(-total // block)), 1, 1, C.c_uint32(block), 1, 1, 0, stream,
                                          params, None), "cuLaunchKernel")
+
+
+@functools.cache
+def loaded(device: torch.device) -> Cubin:
+    """`Cubin.built` for ``device``, once a process: every window's producer launches from the one loaded module."""
+    return Cubin.built(device)
 
 
 def seed_words(seeds: list[bytes], device) -> torch.Tensor:
@@ -485,6 +492,16 @@ class Receipts:
         self.run = run
         return self
 
+    @classmethod
+    def serving(cls, served: Any, run: Any, layers: list[Any]) -> "Receipts":
+        """serve-openai's producer (``--h1-receipts``) for the window ``served`` of ``run``: on the device the served
+        ``layers``' weights are on, each call's B its linear's own weight (no second copy) when every layer holds one, and
+        on a CUDA device the noise from `noise.cu` (`loaded`), else hashlib's."""
+        held = [m.weight for m in layers if isinstance(getattr(m, "weight", None), torch.Tensor)]
+        device = held[0].device if held else torch.device("cpu")
+        weight = (lambda call: layers[call.layer].weight) if len(held) == len(layers) else None
+        return cls(served, run, device=device, weight=weight, cubin=loaded(device) if device.type == "cuda" else None)
+
     def roots(self, call: Any) -> tuple[bytes, bytes]:
         """Call ``call``'s (root(A), root(B)): its step's A table ``a/<K>@<s>``'s and the weights' ``b/<K>``'s registered
         roots (`Served.registered`), the Registered row/v2 roots its tables were committed under. ValueError while
@@ -665,5 +682,5 @@ class Receipts:
 
 
 __all__ = ["Call", "Cubin", "LANES", "NOISE_CU", "Receipts", "call_receipts", "call_stream", "call_streams",
-           "gated_receipts", "gated_reference", "j10r_counters", "layout", "noise_blocks", "noise_blocks_cpu",
+           "gated_receipts", "gated_reference", "j10r_counters", "layout", "loaded", "noise_blocks", "noise_blocks_cpu",
            "noise_cubin", "reference", "seed_record", "stream_blocks", "tile_receipts", "unit_seeds", "units"]
