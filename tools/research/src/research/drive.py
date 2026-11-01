@@ -124,7 +124,7 @@ from typing import Callable, Iterable
 from .executor import (AFTER_LANDING_PRIORITY, FAIL, PENDING, SHADOW_WAIT_S, Executor, QueueTransport, check_id, compare,
                        old_verdicts)
 from .queue import (IDENTITY, PR, Entry, Member, Queue, QueueError, StoreLabels,
-                    _git, _out, built_on, changed, forces_cold, hold, lean_change, lean_hold, repinned, unreviewed)
+                    _git, _out, built_on, changed, forces_cold, hold, lean_change, lean_hold, unreviewed)
 
 #: who hears what drive can't settle
 CI = "@ci"
@@ -2673,6 +2673,8 @@ class Driver:
         """(the tree of ``head`` merged onto ``tip``, "") when it merges as `Queue._merge` merges, with ``tip``'s merge drivers
         and a merge whose every conflict is in a pin kept, each pin rebuilt from the merged tree (`repinned`), else (None,
         why).  A git without `--attr-source` merges without them, which conflicts more."""
+        from .queue import repinned
+
         args = ("merge-tree", "--write-tree", "--name-only", "--no-messages", tip, head)
         r = _git(self.repo, f"--attr-source={tip}", *args, check=False)
         if r.returncode == 129 and "attr-source" in r.stderr:
