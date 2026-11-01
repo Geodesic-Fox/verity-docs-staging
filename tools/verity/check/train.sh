@@ -106,7 +106,11 @@ else
 fi
 [ -z "$base" ] || [ "$(git -C "$root" rev-parse "$sha^{tree}")" != "$(git -C "$root" rev-parse "$base^{tree}")" ] \
   || die "${sha:0:12} is empty (its tree is its base ${base:0:12}'s): nothing to check"
-tree="${TMPDIR:-/tmp}/train-${sha:0:12}${shard:+-${shard/\//of}}"
+# TRAIN_TREES: where the checkout goes, apart from TMPDIR (drive keeps it on the control pod's container disk; its TMPDIR is on
+# the network volume, where uv and imports from the checkout stalled launches for minutes)
+trees="${TRAIN_TREES:-${TMPDIR:-/tmp}}"
+mkdir -p "$trees" || die "can't make $trees"
+tree="$trees/train-${sha:0:12}${shard:+-${shard/\//of}}"
 git -C "$root" worktree remove --force "$tree" 2>/dev/null || true
 git -C "$root" worktree add -q --detach "$tree" "$sha" 2>>"$why" || die "git worktree add $tree failed"
 exec 9>&-
