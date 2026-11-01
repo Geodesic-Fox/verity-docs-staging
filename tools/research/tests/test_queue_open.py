@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from research.queue import QueueError, broker_gh, open_pr
+from research.queue import PR, QueueError, broker_gh, open_pr
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -99,8 +99,63 @@ def test_open_with_dry_run_sends_nothing(tmp_path, monkeypatch, capsys):
     body.write_text("Lane ci\n")
     monkeypatch.setattr(Q, "open_pr", lambda *a, **k: (_ for _ in ()).throw(AssertionError("opened a PR on a dry run")))
     assert research_main(["queue", "open", "--dry-run", "--head", "cursor/x", "--title", "T", "--body-file", str(body),
-                          "--remote", "https://github.com/o/verity.git"]) == 0
-    assert "would open cursor/x onto main in o/verity" in capsys.readouterr().out
+                          "--issue", "ENG-123", "--remote", "https://github.com/o/verity.git"]) == 0
+    out = capsys.readouterr().out
+    assert "would open cursor/x onto main in o/verity" in out and "ending 'Refs ENG-123'" in out
+
+
+def test_the_issue_line_is_linears_non_closing_magic_word_or_a_reason_and_nothing_else():
+    from research.queue import issue_line, named_issue, with_issue
+
+    assert issue_line("ENG-123") == "Refs ENG-123" and issue_line("A1B-7") == "Refs A1B-7"
+    assert issue_line("none: a typo fix") == "Issue: none: a typo fix"
+    for bad in ("eng-123", "ENG123", "ENG-", "1ENG-3", "ENG-12x", "Refs ENG-123", ""):
+        with pytest.raises(QueueError, match=f"--issue {bad!r} is neither a Linear key"):
+            issue_line(bad)
+    with pytest.raises(QueueError, match="none:REASON needs the reason"):
+        issue_line("none:  ")
+    body = with_issue("Lane ci\n\nthe change\n", "ENG-123")
+    assert body == "Lane ci\n\nthe change\n\nRefs ENG-123\n" and with_issue(body, "ENG-123") == body
+    assert named_issue(body) == "ENG-123" and PR(1, "", body=body).owner == "ci"
+    assert named_issue(with_issue("Lane ci\n", "none:docs only")) == "none: docs only"
+
+
+def test_open_needs_an_issue_and_refuses_a_bad_one_before_anything_is_sent(tmp_path, monkeypatch, capsys):
+    from research import queue as Q
+    from research.cli import main as research_main
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    monkeypatch.chdir(tmp_path)
+    body = tmp_path / "body.md"
+    body.write_text("Lane ci\n")
+    monkeypatch.setattr(Q, "open_pr", lambda *a, **k: (_ for _ in ()).throw(AssertionError("opened a PR")))
+    argv = ["queue", "open", "--head", "cursor/x", "--title", "T", "--body-file", str(body), "--remote",
+            "https://github.com/o/verity.git"]
+    with pytest.raises(SystemExit) as e:
+        research_main(argv)
+    assert e.value.code == 2 and "--issue KEY (the PR's Linear issue" in capsys.readouterr().err
+    assert research_main([*argv, "--issue", "eng-1"]) == 1
+    assert "'eng-1' is neither a Linear key" in capsys.readouterr().err
+    assert research_main([*argv, "--issue", "none:"]) == 1
+    assert "none:REASON needs the reason" in capsys.readouterr().err
+    with pytest.raises(SystemExit):
+        research_main(["queue", "status", "--issue", "ENG-1"])
+    assert "--issue is for open only" in capsys.readouterr().err
+
+
+def test_open_sends_the_body_with_its_refs_line(tmp_path, monkeypatch, capsys):
+    from research import queue as Q
+    from research.cli import main as research_main
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    monkeypatch.chdir(tmp_path)
+    body = tmp_path / "body.md"
+    body.write_text("Lane ci\n\nthe change\n")
+    sent = []
+    monkeypatch.setattr(Q, "open_pr", lambda top, repo, head, title, text, **k: sent.append(text) or "https://x/pull/7")
+    assert research_main(["queue", "open", "--head", "cursor/x", "--title", "T", "--body-file", str(body), "--issue",
+                          "ENG-123", "--remote", "https://github.com/o/verity.git"]) == 0
+    assert sent == ["Lane ci\n\nthe change\n\nRefs ENG-123\n"] and capsys.readouterr().out.strip() == "https://x/pull/7"
 
 
 AGENT = "bc-d7be0308-38ba-5176-93d1-9169ce7d6cd3"
