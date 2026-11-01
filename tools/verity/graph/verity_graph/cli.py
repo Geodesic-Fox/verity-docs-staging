@@ -47,13 +47,9 @@ def _list(args: list[str]) -> int:
 
 
 def find(task_id: str) -> tuple[dict, dict]:
-    """(task ``task_id``, the graph of its family and what it reads) of this checkout."""
-    fams = graph.spec(ROOT)["family"]
-    doc = graph.listing(ROOT, {graph.family_of(task_id.partition(":")[0], fams)})
-    task = next((t for t in doc["tasks"] if t["id"] == task_id), None)
-    if task is None:
-        raise graph.GraphError(f"no task {task_id} on this tree: `verity graph` lists them")
-    return task, doc
+    """(task ``task_id``, the part of this checkout's graph that running it needs: `graph.task_graph`)."""
+    doc = graph.task_graph(ROOT, task_id)
+    return next(t for t in doc["tasks"] if t["id"] == task_id), doc
 
 
 def _run(args: list[str]) -> int:
