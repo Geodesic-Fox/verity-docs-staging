@@ -14,8 +14,9 @@ the commit's files alone:
   `__import__`, `importorskip` or `run_module`, a conftest's `pytest_plugins`, and a `.py` file a path loader is given that a
   string in the call names (from the file's directory or one above it). A computed name can't be followed
   (`Info.unfollowed`); what it loads is an undeclared read when the runner meets it;
-- the closures of what the test file and its conftests start: each `.py` file a string in them names (a script a test runs)
-  and each module they run as `python -m NAME`;
+- the closures of what the test file and its conftests start or load: each `.py` file a string in them names (a script a test
+  runs), each module they run as `python -m NAME`, and where they load a module by a path they build, each name a string gives
+  that a `.py` file has;
 - the suite's declared inputs (`[tool.verity.tests] inputs`, a directory as its files) less their Python, which the closure has
   where it is imported, and less Markdown under a directory unless the suite lists a `.md` (`suites.markdown`); the fixture
   registry when an entry of it that git doesn't hold (a fetched fixture) is under the suite's directory or its inputs;
@@ -65,6 +66,7 @@ _CONSTANT = re.compile(r"""\s*[rRuU]?(['"])([\w.]+)\1\s*[,)]""")
 _PYFILE = re.compile(r"""["']([\w./-]*[\w-]\.py)["']""")
 #: a module a test runs as `python -m NAME`, in a command's list
 _DASH_M = re.compile(r"""["']-m["']\s*,\s*[rRuU]?["']([A-Za-z_][\w.]*)["']""")
+_BARE = re.compile(r"""["']([A-Za-z_]\w*)["']""")
 _PLUGINS = re.compile(r"^pytest_plugins[ \t]*=", re.M)
 
 
@@ -342,7 +344,7 @@ class Imports:
                     reqs = _parsed(text)
                     break
             reqs += r
-        unfollowed = 0
+        unfollowed, by_path = 0, False
         fixed: list[str] = []
         for m in _CALL.finditer(text) if any(k in text for k in _CALLS) else ():
             call = _statement(text, m.end() - 1)
@@ -354,7 +356,7 @@ class Imports:
             elif loaded := [p for s in _PYFILE.findall(call) if (p := self._named(path, s))]:
                 fixed += loaded
             else:
-                unfollowed += 1
+                unfollowed, by_path = unfollowed + 1, True
         for line in _PLUGINS.finditer(text) if "pytest_plugins" in text else ():
             for s in re.findall(r"""["']([\w.]+)["']""", _statement(text, line.start())):
                 reqs.append((0, s, ()))
@@ -377,6 +379,8 @@ class Imports:
             elif self.tree.has(here, top):
                 fixed += self.walk(here, module, names)
         scripts = {p for s in _PYFILE.findall(text) if (p := self._named(path, s))} if ".py'" in text or '.py"' in text else set()
+        if by_path:                     # a module loaded by a path it builds from a name (`_load("gamma")`): each name with a file
+            scripts |= {p for s in set(_BARE.findall(text)) if (p := self._named(path, s + ".py"))}
         modules = set(_DASH_M.findall(text)) if "-m" in text else set()
         got = self._info[path] = Info(tuple(sorted(set(fixed) - {path})), local, unfollowed, tuple(sorted(scripts - {path})),
                                       tuple(sorted(modules)))
