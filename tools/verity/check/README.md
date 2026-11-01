@@ -110,12 +110,14 @@ run builds), and the jobs that keep no verdict (`lean-unit-cut`, `lean-changed`,
 worker's `uv sync --locked` refuses a lock that isn't current, each suite fetches the fixtures it reads, and the repository's
 suite holds the lints.
 
+A split suite's part runs (`run`) on the partition `--timings` gives (`{suite: the listing's splits timings}`), so it runs the
+listed files under the listed key; without it, on this machine's timing record. A suite's verdict is the join of its parts'
+(`suites.combine_parts`).
+
 `run ID` runs that task here as `check.py` runs that part in a shard of its own (`check.run` with only that part, without the
 preflight), its `deps` beside it until artifacts are shared, and writes `{"schema", "id", "verdict": passed|failed|skipped,
 "key", "seconds", "outputs": {"dir", "files", "artifacts"}, "steps": [check's step records]}` to stdout or `--out`; the steps'
-progress goes to stderr. It exits 0 for passed or skipped, 1 for failed. A split suite's part is of the partition `--timings`
-gives (`{suite: the listing's splits timings}`), so it runs the listed files under the listed key; without it, of this
-machine's timing record. A suite's verdict is the join of its parts' (`suites.combine_parts`).
+progress goes to stderr. It exits 0 for passed or skipped, 1 for failed.
 
 A recorded check publishes its live record (`live.py`) on the store's remote as each step ends and every few minutes, so
 it can be followed from any machine with the store's key, without its node: `verity ci ls` lists the recent checks, running

@@ -2714,7 +2714,7 @@ def main(argv: list[str]) -> int:
     if "--shard-plan-file" in rest[:-1] and run_dir is None:
         i = rest.index("--shard-plan-file")
         plan_file, rest = Path(rest[i + 1]), rest[:i] + rest[i + 2:]
-    sharded, splits = None, None
+    sharded = None
     if "--shard" in rest and rest.index("--shard") + 1 < len(rest):
         i = rest.index("--shard")
         later = rest[rest.index("--deferred") + 1] if "--deferred" in rest[:-1] else None
@@ -2725,11 +2725,11 @@ def main(argv: list[str]) -> int:
             print(f"check: {e}", file=sys.stderr)
             return 2
         rest = rest[:i] + rest[i + 2:]
-        splits = sharded.pop("splits", None)
         print(f"check: shard {sharded['k']}/{sharded['n']}: {', '.join(sharded['parts'])}", flush=True)
         if p := sharded.get("plan"):
             print(f"check: shard plan {p['digest'][:12]}: N = {p['n']}, floor {p['floor_s'] / 60:.1f} min, predicted wall "
                   f"{p['predicted_s'] / 60:.1f} min, this shard {p['seconds'][sharded['k'] - 1] / 60:.1f} min", flush=True)
+    splits = sharded.pop("splits", None) if sharded else None
     deferred = None
     if "--deferred" in rest and rest.index("--deferred") + 1 < len(rest):
         i = rest.index("--deferred")
