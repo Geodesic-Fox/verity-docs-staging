@@ -42,7 +42,7 @@ TICK=/root/drive-tick.lock
 # TMPDIR is on the volume: a train's check.py --record holds ~8 GiB in check-lean-deps-* at its peak, which took the pod's 20 GiB
 # root overlay to 95% (21 Oct). post_train.py's lock is under it too (tempfile.gettempdir()), so change it only between ticks.
 # A train's checkout (~430 MB) is on the container disk ($TRAIN_TREES): on the volume, uv and Python's imports from it left
-# check.py in NFS waits for minutes, and launches registered no run (1 Nov). `prune_trees` removes one an hour after its last
+# check.py in NFS waits for minutes, and launches registered no run. `prune_trees` removes one an hour after its last
 # change once no process runs in it, so a few an hour stay a few GB.
 HELPER='!/data/infra/gh_app_token.sh git'
 export PATH=$DIR/ghw:$DIR/bin:/root/.local/bin:$PATH GH_CONFIG_DIR=$DIR/gh-config GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8 \

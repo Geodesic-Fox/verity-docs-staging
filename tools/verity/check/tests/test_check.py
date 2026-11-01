@@ -1736,7 +1736,7 @@ def test_train_sh_hands_an_auto_shard_its_plan_and_refuses_one_without_it(tmp_pa
 
 def test_train_sh_replaces_a_tree_git_no_longer_lists_as_a_worktree(tmp_path):
     """On the control pod's NFS TMPDIR a train's tree can be left half removed and no longer a worktree, which `worktree remove`
-    skips and `worktree add` refuses: every relaunch of that commit registered no run (1 Nov)."""
+    skips and `worktree add` refuses: every relaunch of that commit registered no run."""
     git, train, argv = _train_repo(tmp_path)
     (tmp_path / "repo" / "a").write_text("b\n")
     git("commit", "-q", "-am", "change")
