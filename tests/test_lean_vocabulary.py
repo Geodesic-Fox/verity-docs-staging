@@ -279,7 +279,7 @@ def lean_definitions(text: str) -> tuple[list[tuple[str, Hit]], list[tuple[str, 
 
 def _python_code(text: str) -> str:
     """`text` with its string literals and comments blanked to spaces, newlines and offsets kept, so prose that wraps to
-    begin a line with `class X` isn't read as a header. Text that doesn't tokenize raises: every tracked `.py` file compiles."""
+    begin a line with `class X` isn't read as a header.  Every tracked file compiles, so one that doesn't tokenize raises."""
     lines = text.splitlines(keepends=True)
     tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
     prose = {tokenize.STRING, tokenize.COMMENT, getattr(tokenize, "FSTRING_MIDDLE", tokenize.STRING)}
