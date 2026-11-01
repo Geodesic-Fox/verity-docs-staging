@@ -13,6 +13,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -3984,3 +3985,15 @@ def test_the_sync_leaves_off_next_a_head_whose_lock_merge_drops_what_next_needs_
     assert entries[2].state == "refused" and entries[2].why == why
     assert q.load_state()["conflicts"]["2"]["why"] == why
     assert set(json.loads(_git(world.origin, "show", "refs/heads/next:pkg/lean-audit.json"))["guarantees"]) == {"F", "G2", "H", "K"}
+
+
+def test_preflight_trees_go_under_RESEARCH_PREFLIGHT_ROOT_when_no_root_is_given(tmp_path, monkeypatch):
+    """Drive's pod keeps TMPDIR on a network volume, where a merged tree's `uv sync` can't hardlink from uv's cache and outruns
+    the budget; `RESEARCH_PREFLIGHT_ROOT` puts the trees on a local disk instead, and a root passed in still wins."""
+    from research.queue import PREFLIGHT_ROOT_ENV, Preflight
+
+    monkeypatch.setenv(PREFLIGHT_ROOT_ENV, str(tmp_path / "fast"))
+    assert Preflight(tmp_path, "origin", None).root == tmp_path / "fast"
+    assert Preflight(tmp_path, "origin", None, root=tmp_path / "given").root == tmp_path / "given"
+    monkeypatch.delenv(PREFLIGHT_ROOT_ENV)
+    assert Preflight(tmp_path, "origin", None).root == Path(tempfile.gettempdir())

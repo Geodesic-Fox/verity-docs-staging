@@ -39,6 +39,9 @@ QUEUE=/root/.research/queue/verity
 CONF=/root/.config/verity
 STOP=$DIR/stopped
 TICK=/root/drive-tick.lock
+# Each preflight merges a PR onto `next` in a worktree under RESEARCH_PREFLIGHT_ROOT and `uv sync`s it there: on the container
+# disk, beside uv's cache, which it hardlinks from, that takes ~13 s; under TMPDIR on the volume it outran the 120 s budget.
+export RESEARCH_PREFLIGHT_ROOT=$FAST/preflight
 # TMPDIR is on the volume: a train's check.py --record holds ~8 GiB in check-lean-deps-* at its peak, which took the pod's 20 GiB
 # root overlay to 95% (21 Oct). post_train.py's lock is under it too (tempfile.gettempdir()), so change it only between ticks.
 # A train's checkout (~430 MB) is on the container disk ($TRAIN_TREES): on the volume, uv and Python's imports from it left

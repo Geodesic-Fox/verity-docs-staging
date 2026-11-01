@@ -2862,6 +2862,9 @@ PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("integrations/
 PREFLIGHT_UNCOLLECTED: dict[str, str] = {}
 #: the merged tree's environment, as the quick tier's `uv run --locked` has it (a fresh tree syncs from uv's cache in seconds)
 PREFLIGHT_SYNC = ("uv", "sync", "--locked", "--all-packages", "--extra", "torch-cpu", "-q")
+#: where the merged trees go (default: tempfile's): a tree must share a filesystem with uv's cache for its sync to hardlink, so drive
+#: on the control pod, whose TMPDIR is a network volume, sets it to the container disk
+PREFLIGHT_ROOT_ENV = "RESEARCH_PREFLIGHT_ROOT"
 #: what the merged tree's checks may take together; what hasn't finished by then is named and refuses nothing.  Every suite's
 #: collection but circuit-check's takes about 18 s on 4 workers of a 4-core VM; `PREFLIGHT_LINTS` add up to a minute
 PREFLIGHT_BUDGET_S = 120.0
@@ -3482,7 +3485,7 @@ class Preflight:
         self.budget_s, self.jobs, self.clock, self.log, self.free = budget_s, jobs, clock, log, free
         self.fetch = fetch or self._fetch_fixtures
         self.lean, self.lean_s, self.lean_modules = lean, lean_s, lean_modules
-        self.root = Path(root or tempfile.gettempdir())
+        self.root = Path(root or os.environ.get(PREFLIGHT_ROOT_ENV) or tempfile.gettempdir())
 
     def __call__(self, pr: PR, prs: list[PR]) -> str | None:
         """None when the head may be marked; else the refusal."""
