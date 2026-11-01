@@ -378,7 +378,7 @@ def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | N
             f"VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
 
 
-#: `--artifacts`: the node's Lake artifact cache, which only a passing audit writes (`lean_audit.LakeArtifacts`)
+#: `--artifacts`: the node's Lake artifact cache, which only a passing run writes (`lean_audit.LakeArtifacts`)
 ARTIFACTS: Path | None = None
 #: `--dev-cache`: the dependencies come from the verified build cache, so the result is not a Lean verdict
 DEV_CACHE = False
@@ -407,18 +407,15 @@ def plugin_targets(pkg: Path) -> list[str]:
 
 def lake_env() -> dict[str, str]:
     """The environment of every `lake` and `setup.sh` the audit runs. `setup.sh` restores nothing from the build cache
-    (`cache.py`). Lake builds from source, or with `--artifacts` restores a module whose input hash it finds there: with
-    `LAKE_ARTIFACT_CACHE` unset, a package that configures no cache reads it and never writes it. With `--dev-cache`,
-    `setup.sh` restores Mathlib's cache and main's verified build (`cache.py get`) and Lake reads its local cache: the
-    replay still checks our packages' declarations, but a dependency's are taken as their `.olean` states them, which only
-    the gate's from-source build (the cache's root) and the nightly `--fresh` vouch for, so such a run is never a verdict."""
+    (`cache.py`). Lake builds from source; with `--artifacts`, each build step restores the modules `stage_build` staged for
+    it. With `--dev-cache`, `setup.sh` restores Mathlib's cache and main's verified build (`cache.py get`) and Lake reads its
+    local cache: the replay still checks our packages' declarations, but a dependency's are taken as their `.olean` states
+    them, which only the gate's from-source build (the cache's root) and the nightly `--fresh` vouch for, so such a run is
+    never a verdict."""
     env = dict(os.environ)
     env["PATH"] = f"{Path.home() / '.elan' / 'bin'}{os.pathsep}{env.get('PATH', '')}"
     env.setdefault("LEAN_NUM_THREADS", str(cores()))
-    if ARTIFACTS:
-        env.pop("LAKE_ARTIFACT_CACHE", None)
-        env["LAKE_CACHE_DIR"] = str(ARTIFACTS)
-    elif DEV_CACHE:
+    if DEV_CACHE:
         env.pop("LAKE_ARTIFACT_CACHE", None)
     else:
         env["LAKE_ARTIFACT_CACHE"] = "false"
@@ -2554,6 +2551,22 @@ def writable(pkg: Path) -> list[Path]:
     return [d / ".lake" for d in [pkg.resolve(), *path_deps(pkg)]]
 
 
+def stage_build(mk, pkg: Path, roots: list[str], dest: Path) -> tuple[dict[tuple[str, str], str], int]:
+    """A Lake cache directory at ``dest`` for ``pkg``'s build (and its ``roots``, `lake build +R`): each module of it that
+    the node's artifact cache (`ARTIFACTS`) indexes under its sha256 key, its artifacts checked (``mk``: `module_keys`,
+    `stage`). Each build step reads it with `LAKE_CACHE_DIR` and `LAKE_ARTIFACT_CACHE` unset, under which Lake reads a
+    package's cache and never writes it, and inside the sandbox, where `ARTIFACTS` is read-only. The staged directories of
+    processes that are gone go first. Where staging fails, ``dest`` is empty and everything is built."""
+    try:
+        mk.sweep(ARTIFACTS)
+        shutil.rmtree(dest, ignore_errors=True)
+        return mk.stage(ARTIFACTS, pkg, roots, dest)
+    except OSError:
+        shutil.rmtree(dest, ignore_errors=True)
+        dest.mkdir(parents=True, exist_ok=True)
+        return {}, 0
+
+
 def in_sandbox(pkg: Path, argv: list[str]) -> list[str]:
     """``argv`` inside the build sandbox, writable only in the package's `writable` directories, and `ARTIFACTS` readable
     (``argv`` as is where there is no sandbox)."""
@@ -2889,23 +2902,49 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     t, _peak.bytes = time.monotonic(), 0
     if build:
         rep["sandbox"] = sandboxed()
-        jobs = [] if (n := build_threads(pkg)) is None else ["env", f"LEAN_NUM_THREADS={n}"]
+        n = build_threads(pkg)
+        mk = sibling("module_keys") if ARTIFACTS else None
+        cache = ARTIFACTS / mk.STAGE / f"{os.getpid()}-{tag}" if mk else None
+        pre = [*(["-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}"] if cache else []),
+               *([f"LEAN_NUM_THREADS={n}"] if n is not None else [])]
+        jobs = ["env", *pre] if pre else []
         if n is not None:
             rep["build_threads"] = n
-        for step, argv in (("setup", None),
-                           ("build-plugins", lambda: (in_sandbox(pkg, [*jobs, "lake", "build", *ts]) if (ts := plugin_targets(pkg))
-                                                      else [])),
-                           ("build", in_sandbox(pkg, [*jobs, "lake", "build"])),
-                           ("build-roots", in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{r}" for r in policy["roots"])]))):
-            if callable(argv) and not (argv := argv()):
-                continue
-            with contextlib.nullcontext() if argv is None else writing(pkg, log):
-                s = time.monotonic()
-                rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else run(argv, pkg, work / f"{step}.log")
-                rep["seconds"][step] = round(time.monotonic() - s, 1)
-            if rc:
-                rep["failures"].append(Failure(step, None, f"{step}: exit {rc}\n{text[-3000:]}"))
+        staged: dict[tuple[str, str], str] = {}
+        try:
+            for step, argv in (("setup", None), ("stage", None),
+                               ("build-plugins", lambda: (in_sandbox(pkg, [*jobs, "lake", "build", *ts])
+                                                          if (ts := plugin_targets(pkg)) else [])),
+                               ("build", in_sandbox(pkg, [*jobs, "lake", "build"])),
+                               ("build-roots", in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{r}" for r in policy["roots"])]))):
+                if step == "stage":
+                    if cache:
+                        s = time.monotonic()
+                        staged, keyed = stage_build(mk, pkg, policy["roots"], cache)
+                        rep["seconds"][step] = round(time.monotonic() - s, 1)
+                        rep["staged"] = {"modules": len(staged), "keyed": keyed}
+                    continue
+                if callable(argv) and not (argv := argv()):
+                    continue
+                with contextlib.nullcontext() if argv is None else writing(pkg, log):
+                    s = time.monotonic()
+                    rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else run(argv, pkg, work / f"{step}.log")
+                    rep["seconds"][step] = round(time.monotonic() - s, 1)
+                if rc:
+                    rep["failures"].append(Failure(step, None, f"{step}: exit {rc}\n{text[-3000:]}"))
+                    return reported(rep)
+            if bad := mk.misrestored(staged, pkg) if staged else []:
+                for _, trace, _ in bad:
+                    trace.unlink(missing_ok=True)
+                rep["failures"].append(Failure("build", None, "build: Lake finds a module in its cache by its package and "
+                                               "input hash alone, and these modules have the input hash of another this "
+                                               "build restored, so they may hold its outputs; their traces are removed, so "
+                                               "the next build compiles them: " +
+                                               ", ".join(f"{m} ({o}'s)" for m, _, o in bad[:10])))
                 return reported(rep)
+        finally:
+            if cache:
+                shutil.rmtree(cache, ignore_errors=True)
     built()
     files = lean_modules(pkg)
     background = ThreadPoolExecutor(max_workers=5)
@@ -3213,8 +3252,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--replay-cache", type=Path, metavar="DIR", help="reuse the replay of each module that passed it with the "
                     "same .olean files, its imports' included, on the same toolchain (`replay_keys`), and store each one "
                     "checked here")
-    ap.add_argument("--artifacts", type=Path, metavar="DIR", help="Lake's artifact cache, which the builds read and never write "
-                    "(`lake_env`)")
+    ap.add_argument("--artifacts", type=Path, metavar="DIR", help="the node's Lake artifact cache (`lean_audit.LakeArtifacts`): "
+                    "each build restores the modules it indexes under their sha256 keys, and never writes it (`stage_build`)")
     ap.add_argument("--closure", action="store_true", help="the replay also checks every module of the import closure, the "
                     "toolchain's, Mathlib's and ArkLib's included, that has not passed it under its key (with --replay-cache, "
                     "a warm run checks only what changed; `replay_step`)")
@@ -3340,6 +3379,8 @@ def main(argv: list[str]) -> int:
                          (f"; peak GiB {rep['peak_gib']}" if rep.get("peak_gib") else ""))
             if "sandbox" in rep:
                 head += "; built in the sandbox" if rep["sandbox"] else "; built WITHOUT a sandbox (unshare unavailable here)"
+            if s := rep.get("staged"):
+                head += f"; {s['modules']} of its {s['keyed']} keyed modules staged from the artifact cache"
             print(head, flush=True)
             if c := rep.get("replay", {}).get("closure"):
                 print(f"  closure: {c['checked']} modules checked, {c['reused']} reused, of the {c['modules']} the package "
