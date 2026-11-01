@@ -635,34 +635,33 @@ def _load(name: str, path: Path):
 
 
 @pytest.mark.skipif(LAKE is None, reason="no lake")
-def test_a_module_version_a_passing_run_built_is_restored_under_its_key_on_another_tree(tmp_path, monkeypatch):
-    """A kept build holds one tree's modules per package per node, so a check whose kept build came from an older tree
-    rebuilt most of `Security/Proofs`. Lake, reading a cache staged for the build in its sandbox, restores each module
-    version the node's cache indexes under that module's sha256 key instead of compiling it, and only those."""
+def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_path, monkeypatch):
+    """A kept build holds one tree's modules per package per node: check r20261012-023815-e641 rebuilt 640 of
+    `Security/Proofs`' 1,096 modules (2,404 s of a 2,922 s check) because nebius-2's kept build came from an older tree. Lake,
+    reading the cache in the build sandbox, restores each module version it holds instead of compiling it."""
     LC, LA = (_load(f"artifacts_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg,
                     ignore=shutil.ignore_patterns(".lake"))
     store = tmp_path / "artifacts"
+    build = lambda: subprocess.run(LC.in_sandbox(pkg, ["lake", "build"]), cwd=pkg, check=True, capture_output=True,
+                                   env=LC.lake_env())
+    build()
     mods = ["Control", "Control.Assumptions", "Control.Defs", "Control.Thms"]
 
-    def build(at: Path | None = None) -> dict:
-        """`lake build` as the audit runs it, reading a cache staged from ``at``; what was staged."""
-        staged, cache = {}, None
-        if at:
-            monkeypatch.setattr(LC, "ARTIFACTS", at)
-            cache = at / LA.MK.STAGE / "test"
-            staged, said = LC.stage_build(LA.MK, pkg, ["Control"], cache)
-            assert said == {"modules": len(staged), "keyed": len(mods)}
-        pre = ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}"] if cache else []
-        subprocess.run(LC.in_sandbox(pkg, [*pre, "lake", "build"]), cwd=pkg, check=True, capture_output=True,
-                       env=LC.lake_env())
-        assert LA.MK.misrestored(staged, pkg) == []
-        if cache:
-            shutil.rmtree(cache)
-        return staged
+    def staged(at: Path) -> dict:
+        """`lake build` as the audit runs it with the node's cache at ``at``, reading a cache staged for it (Lake restores
+        a module only from there); what was staged."""
+        monkeypatch.setattr(LC, "ARTIFACTS", at)
+        cache = at / LA.MK.STAGE / "test"
+        got, said = LC.stage_build(LA.MK, pkg, ["Control"], cache)
+        assert said == {"modules": len(got), "keyed": len(mods)}
+        subprocess.run(LC.in_sandbox(pkg, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"]),
+                       cwd=pkg, check=True, capture_output=True, env=LC.lake_env())
+        assert LA.MK.misrestored(got, pkg) == []
+        shutil.rmtree(cache)
+        return got
 
-    build()
     arts = LA.LakeArtifacts(store)
     assert arts.put({pkg}) == len(mods)
     lib = pkg / ".lake" / "build" / "lib" / "lean"
@@ -670,12 +669,12 @@ def test_a_module_version_a_passing_run_built_is_restored_under_its_key_on_anoth
     thms = pkg / "Control" / "Thms.lean"
     text = thms.read_text()
     thms.write_text(text + "\ntheorem another_tree : True := trivial\n")
-    staged = build(store)                                             # Thms and Control have other keys: compiled
-    assert sorted(staged.values()) == ["Control.Assumptions", "Control.Defs"]
+    got = staged(store)                                               # Thms and Control have other keys: compiled
+    assert sorted(got.values()) == ["Control.Assumptions", "Control.Defs"]
     assert (lib / "Control" / "Thms.olean").read_bytes() != was[lib / "Control" / "Thms.olean"]
     assert not json.loads((lib / "Control" / "Thms.trace").read_text()).get("synthetic")
     thms.write_text(text)
-    assert sorted(build(store).values()) == mods
+    assert sorted(staged(store).values()) == mods
     for f, b in was.items():
         assert f.read_bytes() == b
     trace = json.loads((lib / "Control" / "Thms.trace").read_text())
@@ -686,7 +685,7 @@ def test_a_module_version_a_passing_run_built_is_restored_under_its_key_on_anoth
     h = hashlib.sha256(dest.read_bytes()).hexdigest()
     assert LA.LakeArtifacts(other).take({LA.SHARED + h: dest.as_uri()}, lambda s: None) == len(arts.added)
     shutil.rmtree(pkg / ".lake")
-    assert sorted(build(other).values()) == mods
+    assert sorted(staged(other).values()) == mods
     for f, b in was.items():
         assert f.read_bytes() == b
     assert all(json.loads(t.read_text())["synthetic"] for t in lib.rglob("*.trace"))
