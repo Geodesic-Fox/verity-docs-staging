@@ -233,6 +233,29 @@ def test_a_lean_check_isnt_moved_across_a_change_lowrisk_excludes_names_and_the_
     assert line.endswith("differ in verity/core/v.py, which `lowrisk_excludes` names"), line
 
 
+def test_the_lanes_merge_rebuilds_conflicted_pins_as_the_sync_does(world, monkeypatch):
+    """The lane merges each member again (onto `checked`'s tip, and above a Lean check it moves) as the sync merges it: a merge
+    whose only conflicts are in pins keeps each pin rebuilt from the merged tree.  Refusing it stopped every landing of a tick
+    on one member's PoUS pin, which the sync had merged."""
+    from test_queue import EXFIL, POUS, TRUSTED, UP, _pin_main, _pinned, _trusted
+
+    tree = _pin_main(world)
+    h = _lane(world, monkeypatch)
+    one = {**tree, f"{POUS}/lakefile.toml": "l1\n"}
+    two = {**tree, f"{POUS}/lean-toolchain": "t1\n"}
+    paths = ["lean-toolchain", "lakefile.toml", "Old.lean", UP]
+    exfil = ["Security/Proofs/lakefile.toml", "x.lean"]
+    a, b = _pinned(world, one, paths, exfil), _pinned(world, two, paths, exfil)
+    _git(h.d.repo, "fetch", "-q", "origin", f"refs/dev/{a}", f"refs/dev/{b}")
+    merged, why = h.d._clean_merge(a, b)
+    assert merged and why == "", why
+    assert _git(h.d.repo, "show", f"{merged}:{TRUSTED}") + "\n" == _trusted(paths, {**one, f"{POUS}/lean-toolchain": "t1\n"})
+    assert _git(h.d.repo, "show", f"{merged}:{EXFIL}")
+    d, e = world.change({"q.txt": "1\n"}), world.change({"q.txt": "2\n"})
+    _git(h.d.repo, "fetch", "-q", "origin", f"refs/dev/{d}", f"refs/dev/{e}")
+    assert h.d._clean_merge(d, e) == (None, "conflict in q.txt")
+
+
 def test_the_lane_waits_while_a_lean_check_drive_didnt_launch_runs(world, monkeypatch):
     """A hand check's run is of the commit it runs on, which a landing off `next` takes off it: (a) can't be shown for it."""
     h = _lane(world, monkeypatch)
