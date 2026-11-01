@@ -54,11 +54,6 @@ uv run tools/verity/check/suites.py --explain SUITE       # why a suite would ru
 commit as an Attempt, run `uv run python tools/verity/check/check.py --record --on vy-nebius-cpu-1 --pool research` from
 the checkout.
 
-A recorded check publishes its live record (`live.py`) on the store's remote as each step ends and every few minutes, so
-it can be followed from any machine with the store's key, without its node: `verity ci ls` lists the recent checks, running
-and ended, and `verity ci inspect RUN` shows a check's steps with their state, elapsed time, an ETA from each step's median
-over recent recorded checks, and its reds so far. What isn't recorded shows as unknown, never as passed.
-
 ## Tasks (`tasks/v1`)
 
 The check is also a graph of tasks, the whole contract between Verity and an executor. `verity tasks` (`tasks.py`) has two
@@ -107,6 +102,11 @@ suite holds the lints.
 preflight), its `deps` beside it until artifacts are shared, and writes `{"schema", "id", "verdict": passed|failed|skipped,
 "key", "seconds", "outputs": {"dir", "files", "artifacts"}, "steps": [check's step records]}` to stdout or `--out`; the steps'
 progress goes to stderr. It exits 0 for passed or skipped, 1 for failed.
+
+A recorded check publishes its live record (`live.py`) on the store's remote as each step ends and every few minutes, so
+it can be followed from any machine with the store's key, without its node: `verity ci ls` lists the recent checks, running
+and ended, and `verity ci inspect RUN` shows a check's steps with their state, elapsed time, an ETA from each step's median
+over recent recorded checks, and its reds so far. What isn't recorded shows as unknown, never as passed.
 
 ## Landing
 
