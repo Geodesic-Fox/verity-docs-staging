@@ -487,10 +487,14 @@ module docstring has the layout and the rules. In short:
 - A miss or a mismatch means building from source. So do a missing read credential (the `LEAN_CACHE_*` variables, else
   the same four lines in `~/.config/verity/lean-cache-read.env`, as the nodes' research user holds them), the kill switch
   (disabled, quarantined or unreachable), and `LEAN_CACHE=off`.
-- The audit never reads the cache: `lake_env()` sets `LEAN_CACHE=off`, and `LAKE_ARTIFACT_CACHE=false` unless check's audit
-  names its node's own Lake cache (`--artifacts`, `lean_audit.LakeArtifacts`), which only a passing audit on that node
-  writes and the sandboxed builds only read. A module is then built from source or restored from an earlier passing audit,
-  as a kept build's modules are: Lake's input hash decides which, in both.
+- The audit never reads the cache: `lake_env()` sets `LEAN_CACHE=off` and `LAKE_ARTIFACT_CACHE=false`. Check's audit and
+  a records run (`lean_changed.py --records`) name their node's own Lake cache instead (`--artifacts`,
+  `lean_audit.LakeArtifacts`), which only a passing run on that node writes, with the modules its build compiled. It
+  indexes each module under a sha256 key of its source, its imports' keys, its package's lakefile, the fetched packages'
+  revisions and the toolchain (`module_keys.py`). Before each build, the modules whose keys it indexes are staged, every
+  artifact checked against its sha256, into a Lake cache of that build's own, which the sandboxed build only reads. Lake
+  restores a staged module only where its input hash agrees as well, and a module whose input hash is another staged
+  module's fails the build. Any other module is built from source.
 - Only integration publishes, and only a clean checkout of a commit on `origin/main`. It builds with `cache.py build` inside
   its sandbox, then runs `cache.py publish` as root outside it, which hashes the staged files itself and signs with the
   bucket-scoped key (`/etc/verity/lean-cache.env`). The build's user wrote the stage, so the publisher follows no link
