@@ -72,6 +72,26 @@ def test_demo_bs_store_is_certified_by_period_held_at():
     assert period.gaps(past)[1] == [f"P2 has no certificate at (w, c0, blocks) = (16448, 21065, {(1 << 27) + (1 << 16)})"]
 
 
+def test_320_reads_keep_the_105_read_certificates():
+    """At `k ≥ 320` challenges the run keeps the 105-read certificates and their `1% + 2^-128`: the registered point
+    under `P2SlackFamilyUncond`, Demo B's store and `2^27` blocks under `periodHeldAt`. `ObligationWide320`'s `2^-20`
+    (`p2.wide320_certificate`, from the open conjecture `P2RingRoundSecureWide`) is no run's certificate."""
+    def at(bps: int, segments: int, k: int) -> R.Point:
+        return R.Point(P2Params(16448, 21065, bps, segments), k, R.DEPLOYED.limit_ns)
+
+    for bps, segments, theorem in ((1 << 16, 8, "Pous.SecurityProofs.P2SlackFamilyUncond"),
+                                   (1 << 16, 1038, "Pous.Period.SecurityProofs.periodHeldAt"),
+                                   (1 << 16, 1 << 11, "Pous.Period.SecurityProofs.periodHeldAt")):
+        for k in (319, 320, 321):
+            pt, s_bits = at(bps, segments, k), bps * segments * 16448 * 18 // 19
+            assert period.certify(pt) == {"certified": True, "eps": str(EPS), "s_bits": s_bits}
+            prof = period.profile(pt)
+            assert prof["gaps"] == [] and prof["certificate"]["theorem"] == theorem and prof["certificate"]["k"] == 105
+    assert period.certify(at(1 << 16, 8, 320))["s_bits"] == 8_169_621_180
+    assert period.certify(at(256, 1, 320)) == {"certified": True, "eps": str(EPS), "s_bits": 256 * 16448 * 18 // 19}
+    assert period.certify(at(1 << 16, (1 << 11) + 1, 320))["certified"] is False
+
+
 def test_encode_in_processes_is_the_serial_encode():
     q = P2Params(128, 173, 8, 2)
     w = hashlib.shake_256(b"W").digest(q.w_bytes)
