@@ -3372,8 +3372,9 @@ def dropped_entries(base: dict, merged: dict) -> list[str]:
     lists the guarantee under `guarantees` (removed), or restated it: it records the guarantee otherwise than ``base`` does,
     its owner aside, or a definition both say it reads has another hash (`check.py --update` keeps a premise only while the
     statement prints it, and the head's records run checked its lock).  It may drop an entry whose text (a premise, a frozen
-    entry's reason) it holds under a key of the section ``base`` lacks (renamed), and a guarantee's premises while it adds as
-    many others under that guarantee (re-keyed at a restated statement, as `check.py`'s `paired` keys them)."""
+    entry's reason) it holds under a key of the section ``base`` lacks (renamed), a guarantee's premises while it adds as
+    many others under that guarantee (re-keyed at a restated statement, as `check.py`'s `paired` keys them), and a frozen
+    entry's reason while it keeps the key (reworded: `check.py` reads the key and the reason's category, not its wording)."""
     listed, was = merged.get("guarantees") or {}, base.get("guarantees") or {}
     reads, read = _read_by(base), _read_by(merged)
 
@@ -3393,7 +3394,7 @@ def dropped_entries(base: dict, merged: dict) -> list[str]:
             had, kept = _texts(section, b, g), _texts(section, m, g)
             gone = [t for t in had if t not in kept and t not in moved]
             if section == "frozen":
-                out += [f"shape.frozen[{g}]" for _ in gone]
+                out += [f"shape.frozen[{g}]" for _ in gone if g not in m]
             elif len(gone) > len([t for t in kept if t not in had]):
                 out += [f"shape.inline[{g}]: " + (t if len(t) <= LOCK_DROP_SHOWN else t[:LOCK_DROP_SHOWN] + "…") for t in gone]
     return out
