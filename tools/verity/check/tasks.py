@@ -67,9 +67,11 @@ STEP_INPUTS = {
     "flock-rust-tests": ["verity/ml/flock/check_build.sh", "verity/ml/flock/live", "verity/ml/flock/flock-*-b684b12.patch"],
     "lean-agreement": ["verity/ml/flock/verifier", VERIFIER],
 }
-#: a worker slot's size, by what a task asks: most tasks a 16-core, 64 GB slot; a Lake package's audit a 32-core, 128 GB one;
-#: a suite that runs in one process (not `parallel`) one core and what `suites.py` holds for one test process
+#: a worker slot's size, by what a task asks: most tasks a 16-core, 64 GB slot; a Lake package's audit the same with a
+#: Lean build's disk, or a 32-core, 128 GB one when it reads `Security` (Mathlib, ArkLib: `lean_slot`); a suite that runs in
+#: one process (not `parallel`) one core and what `suites.py` holds for one test process
 SLOT = {"cores": 16, "mem_gb": 64, "disk_gb": 20}
+LEAN_PKG_SLOT = {"cores": 16, "mem_gb": 64, "disk_gb": 60}
 LEAN_SLOT = {"cores": 32, "mem_gb": 128, "disk_gb": 60}
 ONE_PROCESS = {"cores": 1, "mem_gb": S.TEST_PROCESS_GB, "disk_gb": 10}
 #: where a task's argv names the run's output directory before `<out>` stands for it
@@ -214,6 +216,11 @@ def lean_cover(pkg: str) -> list[str]:
     return [*dict.fromkeys(pkgs), LA.LEAN_TOOL.rstrip("/"), "tools/verity/check/common.py"]
 
 
+def lean_slot(pkg: str) -> dict:
+    """The slot ``pkg``'s audit asks: `LEAN_SLOT` when it or a package it requires is under `Security`, else `LEAN_PKG_SLOT`."""
+    return LEAN_SLOT if any(p.split("/")[0] == "Security" for p in (pkg, *LA.path_deps(pkg))) else LEAN_PKG_SLOT
+
+
 def record(part: str, facts: Facts, all_parts: list[str], costs: dict[str, float]) -> dict:
     """``part``'s `tasks/v1` record."""
     job, _, x = part.partition(":")
@@ -231,7 +238,7 @@ def record(part: str, facts: Facts, all_parts: list[str], costs: dict[str, float
         inputs = {"closure": "suites.inputs_of", "paths": sorted(set(facts.inputs[name]) | set(S.RUNNER))}
         key_doc = {"part": facts.part_key(name, spec, job)} if spec else {"suite": facts.suite_components(name, job)}
     elif kind == "lean-package":
-        resources = LEAN_SLOT
+        resources = lean_slot(x)
         inputs = {"closure": "lean_audit.inputs", "paths": lean_cover(x)}
         beside = [f"lean-audit:{q}" for q in LA.provers(x) if f"lean-audit:{q}" in all_parts]
         key_doc = {"lean": LA.components(x, facts.files, LA.FLAGS), "python": platform.python_version(), "image": S.base_image()}
