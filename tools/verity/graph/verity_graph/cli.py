@@ -9,7 +9,8 @@
     verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events FILE]
                                   every task (or those families' and what they read) serially, in order, uncached, by the
                                   reference executor (`local.py`), its events/v1 lines (purpose adhoc) appended to FILE
-                                  (default DIR/events.jsonl); exit 0 when every one passed
+                                  (default DIR/events.jsonl) and each task's last result/v1 in DIR/results.json; exit 0
+                                  when every one passed
 """
 from __future__ import annotations
 
@@ -79,6 +80,7 @@ def _check(args: list[str]) -> int:
     events = a.events or work / "events.jsonl"
     with open(events, "a") as ev:
         out = local.check(ROOT, _families(a.family), work, retries=a.retries, events=ev)
+    (work / "results.json").write_bytes(contract.canonical({**out["results"], **out["errors"]}) + b"\n")
     counts = {s: sum(r["status"] == s for r in out["results"].values()) for s in ("pass", "fail")}
     print(json.dumps({"ok": out["ok"], **counts, "error": len(out["errors"]), "cancelled": len(out["cancelled"]),
                       "work": str(work), "events": str(events)}), flush=True)

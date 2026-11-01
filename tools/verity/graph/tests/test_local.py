@@ -102,6 +102,8 @@ def test_check_local_writes_its_events_beside_its_work_unless_told_where(tree, t
         assert json.loads(capsys.readouterr().out)["events"] == str(where)
         events = [json.loads(x) for x in where.read_text().splitlines()]
         assert {e["purpose"] for e in events} == {"adhoc"} and [e["event"] for e in events].count("finished") == 3
+    results = json.loads((tmp_path / "w" / "results.json").read_text())
+    assert sorted(results) == ["other:x", "toy-b:b", "toy:a"] and {r["status"] for r in results.values()} == {"pass"}
 
 
 def test_what_the_executor_takes_from_a_launch(tree, tmp_path):
