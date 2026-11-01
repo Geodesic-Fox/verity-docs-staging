@@ -1711,7 +1711,7 @@ class Queue:
             return None, (f"the members below it change {', '.join(changed)} from `{into}` {main[:12]}: its move runs "
                           f"`{into}`'s scripts, and the members above it are carried across it with its base's, so it waits "
                           f"until those members land on `{into}`")
-        with tempfile.TemporaryDirectory(prefix="queue-move-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="queue-move-", ignore_cleanup_errors=True) as tmp:
             wt = Path(tmp, "wt")
             _git(self.workdir, "worktree", "add", "-q", "--detach", str(wt), tip)
             try:
@@ -1798,7 +1798,7 @@ class Queue:
         script = _git(self.workdir, "show", f"{self.base}:{RESTACK}", check=False)
         if script.returncode:
             return dict.fromkeys(keys, {"why": f"`{self.into}` has no {RESTACK}"})
-        with tempfile.TemporaryDirectory(prefix="queue-restack-") as tmp:
+        with tempfile.TemporaryDirectory(prefix="queue-restack-", ignore_cleanup_errors=True) as tmp:
             path = Path(tmp, "restack.py")
             path.write_text(script.stdout, errors="surrogateescape")
             r = subprocess.run([sys.executable, str(path), *heads, "--move-commit", mv.commit, "--script", RENAME,
@@ -2308,7 +2308,7 @@ def base_drivers(repo: Path, base: str):
                           for m in re.findall(r"(?:^|\s)merge=(\S+)", ln)) if not attrs.returncode else {}
     cmds = {k: c for k in (f"merge.{n}.driver" for n in names)
             if (c := RECORD_DRIVER.get(k) or _git(repo, "config", "--get", k, check=False).stdout.strip())}
-    with tempfile.TemporaryDirectory(prefix="research-drivers-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="research-drivers-", ignore_cleanup_errors=True) as tmp:
         held = {s.split(":", 1)[1] for s in _blobs(repo, [f"{base}:{p}" for c in cmds.values() for p in _DRIVER_PATH.findall(c)])}
         files = []
         for d in sorted({posixpath.dirname(p) for p in held}):
@@ -2378,7 +2378,7 @@ def repinned(repo: Path, tree: str, ours: str, theirs: str, conflicted: list[str
     pins = pins_at(repo, ours)
     if not conflicted or any(p not in pins for p in conflicted):
         return None
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         env = {"GIT_INDEX_FILE": str(Path(tmp, "index"))}
         _git(repo, "read-tree", tree, env=env)
         for path in conflicted:
@@ -4217,7 +4217,7 @@ class RecordsGate:
     def _reported(self, run: RecordsRun, path: str, pkg: str) -> tuple[bool, str | None] | None:
         """What run file ``path`` (an `audit.json`, or one package's `report.json`) says of ``pkg``; None when it doesn't name it."""
         try:
-            with tempfile.TemporaryDirectory() as d:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
                 doc = json.loads((self.store.fetch(run.art, Path(d), paths=[path]) / path).read_text())
         except Exception as e:  # noqa: BLE001
             return False, f"records run {run.id}'s {path} can't be read ({type(e).__name__})"
@@ -4291,7 +4291,7 @@ class RecordsGate:
         try:
             if not check.art or AUDIT not in {f["path"] for f in self.store.listing(check.art)}:
                 return False, f"the Lean check {check.id} published no {AUDIT}"
-            with tempfile.TemporaryDirectory() as d:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
                 audit = json.loads((self.store.fetch(check.art, Path(d), paths=[AUDIT]) / AUDIT).read_text())
             reps = audit.get("packages")
             regen = audit.get("regenerated") or {}
@@ -4329,7 +4329,7 @@ class RecordsGate:
         tool = self.lock_merge
         if not tool.is_file():
             return False
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
             sides = []
             for name, c in (("base", base), ("ours", ours), ("theirs", theirs)):
                 (p := Path(d) / name).write_bytes(_blob(self.repo, c, path) or b"")
