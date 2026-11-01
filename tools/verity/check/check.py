@@ -68,7 +68,9 @@ the merge gate (`gate = false`: circuit-check, ratchet-gate), which run after la
                                                             shard K of ci.toml's plan with N shards, on machine M (each shard
                                                             on a pod of the lander's choosing): an Attempt no gate takes alone
     uv run python tools/verity/check/check.py --shard auto:K/N --shard-plan-file PLAN
-                                                            shard K of the auto plan PLAN (`shards.py`, `--shard-plan --out`)
+                                                            shard K of the auto plan PLAN (`shards.py`, `--shard-plan --out`);
+                                                            with --record --on M, PLAN goes as the run's input (drive's
+                                                            `after_landing_shards = "auto"`, one plan for every shard)
     uv run python tools/verity/check/check.py --shard-plan [--max-shards M] [--n N] [--deferred STEP,...] [--costs FILE]
                [--no-gather] [--json] [--out FILE]          the auto plan of this tree, run nothing: its tasks' costs from the
                                                             newest recorded checks (none with --no-gather) and this machine's
@@ -1013,8 +1015,9 @@ def record(argv: list[str]) -> int:
     one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it).  With
     `--deferred STEP,...` it is a `research run` without `--tool check` of those steps alone (no gate reads it), with the
     gathered verdicts and no upstream build or Lean dependencies.  `--pool NAME` (with `--on MACHINE`) waits for a slot of that
-    machine's NAME pool instead of its merge-check slots (`pool_env`); `--timeout S` is the run's (`research run --timeout`, custody 24 h)."""
-    on = base = pool = timeout = None
+    machine's NAME pool instead of its merge-check slots (`pool_env`); `--timeout S` is the run's (`research run --timeout`, custody 24 h).
+    `--shard auto:K/N --shard-plan-file PLAN` (with --on) is shard K of the auto plan PLAN, sent as the run's `AUTO_PLAN` input."""
+    on = base = pool = timeout = plan_file = None
     agreement = priority = False
     rest = []
     it = iter(argv)
@@ -1031,6 +1034,8 @@ def record(argv: list[str]) -> int:
             priority = True
         elif x == "--timeout":
             timeout = next(it)
+        elif x == "--shard-plan-file":
+            plan_file = Path(next(it)).resolve()
         else:
             rest.append(x)
     try:
@@ -1042,11 +1047,20 @@ def record(argv: list[str]) -> int:
     records = "--cc-records" in rest
     parts = None
     deferred = rest[rest.index("--deferred") + 1] if "--deferred" in rest[:-1] else None
+    spec = rest[rest.index("--shard") + 1] if "--shard" in rest[:-1] and not records else None
+    if (spec or "").startswith("auto:") != (plan_file is not None) or (plan_file is not None and not on):
+        print(f"check: --shard {spec or 'K/N'}{' --shard-plan-file' * (plan_file is not None)} refused: an auto shard is "
+              "`--shard auto:K/N --shard-plan-file PLAN --on M`, PLAN made once for all N (`--shard-plan --out PLAN`) and "
+              "sent as the run's input, and only an auto shard takes a plan file", file=sys.stderr)
+        return 2
     try:
         if records:                                    # circuit-check's records alone: its memory, no Lean
             parts = ["circuit-check"]
-        elif "--shard" in rest[:-1]:
-            parts = shard(rest[rest.index("--shard") + 1], gated=deferred is None)["parts"]
+        elif plan_file is not None:                    # its plan is of those steps' jobs alone (`auto_shard`)
+            jobs = DECLARATION.needed(JOBS, [s for s in deferred.split(",") if s]) if deferred is not None else None
+            parts = shard(spec, gated=deferred is None, jobs=jobs, plan_file=plan_file)["parts"]
+        elif spec is not None:
+            parts = shard(spec, gated=deferred is None)["parts"]
             if deferred is not None:
                 parts = [p for p in parts if p in deferred_parts(deferred)]
         elif deferred is not None:
@@ -1125,6 +1139,9 @@ def record(argv: list[str]) -> int:
     if on and (combining or parts is not None):
         (d / SHARD_PARTS).write_text(json.dumps(parts or []))
         cmd += ["--send", str(d / SHARD_PARTS)]
+    if plan_file is not None:
+        shutil.copyfile(plan_file, d / AUTO_PLAN)
+        cmd += ["--send", str(d / AUTO_PLAN)]
     if not combining and not records and ("--no-cache" not in rest or "--circuit-cache" in rest):
         given = None
         if "--verdicts-in" in rest[:-1]:
