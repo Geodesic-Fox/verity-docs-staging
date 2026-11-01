@@ -61,7 +61,8 @@ SUITE = {
     "s/tests/sub/__init__.py": "",
     "s/tests/sub/conftest.py": "",
     "s/tests/sub/local.py": "V = 3\n",
-    "s/tests/sub/test_b.py": "from .local import V\n\n\ndef test_b():\n    assert V == 3\n",
+    "s/tests/sub/test_b.py": ('from toy_lib import adapters\n\nfrom .local import V\n\n\ndef test_b(monkeypatch):\n'
+                              '    monkeypatch.setattr("toy_lib.extra.X", 2)\n    assert V == 3 and adapters.load("x").X == 1\n'),
     "s/tests/fixtures/test_data.py": "def test_never():\n    pass\n",
     "s/tests/test_d.py": ('import sys\nfrom pathlib import Path\n\nHERE = Path(__file__).resolve().parent\n'
                           'ASSETS = Path(__file__).resolve().parents[2] / "lib" / "assets"\n'
@@ -76,6 +77,9 @@ SUITE = {
     "lib/toy_lib/plugins/b.py": "from verity_config.settings import of\n\nsettings = of(__file__)\n",
     "lib/toy_lib/plugins/table.json": "{}\n",
     "lib/toy_lib/plugins/data/t.bin": "t\n",
+    "lib/toy_lib/adapters/__init__.py": ('import importlib\n\nADAPTERS = {"x": "xa"}\n\n\ndef load(name):\n'
+                                         '    module = f"{__name__}.{ADAPTERS[name]}"\n    return importlib.import_module(module)\n'),
+    "lib/toy_lib/adapters/xa.py": "X = 1\n",
 }
 #: in every toy task: the suite's declared data but its Python and its directory's Markdown, its own directory's data, the
 #: pyprojects above, the guard
@@ -113,8 +117,11 @@ def test_a_test_file_s_inputs(tmp_path):
                                   "s/tests/test_a.py"]), "its conftest, the library it imports and the module named to import_module"
     assert a["vars"] == {"suite": "s"} and a["timeout_s"] == 121 and a["resources"] == {"mem_gb": 6}
     assert by["test-file:s/tests/sub/test_b.py"]["inputs"] == sorted(
-        [*COMMON, *LIB, "s/tests/conftest.py", "s/tests/sub/__init__.py", "s/tests/sub/conftest.py", "s/tests/sub/local.py",
-         "s/tests/sub/test_b.py"]), "both conftests, its package's __init__.py and its relative import"
+        [*COMMON, *LIB, "lib/toy_lib/adapters/__init__.py", "lib/toy_lib/adapters/xa.py", "lib/toy_lib/extra.py",
+         "s/tests/conftest.py", "s/tests/sub/__init__.py", "s/tests/sub/conftest.py", "s/tests/sub/local.py",
+         "s/tests/sub/test_b.py"]), \
+        ("both conftests, its package's __init__.py, its relative import, the module of the target it monkeypatches and each "
+         "module of the package a name holding an f-string names")
     assert by["test-file:s/tests/test_c.py"]["inputs"] == sorted(
         [*COMMON, *LIB, "lib/toy_lib/cli.py", "s/scripts/run_me.py", "s/tests/conftest.py", "s/tests/test_c.py"]), \
         "the script it runs and the module it runs with -m, with what they import"

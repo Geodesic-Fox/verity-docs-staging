@@ -14,7 +14,8 @@ the commit's files alone:
   parts and its module-level names; where it builds one otherwise, the directories it builds anywhere and those above it serve
   its own imports), and a name none has from the importing file's own directory; a constant name given to `import_module`,
   `__import__`, `importorskip` or `run_module`, and each module of the package an f-string's constant head or a module's
-  `__name__` names (`f"verity.ml.registry.{m.name}"`); a conftest's `pytest_plugins`; a `.py` file a path loader is given
+  `__name__` names (`f"verity.ml.registry.{m.name}"`), given or assigned to the name given; a dotted target given to
+  `monkeypatch.setattr` or `mock.patch`, which imports its module; a conftest's `pytest_plugins`; a `.py` file a path loader is given
   that the call's strings name, in one string or in parts joined by `/` (from the file's directory or one above it), and
   where the path is a variable (a helper's parameter), each `.py` file the file's strings name; where it builds the path from
   a name (`_load("gamma")`), each `.py` file of its directory a string of it names; each module of a package that imports them
@@ -84,8 +85,11 @@ _DASH_M = re.compile(r"""["']-m["']\s*,\s*[rRuU]?["']([A-Za-z_][\w.]*)["']""")
 _BUILT = re.compile(r"""[fF][rR]?["'][^"'\n]*\{[^}]+\}\.py["']|\+\s*["']\.py["']""")
 _BARE = re.compile(r"""["']([A-Za-z_]\w*)["']""")
 _PLUGINS = re.compile(r"^pytest_plugins[ \t]*=", re.M)
-#: a module name built in an f-string (`f"verity.ml.circuits.ops.boolean.{m.name}"`, `f"{__name__}.{n}"`)
+#: a module name built in an f-string (`f"verity.ml.circuits.ops.boolean.{m.name}"`, `f"{__name__}.{n}"`), or a name holding one
 _FSTRING = re.compile(r"""\s*[fF](['"])([^'"\n]*\{[^'"\n]*)\1""")
+_ARG_NAME = re.compile(r"\s*([A-Za-z_]\w*)\s*[,)]")
+#: a dotted target string handed to pytest's `monkeypatch.setattr` or to `mock.patch`, which imports the module it names
+_PATCH = re.compile(r"""\b(?:setattr|delattr|patch)\(\s*[rRuU]?["']([A-Za-z_]\w*(?:\.\w+)+)["']""")
 #: a path joined of string parts to a name or `Path(__file__)` (`HERE.parent / "harness"`)
 _BUILT_PATH = re.compile(r"""(?:\bPath\(__file__\)|\b[A-Za-z_]\w*)(?:\.\w+|\[\d+\]|\(\))*(?:\s*/\s*["'][\w.-]+["'])+""")
 #: a call that puts a directory on `sys.path`
@@ -587,6 +591,17 @@ class Imports:
             d = _parent(d)
         return p if (p := _join(_parent(path), "settings.py")) in self.tree.files else None
 
+    @staticmethod
+    def _fstring(text: str, at: int) -> str | None:
+        """The f-string a call's first argument at offset ``at`` is, or the one a module-level or local name it passes is
+        assigned (`module = f"{__name__}.{ADAPTERS[name]}"`)."""
+        if f := _FSTRING.match(text, at):
+            return f.group(2)
+        if (n := _ARG_NAME.match(text, at)) and (a := re.search(rf"""^[ \t]*{n.group(1)}[ \t]*=[ \t]*[fF](['"])([^'"\n]*\{{[^'"\n]*)\1""",
+                                                                 text, re.M)):
+            return a.group(2)
+        return None
+
     def _package(self, path: str, text: str, name: str) -> tuple[int, str] | None:
         """The package an f-string module name ``name`` in file ``path`` names a module of, as an import's (level, module), or
         None: the constant dotted head before its first `{` (`f"verity.ml.registry.{m}"`), else the package `{__name__}` or
@@ -629,7 +644,7 @@ class Imports:
             if m.group(1) in _BY_NAME:
                 if c := _CONSTANT.match(text, m.end()):
                     reqs.append((0, c.group(2), ()))
-                elif (f := _FSTRING.match(text, m.end())) and (each := self._package(path, text, f.group(2))):
+                elif (f := self._fstring(text, m.end())) and (each := self._package(path, text, f)):
                     reqs.append((*each, ("*",)))
                 else:
                     unfollowed += 1
@@ -640,6 +655,7 @@ class Imports:
         for line in _PLUGINS.finditer(text) if "pytest_plugins" in text else ():
             for s in re.findall(r"""["']([\w.]+)["']""", _statement(text, line.start())):
                 reqs.append((0, s, ()))
+        reqs += [(0, s, ()) for s in _PATCH.findall(text)] if "attr(" in text or "patch(" in text else []
         local: dict[str, list[tuple[str, tuple[str, ...]]]] = {}
         here = _parent(path)
         put = "sys.path" in text or "syspath_prepend" in text or "addsitedir" in text
