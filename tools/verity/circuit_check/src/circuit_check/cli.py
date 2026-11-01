@@ -25,7 +25,7 @@ unpinned or untyped lowering, and a Definition over the partition's budget are w
 under ``unchecked`` by check, with counts, and the last line counts them.  A shard fails on its own targets' failures alone
 (whether a known entry no longer fails, and a by-calls root's callees' verdicts, only ``--combine`` sees), and ``--combine``
 exits 2 when it refuses the shards it was given (`shard.read`).  ``--binding`` fails as a shard does, and exits 2 when the
-bindings' records give no task list.
+bindings' records give no task list or the catalog has no binding of that name.
 
 Named targets run in parallel, one worker per core (`default_jobs`), and a target whose every input is unchanged is reused
 from check's own cache (`default_cache`; ``--no-cache`` checks it now).  Each target's line, and the run's last, say where
@@ -651,6 +651,10 @@ def parallel(fn: Callable, items: list, jobs: int, initializer: Callable | None 
             z.close()
 
 
+#: how ``--binding`` refuses a name no catalog binding has (`verity graph`'s circuit-binding runner tells it by this)
+NO_BINDING = "the catalog has no binding of that name"
+
+
 def _binding_of(plan: UN.Plan, kind: str, label: str) -> set[str]:
     """The catalog bindings (`shard.binding`) that ``--binding`` checks a target of the list under: a Definition's, the one whose
     record `units.derive` took it from (the binding whose roots reach it first, which makes it where it misses, `_made`); a
@@ -714,8 +718,9 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
 
     With ``binding`` (a catalog binding's name, `shard.binding`) only that binding's targets (`_binding_of`) are looked up and
     checked, from the bindings' records (``units``; a binding whose record misses is built apart, as ``--all`` builds it):
-    `units.Stale` when they give no task list, where ``--all`` would build the whole catalog here.  The report is of those
-    targets alone, unjoined, as a shard's, and so is the task-list entry, under a key that names the binding.
+    `units.Stale` when they give no task list, where ``--all`` would build the whole catalog here, or the catalog has no
+    binding of that name (`NO_BINDING`), which would check nothing.  The report is of those targets alone, unjoined, as a
+    shard's, and so is the task-list entry, under a key that names the binding.
 
     The report's ``prologue_s`` is the seconds from the run's start until it hands the task list to `_checked_all`: the list,
     from the bindings' records or their builds, and the targets' keys, which each shard of a run builds for itself."""
@@ -765,6 +770,8 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
             plan, planned = None, None
             TG.BINDINGS.clear()
             SC.HANDED.clear()
+    if binding is not None and plan is not None and binding not in {SH.binding(e.units) for e in plan.entries}:
+        raise UN.Stale(f"--binding {binding}: {NO_BINDING} (`--bindings` names them)")
     if planned is not None:
         tasks, keys, hits = planned
         if plan.listed is None:

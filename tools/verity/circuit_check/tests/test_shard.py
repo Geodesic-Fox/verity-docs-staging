@@ -399,7 +399,8 @@ def test_each_binding_from_a_copy_of_one_records_only_run_s_cache_checks_its_own
     """``--bindings`` names each catalog binding with the targets ``--binding`` checks under it: together the whole list, each
     target once.  Each forked ``--binding`` run, in a tree of its own from a copy of one ``--records-only`` run's cache (a task
     on another machine), builds no binding and no body in its own process and checks exactly its targets, with the verdicts a
-    full build gives; run again, it reuses every target.  With no record, it refuses rather than build."""
+    full build gives; run again, it reuses every target.  With no record it refuses rather than build, and given a name no
+    catalog binding has, rather than check nothing."""
     root = _tree(tmp_path / "t")
     _bindings(root, *UNIT_BINDINGS)
     cold = _py(root, UNITS.replace("units=True)", "units=True, binding='_core_roots')"))
@@ -426,3 +427,5 @@ def test_each_binding_from_a_copy_of_one_records_only_run_s_cache_checks_its_own
             assert again["stats"]["units"] == out["stats"]["units"] and again["here"] == [], again["stats"]
             assert again["hits"] == sorted(again["values"]) == sorted(out["values"]), again
     assert values == _fresh(root)["values"]
+    unknown = _py(root, UNITS.replace("units=True)", "units=True, binding='_no_roots')"))
+    assert unknown.returncode and cli.NO_BINDING in unknown.stderr, unknown.stderr
