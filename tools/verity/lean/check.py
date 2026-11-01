@@ -3388,8 +3388,6 @@ def main(argv: list[str]) -> int:
                          (f"; peak GiB {rep['peak_gib']}" if rep.get("peak_gib") else ""))
             if "sandbox" in rep:
                 head += "; built in the sandbox" if rep["sandbox"] else "; built WITHOUT a sandbox (unshare unavailable here)"
-            if s := rep.get("staged"):
-                head += f"; {s['modules']} of its {s['keyed']} keyed modules staged from the artifact cache"
             print(head, flush=True)
             if c := rep.get("replay", {}).get("closure"):
                 print(f"  closure: {c['checked']} modules checked, {c['reused']} reused, of the {c['modules']} the package "
@@ -3397,6 +3395,8 @@ def main(argv: list[str]) -> int:
                       f"{rep['replay']['checked']} checked, {rep['replay']['reused']} reused; replay "
                       f"{rep['seconds'].get('replay')} s ({rep['replay']['phases']}), peak {rep['replay']['peak_gib']} GiB",
                       flush=True)
+            if s := rep.get("staged"):
+                print(f"  staged: {s['modules']} of its {s['keyed']} keyed modules from the artifact cache", flush=True)
             for f in rep["failures"]:
                 print("  " + f.replace("\n", "\n    "), flush=True)
             for n in rep.get("notes", []):
