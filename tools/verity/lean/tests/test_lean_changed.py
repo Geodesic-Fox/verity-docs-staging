@@ -137,6 +137,30 @@ def test_a_build_slot_takes_the_slot_path(fast, tmp_path, monkeypatch):
     assert any("taking the slot path" in s for s in said)
 
 
+def test_the_slot_path_reads_the_node_s_artifact_cache_and_fills_it_only_from_a_package_that_passed(fast, tmp_path,
+                                                                                                   monkeypatch):
+    _, tree, calls = fast
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    put = []
+
+    def run(argv, **kw):
+        calls.append((argv, kw.get("cwd")))
+        return type("P", (), {"returncode": 1 if argv[-1].endswith("Req") else 0})()
+
+    def fake_put(self, pkgs, since=None):
+        put.append((self.store, pkgs, since))
+        return 3
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "put", fake_put)
+    said = []
+    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 1
+    store = (tmp_path / "lean-artifacts").resolve()
+    assert [a[a.index("--artifacts") + 1] for a, _ in calls] == [str(store)] * 2
+    assert [(s, p) for s, p, _ in put] == [(store, {tree / "pkg"})], "a requirer that failed puts nothing"
+    assert isinstance(put[0][2], float) and any("3 module version(s) new in the artifact cache" in s for s in said)
+
+
 def test_dev_cache_takes_that_path_even_where_a_build_slot_is_granted(fast, tmp_path, monkeypatch):
     root, tree, calls = fast
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", lambda *a, **k: pytest.fail("--dev-cache takes no build slot"))

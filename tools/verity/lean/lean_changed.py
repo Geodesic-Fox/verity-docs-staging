@@ -20,7 +20,9 @@ dependencies the node does not keep.
 
 `--records` is a lane's fast path to the records in PKG's `lean-audit.json` (PKG: its path, or a unique part of one):
 `tools/verity/lean/check.py --build --no-replay --no-runs` on PKG in a tree kept per slot, which prints what the audit prints,
-`--update`'s review included, after a build of only what changed since that slot's last run. It first waits for one of the
+`--update`'s review included, after a build of only what changed since that slot's last run, which restores each module the
+node's artifact cache holds under its sha256 key (`check.py --artifacts`, `lean_audit.LakeArtifacts`, the one the audit
+reads); each package whose check.py passes puts the modules its build compiled there. It first waits for one of the
 node's Lean slots of pool `build` (`lean_slot.py`; pool `any` never stands in for it), never one of the `audit` pool's, where
 hour-long audits hold every slot, whatever slot (LEAN_SLOT) the process that started it holds. Where SLOTS lists no `build`
 pool, or with `--dev-cache` (a slot tree whose dependencies are fetched cold builds them from source), it takes the `--dev-cache` path
@@ -810,6 +812,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
         slot = LEAN_SLOT.hold(FAST_POOL, or_any=False)
     except LEAN_SLOT.Refused as e:
         return dev_records(pkg, todo, update, moved, out, str(e), log, files)
+    artifacts = LA.LakeArtifacts((deps.parent / "lean-artifacts").resolve())
     try:
         tree = tree or records_tree()
         log(f"lean-records: taking the slot path: check.py on {tree}, which keeps its build between runs")
@@ -842,8 +845,9 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 write_links(tree, links)
                 mark(tree, package=p, phase="check")
                 mine_out = reports(out, pkg, p)
-                got = subprocess.run(check_argv(p, pkg, tree / p, mine_out, update, moved), cwd=tree,
-                                     env={**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())},
+                since = time.time()
+                got = subprocess.run(check_argv(p, pkg, tree / p, mine_out, update, moved, artifacts=artifacts.store),
+                                     cwd=tree, env={**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())},
                                      pass_fds=() if slot is None else (slot,)).returncode
                 if AUDIT.killed(got):
                     killed[p] = got
@@ -859,6 +863,11 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                     new = (tree / pkg / "lean-audit.json").read_bytes()
                 if got == 0:
                     passed(p, pkg, files, committed, new, log)
+                    try:
+                        log(f"lean-records: {p}: {artifacts.put({tree / p}, since)} module version(s) new in the "
+                            "artifact cache")
+                    except OSError as e:
+                        log(f"lean-records: {p}: the artifact cache was not written: {e}")
                 rc = rc or got
             if killed:
                 p, got = next(iter(killed.items()))
@@ -1101,9 +1110,12 @@ def reports(out: Path, pkg: str, p: str) -> Path:
     return out if p == pkg else out / f"requirer-{re.sub(r'[^A-Za-z0-9]+', '_', p)}"
 
 
-def check_argv(p: str, pkg: str, at: Path, out: Path, update: bool, moved: Path | None, dev: bool = False) -> list[str]:
-    """check.py on ``at`` (``p``'s directory), without the kernel replay or the tests; `--update` and `--moved` only for PKG."""
+def check_argv(p: str, pkg: str, at: Path, out: Path, update: bool, moved: Path | None, dev: bool = False,
+               artifacts: Path | None = None) -> list[str]:
+    """check.py on ``at`` (``p``'s directory), without the kernel replay or the tests, its builds reading the node's
+    ``artifacts`` cache where given; `--update` and `--moved` only for PKG."""
     return [sys.executable, str(AUDIT_PY), *(["--dev-cache"] if dev else []), "--build", "--no-replay", "--no-runs",
+            *(["--artifacts", str(artifacts)] if artifacts else []),
             *(["--update"] if update and p == pkg else []),
             *(["--moved", str(moved.resolve())] if moved and p == pkg else []), "--out", str(out), str(at)]
 
