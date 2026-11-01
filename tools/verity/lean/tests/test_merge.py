@@ -425,8 +425,9 @@ def test_an_import_one_side_removed_stays_removed_where_the_other_side_moved_it(
 def test_a_module_system_file_s_imports_merge_in_every_form(tmp_path):
     """On Lean's module system an import list is `public import` lines, among them `meta` and `all` ones (`headers.py`):
     two sides that each add one merge, and one a side removed stays removed."""
-    head = "module\n\n"
-    imports = lambda *ls: head + "".join(f"{s}\n" for s in ls) + "\n@[expose] public section\n\ntheorem t : True := trivial\n"
+    def imports(*ls: str) -> str:
+        return "module\n\n" + "".join(f"{s}\n" for s in ls) + "\n@[expose] public section\n\ntheorem t : True := trivial\n"
+
     text, left = _lean(tmp_path, imports("public import G.A", "public meta import G.B", "import all G.C"),
                        imports("public import G.A", "public import G.X -- ours", "import all G.C"),
                        imports("public import G.A", "public meta import G.B", "meta import G.Y", "import all G.C"))
