@@ -3,11 +3,13 @@
 Lake names a module's outputs by its input hash, 64 bits of a hash that isn't cryptographic. The cache indexes each module
 it holds by a sha256 key of what its compilation reads instead (`keys`): the toolchain; the revision of every fetched
 dependency (the root's `lake-manifest.json`), which fixes every module the workspace's packages don't define; the lakefile of
-the package that defines it, which sets its options; its source; and the keys of the workspace modules it imports. Before a
+the package that defines it, which sets its options, and every file its `[[input_file]]` and `[[input_dir]]` targets name,
+which a module may read as it compiles (`include_str`); its source; and the keys of the workspace modules it imports. Before a
 package's build, `stage` fills a Lake cache directory of that build's own with each module whose key the cache indexes, every
 artifact checked against the sha256 the index holds. Lake reads only that directory and never writes it, and restores a
 module from it only where its own input hash agrees as well. A module without a key (a header this parser doesn't read, an
-import that no package or two packages claim, a `lakefile.lean`), or whose key isn't indexed, or with an artifact that
+import that no package or two packages claim, a `lakefile.lean` or a target this reading doesn't follow), or whose key isn't
+indexed, or with an artifact that
 differs, is built from source. Lake looks a module up by its package and input hash alone, so two staged modules with one
 input hash are both left out, and after the build `misrestored` names any module whose input hash is another staged
 module's, which fails the build.
@@ -31,7 +33,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import NamedTuple
 
-SCHEMA = "lean-module/v1"
+SCHEMA = "lean-module/v2"
 #: a Lake artifact's name in its cache: its 64-bit content hash and its extension
 ARTIFACT = re.compile(r"[0-9a-f]{16}\.[a-z.]+")
 #: an index entry's name: the module's key
@@ -160,6 +162,8 @@ class Package(NamedTuple):
     src: Path
     #: the sha256 of its lakefile, which sets its modules' options
     lakefile: str
+    #: the sha256 of its input files (`input_files`), which its modules may read as they compile
+    inputs: str
     #: each library's roots (a module under one is the library's)
     roots: tuple[str, ...]
     #: each executable's root module
@@ -177,9 +181,49 @@ class Package(NamedTuple):
         return self.dir / ".lake" / "build"
 
 
+#: the lakefile's arrays of tables this reading follows: another kind of target could feed a compilation what no key reads
+TARGETS = ("lean_lib", "lean_exe", "require", "input_file", "input_dir")
+
+
+def input_files(d: Path, doc: dict) -> list[list[str]] | str:
+    """[[path, its sha256]] of each file the `[[input_file]]` and `[[input_dir]]` targets of the package at ``d`` (its
+    lakefile, ``doc``) name, every file under a directory whatever its `filter`: a module may read one as it compiles
+    (`include_str`), and Lake tracks it only as such a target. Or why the package has no keys: a target of another kind or
+    shape, a file or directory missing, a symbolic link under a directory, or a `needs` or `extraDepTargets` naming anything
+    but these targets."""
+    if other := sorted(k for k, v in doc.items() if isinstance(v, list) and v and all(isinstance(t, dict) for t in v)
+                       and k not in TARGETS):
+        return f"a target of a kind this reading doesn't follow ({other[0]})"
+    out, names = [], set()
+    for kind in ("input_file", "input_dir"):
+        ts = doc.get(kind, [])
+        if not isinstance(ts, list) or not all(isinstance(t, dict) and isinstance(t.get("name"), str)
+                                               and isinstance(t.get("path"), str) for t in ts):
+            return f"an {kind} of another shape"
+        for t in ts:
+            names.add(t["name"])
+            at = d / t["path"]
+            if kind == "input_file" and at.is_file():
+                out.append([t["path"], digest(at)])
+            elif kind == "input_dir" and at.is_dir():
+                found = sorted(at.rglob("*"))
+                if any(f.is_symlink() for f in found):
+                    return f"its input_dir {t['name']} holds a symbolic link, under which this reading doesn't look"
+                out += [[(Path(t["path"]) / f.relative_to(at)).as_posix(), digest(f)] for f in found if f.is_file()]
+            else:
+                return f"its {kind} {t['name']} has no {t['path']}"
+    for t in [doc, *(t for k in ("lean_lib", "lean_exe") for t in doc.get(k, []))]:
+        for field in ("needs", "extraDepTargets"):
+            want = t.get(field, [])
+            if not isinstance(want, list) or any(w not in names for w in want):
+                return f"{field} {want!r} names a target that isn't one of its input files or directories"
+    return sorted(out)
+
+
 def package(d: Path) -> Package | str:
-    """The package at ``d`` from its `lakefile.toml`, or why it has no keys: a `lakefile.lean`, or a library or executable
-    with a source directory or globs of its own, which this reading doesn't follow."""
+    """The package at ``d`` from its `lakefile.toml`, or why it has no keys: a `lakefile.lean`, a library or executable
+    with a source directory or globs of its own, which this reading doesn't follow, or input files it can't read
+    (`input_files`)."""
     f = d / "lakefile.toml"
     if not f.is_file():
         return f"{d} has no lakefile.toml"
@@ -199,6 +243,9 @@ def package(d: Path) -> Package | str:
     targets = doc.get("defaultTargets", [])
     if not isinstance(targets, list) or not all(isinstance(t, str) for t in targets):
         return f"{f}: defaultTargets is not a list of names"
+    inputs = input_files(d, doc)
+    if isinstance(inputs, str):
+        return f"{f}: {inputs}"
     roots: dict[str, list[str]] = {t["name"]: t.get("roots", [t["name"]]) for t in libs}
     roots_ = [r for rs in roots.values() for r in rs]
     exe_roots = {t["name"]: name(t.get("root", t["name"])) for t in exes}
@@ -206,7 +253,8 @@ def package(d: Path) -> Package | str:
     for t in targets:
         default += roots.get(t, []) + ([exe_roots[t]] if t in exe_roots else [])
     return Package(doc["name"].strip("«»"), d.resolve(), (d / doc.get("srcDir", ".")).resolve(), _sha(raw),
-                   tuple(roots_), tuple(exe_roots.values()), tuple(default))
+                   _sha(json.dumps(inputs, separators=(",", ":")).encode()), tuple(roots_), tuple(exe_roots.values()),
+                   tuple(default))
 
 
 def workspace(root: Path) -> tuple[list[Package], list[list[str]], str] | str:
@@ -290,7 +338,7 @@ def keys(root: Path, extra: list[str] | tuple[str, ...] = ()) -> dict[str, Key]:
                 memo[m] = None
                 continue
             doc = {"schema": SCHEMA, "toolchain": toolchain, "revs": revs, "package": p.name, "lakefile": p.lakefile,
-                   "module": m, "source": _sha(data), "imports": sorted([i, k.key] for i, k in mine.items())}
+                   "inputs": p.inputs, "module": m, "source": _sha(data), "imports": sorted([i, k.key] for i, k in mine.items())}
             memo[m] = out[m] = Key(_sha(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()), p,
                                    tuple(sorted(mine)))
     return out

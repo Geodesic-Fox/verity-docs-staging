@@ -103,6 +103,44 @@ def test_a_module_lake_could_read_otherwise_has_no_key(tmp_path):
         assert MK.keys(root) == {}, lakefile
 
 
+def test_a_package_s_input_files_are_in_the_key_of_each_of_its_modules(tmp_path):
+    """A module may read a file as it compiles (`include_str`), which Lake tracks only as an `[[input_file]]` or
+    `[[input_dir]]` target: editing a pinned checkpoint's sha512 in the `models.json` a module embeds that way left its key
+    as it was. Each file such a target names, every file under a directory, is in the key of each module of its package;
+    a target this reading can't follow leaves the package without keys, so its modules are built."""
+    lakefile = ('name = "r"\ndefaultTargets = ["R"]\n\n[[input_file]]\nname = "models"\npath = "models.json"\ntext = true\n\n'
+                '[[input_dir]]\nname = "data"\npath = "data"\n\n[[lean_lib]]\nname = "R"\nneeds = ["models", "data"]\n')
+    files = {"r/lakefile.toml": lakefile, "r/models.json": '{"checkpoint_sha512": "aa"}\n', "r/data/a/b.txt": "b\n"}
+    root = _workspace(tmp_path / "ok", files)
+    k = MK.keys(root, ["R.B"])
+    assert sorted(k) == ["D.X", "R", "R.A", "R.B"]
+
+    def changed(path: str, text: str) -> set[str]:
+        f = tmp_path / "ok" / path
+        was = f.read_text() if f.exists() else None
+        f.write_text(text)
+        now = MK.keys(root, ["R.B"])
+        if was is None:
+            f.unlink()
+        else:
+            f.write_text(was)
+        return {m for m in k if now[m].key != k[m].key}
+
+    mine = {"R", "R.A", "R.B"}
+    assert changed("r/models.json", '{"checkpoint_sha512": "ab"}\n') == mine
+    assert changed("r/data/a/b.txt", "c\n") == mine
+    assert changed("r/data/c.txt", "") == mine, "a file added under the directory"
+    for i, (more, why) in enumerate([
+            ({"r/lakefile.toml": lakefile.replace('"models.json"', '"gone.json"')}, "its input_file models has no gone.json"),
+            ({"r/lakefile.toml": lakefile.replace('["models", "data"]', '["d/other"]')}, "names a target that isn't"),
+            ({"r/lakefile.toml": lakefile + '\n[[extern_lib]]\nname = "x"\n'}, "doesn't follow (extern_lib)")]):
+        root = _workspace(tmp_path / f"no{i}", files | more)
+        assert MK.keys(root) == {} and why in MK.workspace(root), why
+    root = _workspace(tmp_path / "link", files)
+    (root / "data" / "l").symlink_to(root / "data" / "a")
+    assert MK.keys(root) == {} and "holds a symbolic link" in MK.workspace(root)
+
+
 def _setup(root: Path, mod: str, pkg: str, arts: dict[str, Path]) -> None:
     f = root / ".lake" / "build" / "ir" / MK.path_of(mod, ".setup.json")
     f.parent.mkdir(parents=True, exist_ok=True)
