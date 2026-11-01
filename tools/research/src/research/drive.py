@@ -117,7 +117,6 @@ import math
 import os
 import re
 import shutil
-import signal
 import subprocess
 import sys
 import tempfile
@@ -1330,8 +1329,8 @@ class Driver:
             if run.get("resend"):
                 pl["resend"] = True
             self.refuse(drive, f"launch:postland:{run['tip']}", f"train.sh {run['tip'][:12]} {self.on} --deferred "
-                                                                f"{','.join(pl.get('steps') or AFTER_LANDING)} --shard "
-                                                                f"{shard_spec(run, k)} registered no run: {tail}")
+                                                                f"{','.join(pl.get('steps') or AFTER_LANDING)} --shard {k}/{n} "
+                                                                f"registered no run: {tail}")
             return False
         if any("launch" in rec for rec in shards):
             return False
@@ -1883,8 +1882,7 @@ class Driver:
                 rec = None
         if rec is None:
             self.refuse(drive, f"launch:postland:{main}", f"train.sh {main[:12]} {self.on} --deferred {steps}{flags}"
-                                                          + (f" (as {n} shards{_of_plan(plan)})" if n > 1 or plan else "")
-                                                          + f" registered no run: {tail}")
+                                                          + (f" (as {n} shards)" if n > 1 else "") + f" registered no run: {tail}")
             return
         pl["run"] = {**rec, "tip": main, "at": self.now(), **({"resend": True} if pl.pop("resend", False) else {}),
                      **({"skip": skip} if skip else {}), **({"baseline": True} if base else {}),
@@ -1933,6 +1931,8 @@ class Driver:
         if why is not None:
             return done({}, f"failed: {why}")
         if self.now() - rec["at"] > PLAN_WAIT_S:
+            import signal
+
             with contextlib.suppress(ProcessLookupError, PermissionError, ValueError, TypeError):
                 os.killpg(int(rec["pid"]), signal.SIGTERM)
             return done({}, f"was not made in {PLAN_WAIT_S // 60} min (stopped)")
