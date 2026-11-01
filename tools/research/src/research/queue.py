@@ -3345,7 +3345,7 @@ class RecordsGate:
 
     Two heads are vouched for by the commit below them, followed `RECORDS_WALK` commits at most: one that commits exactly the
     record a records run of its one parent regenerated for a package that passed there (`--update`'s `record/lean-audit.json`),
-    changing nothing but locks; and one that only merged the landing branch into a vouched commit, every file it changed being its whole
+    changing nothing but locks; and one that only merged `main` into a vouched commit, every file it changed being main's whole
     but a lock, which is main's or `tools/verity/lean/merge.py`'s merge of the two sides (the fast path reports `path: reused`
     for it: a candidate, which the train's Lean check rebuilds and regenerates where it differs).
 
