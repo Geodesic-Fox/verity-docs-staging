@@ -2657,7 +2657,6 @@ def main(argv: list[str]) -> int:
         i = rest.index("--cc-records-from")
         records, rest = rest[i + 1], rest[:i] + rest[i + 2:]
     sharded = None
-    run_dir = Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None
     plan_file = run_dir / "inputs" / AUTO_PLAN if run_dir is not None else None
     if "--shard-plan-file" in rest[:-1] and run_dir is None:
         i = rest.index("--shard-plan-file")
