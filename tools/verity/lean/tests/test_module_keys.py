@@ -113,24 +113,25 @@ def _setup(root: Path, mod: str, pkg: str, arts: dict[str, Path]) -> None:
 def test_a_build_is_indexed_only_where_lake_read_its_header_as_the_parser_did(tmp_path):
     root = _workspace(tmp_path)
     pkgs = MK.workspace(root)[0]
-    keyed = MK.keys(root)
+    keyed, owners = MK.keys(root), {}
 
     def lib(p, m):
         return tmp_path / p / ".lake" / "build" / "lib" / "lean" / MK.path_of(m, ".olean")
 
     mathlib = tmp_path / "r" / ".lake" / "packages" / "mathlib" / ".lake" / "build" / "lib" / "lean" / "Mathlib.olean"
     right = {"D.X": lib("d", "D.X"), "R.A": lib("r", "R.A"), "Mathlib": mathlib, "Init": Path("/elan/lib/lean/Init.olean")}
-    assert MK.indexable("R", keyed, pkgs) == "no setup.json"
+    assert MK.indexable("R", keyed, pkgs, owners) == "no setup.json"
     _setup(root, "R", "r", right)
-    assert MK.indexable("R", keyed, pkgs) is None
+    assert MK.indexable("R", keyed, pkgs, owners) is None
     _setup(root, "R", "r", right | {"R.B": lib("r", "R.B")})
-    assert "Lake imports ['R.B']" in MK.indexable("R", keyed, pkgs)
+    assert "Lake imports ['R.B']" in MK.indexable("R", keyed, pkgs, owners)
     _setup(root, "R", "r", {i: p for i, p in right.items() if i != "D.X"})
-    assert "and not ['D.X']" in MK.indexable("R", keyed, pkgs)
+    assert "and not ['D.X']" in MK.indexable("R", keyed, pkgs, owners)
     _setup(root, "R", "r", right | {"D.X": lib("r", "D.X")})
-    assert MK.indexable("R", keyed, pkgs) == "D.X is built in r, not d"
+    assert MK.indexable("R", keyed, pkgs, owners) == "D.X is built in r, not d"
+    assert owners[str(lib("r", "D.X").parent)] == "r" and owners[str(mathlib.parent)] is None, "one lookup a directory"
     _setup(root, "R", "d", right)
-    assert "setup.json names 'R' of 'd'" == MK.indexable("R", keyed, pkgs)
+    assert "setup.json names 'R' of 'd'" == MK.indexable("R", keyed, pkgs, owners)
 
 
 def _entry(store: Path, k, mod: str, h: str, files: dict[str, bytes]) -> dict:

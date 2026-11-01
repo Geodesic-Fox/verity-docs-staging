@@ -320,11 +320,13 @@ def _strings(j) -> list[str]:
     return [s for v in (j.values() if isinstance(j, dict) else j if isinstance(j, list) else ()) for s in _strings(v)]
 
 
-def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package]) -> str | None:
+def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package], owners: dict[str, str | None] | None = None) -> str | None:
     """Why ``mod``'s build may not be indexed under its key, or None: Lake read its header as `keys` did. Its
     `<module>.setup.json` names it and the package `keys` found it in, and the workspace modules there (`importArts`, an
     `.olean` under the build of one of ``pkgs``, the workspace's packages) are those `closure` gives, each built in the
-    package `keys` found it in."""
+    package `keys` found it in. ``owners`` holds, for one build's calls, the package whose build holds each directory an
+    `.olean` is in: a module lists every module it imports transitively, Mathlib's included, thousands of paths in a few
+    hundred directories."""
     k = keyed[mod]
     try:
         setup = json.loads((k.package.build() / "ir" / path_of(mod, ".setup.json")).read_text())
@@ -336,14 +338,19 @@ def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package]) -> str | Non
     if not isinstance(arts, dict):
         return "setup.json has no importArts"
     libs = {p.name: (p.build() / "lib" / "lean").resolve() for p in pkgs}
+    owners = {} if owners is None else owners
     built: dict[str, str] = {}
     for i, paths in arts.items():
-        olean = next((Path(s) for s in _strings(paths) if s.endswith(".olean")), None)
+        olean = paths.get("olean") if isinstance(paths, dict) else None
+        if not isinstance(olean, str) or not olean.endswith(".olean"):
+            olean = next((s for s in _strings(paths) if s.endswith(".olean")), None)
         if olean is None:
             return f"importArts gives {i} no .olean"
-        here = olean.resolve()
-        owner = next((n for n, lib in libs.items() if here.is_relative_to(lib)), None)
-        if owner is not None:
+        d = os.path.dirname(olean)
+        if d not in owners:
+            here = Path(d).resolve()
+            owners[d] = next((n for n, lib in libs.items() if here.is_relative_to(lib)), None)
+        if (owner := owners[d]) is not None:
             built[name(i)] = owner
     want = closure(mod, keyed)
     if set(built) != want:

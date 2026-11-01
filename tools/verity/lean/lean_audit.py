@@ -761,9 +761,9 @@ class LakeArtifacts:
                 ws = MK.workspace(pkg)
                 if isinstance(ws, str):
                     continue
-                keyed = MK.keys(pkg, MK.policy_roots(pkg))
+                keyed, owners = MK.keys(pkg, MK.policy_roots(pkg)), {}
                 with ThreadPoolExecutor(max_workers=8) as ex:
-                    built = dict(zip(keyed, ex.map(lambda m: self._built(m, keyed, ws[0], since), keyed)))
+                    built = dict(zip(keyed, ex.map(lambda m: self._built(m, keyed, ws[0], since, owners), keyed)))
                 indexed: set[str] = set()
                 for mod, k in keyed.items():
                     if all(i in indexed for i in k.imports) and (got := self._index(mod, k, built[mod])) is not None:
@@ -773,9 +773,10 @@ class LakeArtifacts:
         return n
 
     @staticmethod
-    def _built(mod: str, keyed: dict, pkgs: list, since: float | None) -> tuple[str, dict, dict[str, tuple[Path, str]]] | str:
+    def _built(mod: str, keyed: dict, pkgs: list, since: float | None,
+               owners: dict | None = None) -> tuple[str, dict, dict[str, tuple[Path, str]]] | str:
         """(Lake's input hash, the outputs its trace names, {artifact: (its file, its sha256)}) of ``mod`` as its build
-        compiled it, or why it isn't indexed: not compiled since ``since``, restored, or not `indexable`."""
+        compiled it, or why it isn't indexed: not compiled since ``since``, restored, or not `indexable` (``owners``)."""
         build = keyed[mod].package.build()
         trace = build / "lib" / "lean" / MK.path_of(mod, ".trace")
         if not trace.is_file():
@@ -792,7 +793,7 @@ class LakeArtifacts:
         out, h = d.get("outputs"), d.get("depHash")
         if not isinstance(out, dict) or not isinstance(h, str) or not MK.HASH.fullmatch(h):
             return "a trace without its outputs or input hash"
-        if why := MK.indexable(mod, keyed, pkgs):
+        if why := MK.indexable(mod, keyed, pkgs, owners):
             return why
         files = {}
         for name in sorted({s for s in _strings(out) if ARTIFACT.fullmatch(s)}):
