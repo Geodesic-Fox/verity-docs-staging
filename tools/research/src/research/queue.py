@@ -101,8 +101,9 @@ only once that commit's after-landing run, the full check, passed every step on 
     research queue shadow-report [--tips N]
                                                    with drive.toml's `executor = "shadow"`: the newest N `checked` tips whose
                                                    after-landing run drive compared with the executor's verdicts, each one's
-                                                   agreement and every disagreement, and whether the newest 3 agree fully, the
-                                                   gate for `executor = "on"` (`research.executor`)
+                                                   agreement and every disagreement (parts missing in the executor and tasks
+                                                   only it ran among them), and whether the newest 3 agree fully, none
+                                                   incomplete: the gate for `executor = "on"` (`research.executor`)
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and is marked ready at its head;

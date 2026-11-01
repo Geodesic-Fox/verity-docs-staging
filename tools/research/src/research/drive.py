@@ -1072,65 +1072,94 @@ class Driver:
     def _shadow_list(self, drive: dict, tip: str) -> None:
         """`executor = "shadow"`: list ``tip``'s task graph beside its after-landing run, once."""
         if self.executor == "shadow" and tip not in (tips := drive.setdefault("executor", {})):
-            tips[tip] = {"at": self.now(), "listing": self.list_tasks(self.repo, tip)}
+            try:
+                tips[tip] = {"at": self.now(), "listing": self.list_tasks(self.repo, tip)}
+            except Exception as e:  # noqa: BLE001  (a shadow never stops drive: recorded incomplete)
+                self._shadow_incomplete(tips, tip, f"listing its task graph: {type(e).__name__}: {e}")
 
     def _shadow_old(self, drive: dict, run: dict) -> None:
         """The after-landing run of a shadowed tip ended: its verdicts by part (`executor.old_verdicts`)."""
-        if (rec := (drive.get("executor") or {}).get(run["tip"])) is not None and "old" not in rec:
-            rec["old"] = old_verdicts(self._evidence(Verdict("failed", " ".join(run["ids"]))))
+        if (rec := (tips := drive.get("executor") or {}).get(run["tip"])) is not None and "old" not in rec:
             rec["run"] = " ".join(run["ids"])
+            try:
+                rec["old"] = old_verdicts(self._evidence(Verdict("failed", rec["run"])))
+            except Exception as e:  # noqa: BLE001  (a shadow never stops drive: recorded incomplete)
+                self._shadow_incomplete(tips, run["tip"], f"reading its after-landing run's verdicts: {type(e).__name__}: {e}")
 
     def _follow_shadow(self, drive: dict) -> None:
-        """Each shadowed tip: its graph, once listed, enqueued at `AFTER_LANDING_PRIORITY`; once its after-landing run ended and
-        every task has a verdict, or `SHADOW_WAIT_S` after the enqueue, how they compare (`executor.compare`) is recorded as an
-        `executor_shadow` label on `commit:<tip>` (`_shadow_record`), and the tip leaves the state.  A listing or an enqueue that
-        fails, or a run that never ends within `SHADOW_WAIT_S`, is recorded as its error.  Nothing here lands, launches a check,
-        reverts or tells anyone."""
+        """Each shadowed tip (`_shadow_tip`).  An error following one, the store's or the transport's, is logged with the tip and
+        recorded as the tip's shadow left incomplete, which never agrees, and the tick goes on: a shadow never stops landing."""
         tips = drive.get("executor") or {}
         if not tips or self.dry_run or self.q.shadow:
             return
         for tip, rec in list(tips.items()):
-            if "listing" in rec:
-                graph, why = self._listed(tip, rec["listing"])
-                if graph is None and why is None:
-                    if self.now() - rec["at"] <= SHADOW_WAIT_S:
-                        continue
-                    why = f"still listing {SHADOW_WAIT_S // 3600} h after it began"
-                del rec["listing"]
-                if graph is not None:
-                    try:
-                        rec["keys"], rec["check"], rec["enqueued"] = (self.tasks.enqueue(graph, AFTER_LANDING_PRIORITY),
-                                                                      check_id(graph), self.now())
-                    except Exception as e:  # noqa: BLE001  (a shadow never stops drive: the error is its record)
-                        why = f"enqueueing its task graph failed: {type(e).__name__}: {e}"
-                    else:
-                        self.q.log(f"research queue drive: shadow: enqueued {len(rec['keys'])} tasks of {rec['check']}")
-                if why is not None:
-                    self._shadow_record(tip, {"error": f"listing its task graph: {why}", "run": rec.get("run", "")})
-                    del tips[tip]
-                    continue
-            if "old" not in rec:
-                if self.now() - rec["at"] > SHADOW_WAIT_S:
-                    self._shadow_record(tip, {"error": "its after-landing run never ended", "check": rec.get("check", "")})
-                    del tips[tip]
-                continue
-            v = self.tasks.verdicts(rec["keys"].values())
-            if PENDING in v.values() and self.now() - rec["enqueued"] <= SHADOW_WAIT_S:
-                continue
-            self._shadow_record(tip, {"check": rec["check"], "run": rec["run"], **compare(rec["keys"], rec["old"], v)})
-            del tips[tip]
+            try:
+                self._shadow_tip(tips, tip, rec)
+            except Exception as e:  # noqa: BLE001  (a shadow never stops drive: recorded incomplete)
+                self._shadow_incomplete(tips, tip, f"{type(e).__name__}: {e}")
+
+    def _shadow_tip(self, tips: dict, tip: str, rec: dict) -> None:
+        """A shadowed tip: its graph, once listed, enqueued at `AFTER_LANDING_PRIORITY`; once its after-landing run ended and
+        every task has a verdict, or `SHADOW_WAIT_S` after the enqueue, how they compare (`executor.compare`) is recorded as an
+        `executor_shadow` label on `commit:<tip>` (`_shadow_record`), and the tip leaves the state.  A listing or an enqueue that
+        fails, or a run that never ends within `SHADOW_WAIT_S`, is recorded as its error.  Nothing here lands, launches a check,
+        reverts or tells anyone."""
+        if "listing" in rec:
+            graph, why = self._listed(tip, rec["listing"])
+            if graph is None and why is None:
+                if self.now() - rec["at"] <= SHADOW_WAIT_S:
+                    return
+                why = f"still listing {SHADOW_WAIT_S // 3600} h after it began"
+            del rec["listing"]
+            if graph is not None:
+                try:
+                    rec["keys"], rec["check"], rec["enqueued"] = (self.tasks.enqueue(graph, AFTER_LANDING_PRIORITY),
+                                                                  check_id(graph), self.now())
+                except Exception as e:  # noqa: BLE001  (a shadow never stops drive: the error is its record)
+                    why = f"enqueueing its task graph failed: {type(e).__name__}: {e}"
+                else:
+                    self.q.log(f"research queue drive: shadow: enqueued {len(rec['keys'])} tasks of {rec['check']}")
+            if why is not None:
+                self._shadow_record(tip, {"error": f"listing its task graph: {why}", "run": rec.get("run", "")})
+                del tips[tip]
+                return
+        if "old" not in rec:
+            if self.now() - rec["at"] > SHADOW_WAIT_S:
+                self._shadow_record(tip, {"error": "its after-landing run never ended", "check": rec.get("check", "")})
+                del tips[tip]
+            return
+        v = self.tasks.verdicts(rec["keys"].values())
+        if PENDING in v.values() and self.now() - rec["enqueued"] <= SHADOW_WAIT_S:
+            return
+        self._shadow_record(tip, {"check": rec["check"], "run": rec["run"], **compare(rec["keys"], rec["old"], v)})
+        del tips[tip]
+
+    def _shadow_incomplete(self, tips: dict, tip: str, why: str) -> None:
+        """``tip``'s shadow failed (``why``): logged, recorded incomplete (`executor.agrees` never holds of it), and dropped."""
+        rec = tips.pop(tip, None) or {}
+        self.q.log(f"research queue drive: shadow: `{self.q.into}` {tip[:12]}: failed ({why}); recorded incomplete, landing "
+                   "goes on")
+        self._shadow_record(tip, {"incomplete": why, "check": rec.get("check", ""), "run": rec.get("run", "")})
 
     def _shadow_record(self, tip: str, value: dict) -> None:
+        """``value`` as ``tip``'s `executor_shadow` label, written through to the store's remote; a store that refuses it is
+        logged, never raised: a shadow never stops drive."""
         from .store import vocab
         from .store.cli import _label_write_through
 
         target = f"commit:{tip}"
         said = "no store"
         if self.q.store is not None:
-            self.q.store.add_label(target, vocab.EXECUTOR_SHADOW, value, "drive", ref=value.get("run") or None)
-            said, _ = _label_write_through(self.q.store, target)
-        what = value.get("error") or (f"{value['agree']}/{value['units']} agree, {len(value['disagree'])} disagree"
-                                      + (f", {len(value['pending'])} pending" if value["pending"] else ""))
+            try:
+                self.q.store.add_label(target, vocab.EXECUTOR_SHADOW, value, "drive", ref=value.get("run") or None)
+                said, _ = _label_write_through(self.q.store, target)
+            except Exception as e:  # noqa: BLE001
+                said = f"not recorded: {type(e).__name__}: {e}"
+        what = (value.get("error") or (f"incomplete: {value['incomplete']}" if value.get("incomplete") else
+                f"{value['agree']}/{value['units']} agree, {len(value['disagree'])} disagree"
+                + (f", {len(value['pending'])} pending" if value["pending"] else "")
+                + (f", {len(value['missing'])} missing in executor" if value.get("missing") else "")
+                + (f", {len(value['executor_only'])} executor only" if value.get("executor_only") else "")))
         self.q.log(f"research queue drive: shadow: `{self.q.into}` {tip[:12]}: {what} ({target}; {said})")
 
     def _start_tasks(self, pl: dict, tip: str, base: bool) -> None:
