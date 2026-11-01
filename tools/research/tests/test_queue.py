@@ -586,7 +586,7 @@ def _gate_says(main: str, what: str, merged: bool = False) -> str:
 
 def test_a_landing_gate_left_in_its_directory_still_judges(tmp_path, monkeypatch):
     """On drive's NFS TMPDIR the gate script just run is often left as a .nfsXXXX file, so removing its directory fails with
-    ENOTEMPTY; every tick crashed on that (1 Nov).  The gate's verdict stands and the directory is left for the sweep."""
+    ENOTEMPTY, and every tick crashed on it.  The gate's verdict stands and the directory is left for the sweep."""
     import errno
     import tempfile
 
