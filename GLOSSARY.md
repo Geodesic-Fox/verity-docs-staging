@@ -150,7 +150,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "coin server"; the `round_digest` strings of statement identities in `Flock/Tags.lean` | the challenger's live-coin part |
 | "network transparency"; the `network-transparency/` paths in network accounting's project store that the `NetworkCertifier` Lean cites | network accounting |
 | "warden", "network warden", "tap", "the auditor's tap", "uplink tap", "warden/certifier"; the domain tags `verity-network-warden/row/v1` and `verity-network-warden/record/v1`, the store label value `replay_set=warden/re-verify` | the network certifier; "the warden's records" are network certificates |
-| "remote bandwidth audit" | proof of useful bandwidth (PoUB) |
+| "remote bandwidth audit", "remote bandwidth", "remote audit", "proof of useful bandwidth" | PoUB |
 | "timed verifier"; the recorded config key `verifier_cpu` (`--verifier-cpu`) | the memory challenger |
 | "prover gateway", "gateway"; one recorded statement string of recursive sessions | the ZK server |
 | "verifier gateway" | the challenger |
@@ -165,7 +165,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "block", "message block" for a hash's compression input; the Lean's `Hm96.block`, `HmRow.blockBit`, `ROW_BLOCK`, `shaBlock`, `NetworkCheck.block`, until renamed; BLAKE3's own terms | chunk (a compression's 1024 bits) |
 | "block" for a piece of a counter-mode stream (coins, noise); `Randomness.block`, `J10R.noiseBlock`, `verity.ml.randomness`'s `blocks()`, until renamed | chunk (of the stream) |
 | "block" for a unit of the encoded store of proof of useful space (PoUS); `blocks_per_segment`, `block_bytes`, until a format version | label (a segment's top label) |
-| "block" for a unit of a store, registered or appended, and of a fill; the receipt kind `block-sha512`, `BLOCK_BYTES`, the Lean's `Requirement.liveBlocks`/`readBlocks`/`OneBlockEach`, `Tag.Block`, `appendCoinBlocks`, until a format version or their owners rename them | chunk (of the store) |
+| "block" for a unit of a store, registered or appended, and of a fill; the receipt kind `block-sha512`, `BLOCK_BYTES`, the Lean's `Requirement.liveBlocks`/`readBlocks`/`OneBlockEach`, `appendCoinBlocks`, until a format version or their owners rename them | chunk (of the store) |
 | "block", "block-scaled" for entries under one FP8 or NVFP4 scale; the checkpoint id `verity-fp8-block128/v1`, the Definitions `ScaledMmFp8Block_v1`, `ScaledMmFp8BlockSharedScale_v1`, `MoeExpertFp8BlockCoordinate_v2`, `BlockScaledAlignAdd`, `SiluMulFp8BlockQuant_v1`, vLLM's `weight_block_size` | scale group |
 | "block" for a range of a GEMM's inner dimension; the Lean's `D1.nBlocks`, `ThreeBlock` | segment |
 | "block" for a page of vLLM's KV cache, and its block pool; vLLM's `block_size`, `block_table`, `num_gpu_blocks` | KV page, page pool |
@@ -175,7 +175,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "compile unit" | the compile slice's proof block |
 | "isolation unit" (IU), "isolation block", "certified block" | inference block |
 | "novel communication intensity" (NCI); "baseline" for θ; `Nci*`, `nci-*`, `ius` and the `nci` directories, until renamed | the inference-only policy; the registered information θ |
-| "replay unit" (RU) | replay block |
+| "replay unit" (RU) | proof block (optimizer: replay block) |
 | "leg"; "integrity", "work", "space" and "communication" naming subprotocols; the all-protocols runner's legs, the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
 | "stage", outside "one-stage"; names and record keys that keep it, such as `research run --stage` | phase, or run |
 | "row" for a server's window (s, w), "per-row bound" | server block, server-block yield |
@@ -198,7 +198,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | 𝒜_phys, "physical class", "the physical model's class"; "envelope" for 𝒜_p, "subprotocol application" for p; 𝒜′, "restricted class", "monitored class", "training class", "faithfulness" for 𝒜′; "class" for a set of computations; "initial information" for what both sides start from; the Lean's `Accounting.Overhead.physClass`, `envelope`, `restricted` and `Class` and `benchmarks/rho`'s, until renamed | the feasible set 𝓕; protocol p's admissible set 𝒜_p; the admissible set 𝒜; set; the initial state a |
 | "server-time" for the cost, "threshold" for T_𝒢(η; S); the Lean's `Accounting.Overhead.serverTime` (to count each server's GPUs) and `threshold`, until renamed | GPU-hours; the training cost T_𝒢(η; S) |
 | "server-time block", "serving block", "server-window", "physical block", and "window" for a server's gates between two memory wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/rho`'s `ServingBlock`, until they are renamed | server block; the overhead lower bound's sum over server blocks |
-| "server block" for one server's proof blocks in one circuit, "server-time block" for the steps that circuit spans; the network certifier's `blocks.Server`, `Blocks.window` and `verity/blocks/v1`'s `server` and `server_time` keys, until a format version | a server's proof blocks; the circuit's steps |
+| "server block" for one server's proof blocks in one circuit, "server-time block" for the steps that circuit spans; `verity/blocks/v1`'s `server` and `server_time` keys, until a format version | a server's proof blocks; the circuit's steps |
 | "coverage", "materialization" and "work requirement" for what every successful training run must compute; η_cov's subscript | necessary subcomputation (the covering bounds and the inventory's coverage keep their names) |
 | "exclusion bound" and "exclusion" for the result; for the per-block step, "per-block limit", "per-block cap", "window cap", q, q_T(c, k), and `benchmarks/rho`'s `Cap`, until renamed | the slowdown lower bound; the server-block yield q_S, and the inference-block yield q(c, k) |
 | "registered computation" | the registered circuit |
@@ -308,7 +308,7 @@ pins, fixtures and recorded runs bake in; a new family takes a fresh id (`test_t
   is one proof block. An element is one member, such as 16 bits. A leaf serializes whole elements, but a partition counts
   bits, so a proof block may commit some of an element's bits and not others.
 - **Format**: a label on a port's elements (BF16, FP32, E4M3, int32, token id) saying how their bits encode a number or a
-  symbol; metadata, outside the content digest (`verity.ml.circuits.annotations`).
+  symbol; metadata, outside the content digest (`verity.ml.circuits.metadata`).
 - **Boolean Definition** and **word view**: a Boolean Definition's gates are only gates (`verity.ml.circuits.boolean.is_boolean`),
   so its meaning is its gates; a *word Definition*'s gates output w-bit words whose meaning is registry code, and the word
   library migrates to Boolean Definitions under new versions of the same names. The word view reads each element's bits as
