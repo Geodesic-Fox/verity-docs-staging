@@ -126,7 +126,7 @@ def _tree(tmp_path: Path, monkeypatch, files: dict[str, str]) -> Path:
     for m in (lean_build, flock_circuit_build, lean_agreement):
         monkeypatch.setattr(m, "ROOT", root)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))                        # no elan or cargo of the machine's
-    monkeypatch.setenv("PATH", f"{root / 'bin'}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", str(root / "bin"), prepend=os.pathsep)
     return root
 
 
