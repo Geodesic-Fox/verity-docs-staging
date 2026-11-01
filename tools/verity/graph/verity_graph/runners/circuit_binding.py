@@ -34,8 +34,10 @@ NAMED = 100
 
 
 def cache() -> Path:
-    """circuit-check's cache on this machine: check's own (`tools/verity/check/common.py`'s ``cache_dir() / "circuit-check"``)."""
-    return Path(os.environ.get("CHECK_CACHE") or Path.home() / ".cache" / "verity-check") / "circuit-check"
+    """circuit-check's cache on this machine: check's own where check keeps it unless ``CHECK_CACHE`` moves it, as on every node
+    (`tools/verity/check/common.py`'s ``cache_dir() / "circuit-check"``).  ``CHECK_CACHE`` is check's registry's to read
+    (`tests/lint/test_repo_env_reads.py`), so a machine that sets it keeps these tasks' records apart from check's."""
+    return Path.home() / ".cache" / "verity-check" / "circuit-check"
 
 
 def checker(task: dict, work: Path, *args: str) -> tuple[int, dict | None]:

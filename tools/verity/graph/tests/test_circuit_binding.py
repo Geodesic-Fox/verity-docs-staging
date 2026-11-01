@@ -190,8 +190,14 @@ def test_pack_is_the_records_bytes_alone_and_unpack_puts_each_back(tmp_path):
     assert (into / "v1" / "aa" / "one.json").stat().st_mode & 0o777 == 0o400, "a record already there is rewritten"
 
 
+def _machine(tmp_path, monkeypatch) -> str:
+    """The machine's circuit-check cache, under a home of the test's, with ``CHECK_CACHE`` set elsewhere, which doesn't move it."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "moved"))
+    return str(tmp_path / "home" / ".cache" / "verity-check" / "circuit-check")
+
+
 def _binding_run(tmp_path, monkeypatch, rc, report, say="") -> tuple[dict, list]:
-    monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "machine"))
     work = tmp_path / "work"
     CB.pack(_records(tmp_path / "src", {"v/k/r.json": "{}"}), work / F.RECORDS["path"])
     calls = _stand_in(monkeypatch, CB, rc, report, say)
@@ -222,10 +228,10 @@ def _report(*targets: tuple[str, list[str]], new: list[str] = (), hits: int = 0)
     (-9, _report(("A", [])), "", "error", {"error": "circuit-check --binding exited -9"})])
 def test_a_binding_s_run_is_circuit_check_s_verdict_on_its_targets_from_the_records(tmp_path, monkeypatch, rc, report, say,
                                                                                       status, detail):
+    cache = _machine(tmp_path, monkeypatch)
     res, calls = _binding_run(tmp_path, monkeypatch, rc, report, say)
     assert (res["status"], res["detail"]) == (status, detail), res
     (c,) = calls
-    cache = str(tmp_path / "machine" / "circuit-check")
     assert c["argv"][1:] == ["-m", "circuit_check", "--all", "--catalog-units", "--cache", cache, "--binding",
                              "verity.ml.x.circuit-check#_b_roots", "-q", "--jobs", "3", "--mem-gb", "5", "--out",
                              str(tmp_path / "work" / CB.REPORT)]
@@ -265,7 +271,7 @@ def test_the_catalog_s_run_builds_every_record_into_a_fresh_cache_and_tars_it(tm
     (["a", "b", "c"], 0, "fail", {"unlisted": [], "unmade": ["c"]}),
     (["a", "b"], 2, "error", {"error": "circuit-check --bindings exited 2"})])
 def test_coverage_holds_the_bindings_circuit_check_makes_to_the_listed_ones(tmp_path, monkeypatch, listed, rc, status, detail):
-    monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "machine"))
+    cache = _machine(tmp_path, monkeypatch)
     work = tmp_path / "work"
     CB.pack(_records(tmp_path / "src", {"v/k/r.json": "{}"}), work / F.RECORDS["path"])
     made = {"bindings": {"a": [["definition", "A"], ["template", "t"]], "b": []}, "root_errors": [], "unchecked": ["F"]}
@@ -280,4 +286,4 @@ def test_coverage_holds_the_bindings_circuit_check_makes_to_the_listed_ones(tmp_
         assert res["detail"] == {"bindings": 2, "targets": 2, "root_errors": [], "unchecked": ["F"], **detail}
     else:
         assert res["detail"]["error"].startswith(detail["error"])
-    assert calls[0]["argv"][3:8] == ["--all", "--cache", str(tmp_path / "machine" / "circuit-check"), "--bindings", "-q"]
+    assert calls[0]["argv"][3:8] == ["--all", "--cache", cache, "--bindings", "-q"]
