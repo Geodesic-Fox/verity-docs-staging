@@ -27,8 +27,9 @@ the commit's files alone:
 - the data beside the closure's modules (`Tree.beside`): each one's directory's files that aren't Python, and the files under
   its directories that hold no Python (`tables/`); and every pyproject.toml when a module of it lists them all
   (`suites.metadata`);
-- the files under each path the test file and its conftests name: string parts joined by `/` or one string holding one, and
-  parts joined to a path they build (`VERIFIER / "agree.py"`);
+- the files under each path the test file, its conftests and the helpers it imports (a module of the closure under the suite's
+  test paths that is no `test_*.py`) name: string parts joined by `/` or one string holding one, and parts joined to a path
+  they build (`VERIFIER / "agree.py"`);
 - the suite's declared inputs (`[tool.verity.tests] inputs`, a directory as its files) less their Python, which the closure has
   where it is imported, but for the whole tree (`.`), and its own directory's files but their Python and the suites nested in
   it (`suites.inputs_of` always holds it); less Markdown under a directory unless the suite lists a `.md` (`suites.markdown`);
@@ -887,7 +888,8 @@ def task(tree: Tree, imports: Imports, suite: Suite, path: str, data: list[str])
     beside = {f for d in {_parent(f) for f in code} for f in tree.beside(d) if md or not f.endswith(".md")}
     if not imports.metadata.isdisjoint(code):
         pyprojects += tree.pyprojects
-    paths = {f for s in [path, *conftests] for f in imports.named(s) if md or not f.endswith(".md")}
+    helpers = [f for f in code if not f.rpartition("/")[2].startswith("test_") and any(_under(f, t) for t in suite.testpaths)]
+    paths = {f for s in {path, *conftests, *helpers} for f in imports.named(s) if md or not f.endswith(".md")}
     inputs = {*code, *beside, *paths, *seeds, *data, *pyprojects, *GUARD}
     out = {"id": f"{KIND}:{path}", "vars": {"suite": suite.path}, "inputs": sorted(inputs)}
     if suite.mem_gb:

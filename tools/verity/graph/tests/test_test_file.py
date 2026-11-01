@@ -51,7 +51,8 @@ SUITE = {
     "s/notes.txt": "n\n",
     "s/scripts/run_me.py": "import toy_lib.helper\n",
     "s/tests/conftest.py": "import toy_lib\n",
-    "s/tests/helpers.py": "def h():\n    return 2\n",
+    "s/tests/helpers.py": 'from pathlib import Path\n\nGOLDEN = Path(__file__).resolve().parents[2] / "golden"\n\n\ndef h():\n    return 2\n',
+    "golden/g.txt": "g\n",
     "s/tests/test_a.py": ('import importlib\n\nfrom helpers import h\nfrom toy_lib import core\n\n\ndef test_a():\n'
                           '    importlib.import_module("toy_lib.extra")\n    name = "toy_lib." + "helper"\n'
                           '    importlib.import_module(name)\n    assert core.f() + h() == 3\n'),
@@ -113,8 +114,9 @@ def test_a_test_file_s_inputs(tmp_path):
     assert sorted(by) == ["test-file:s/tests/sub/test_b.py", "test-file:s/tests/test_a.py", "test-file:s/tests/test_c.py",
                           "test-file:s/tests/test_d.py"], "a data directory's test_*.py is no test file"
     a = by["test-file:s/tests/test_a.py"]
-    assert a["inputs"] == sorted([*COMMON, *LIB, "lib/toy_lib/extra.py", "s/tests/conftest.py", "s/tests/helpers.py",
-                                  "s/tests/test_a.py"]), "its conftest, the library it imports and the module named to import_module"
+    assert a["inputs"] == sorted([*COMMON, *LIB, "golden/g.txt", "lib/toy_lib/extra.py", "s/tests/conftest.py", "s/tests/helpers.py",
+                                  "s/tests/test_a.py"]), \
+        "its conftest, the library it imports, the module named to import_module and the directory its helper names"
     assert a["vars"] == {"suite": "s"} and a["timeout_s"] == 121 and a["resources"] == {"mem_gb": 6}
     assert by["test-file:s/tests/sub/test_b.py"]["inputs"] == sorted(
         [*COMMON, *LIB, "lib/toy_lib/adapters/__init__.py", "lib/toy_lib/adapters/xa.py", "lib/toy_lib/extra.py",
