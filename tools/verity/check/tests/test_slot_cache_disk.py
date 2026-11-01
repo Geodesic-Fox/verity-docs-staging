@@ -24,6 +24,8 @@ def test_a_full_cache_disk_blocks_every_slot(monkeypatch, tmp_path):
     monkeypatch.setattr(SLOT, "DISK", tmp_path / "no-disk")
     monkeypatch.setattr(SLOT, "memory_gb", lambda root=None: 10**6)
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "verity-check"))
-    assert SLOT.blocked(slot, NOW) is None
+    monkeypatch.setattr(SLOT, "DISK_MIN_GB", 0)
+    monkeypatch.setattr(SLOT, "DISK_MIN_INODES", 0)
+    assert SLOT.blocked(slot, NOW) is None, "the test host's own free disk must not decide this"
     monkeypatch.setattr(SLOT, "DISK_MIN_GB", 1e18)
     assert SLOT.blocked(slot, NOW).startswith(f"{tmp_path} has ") and "GB free, under" in SLOT.blocked(slot, NOW)
