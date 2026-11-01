@@ -1,14 +1,19 @@
 """lean-module: one task per module of the tree's Lake packages, which compiles it and kernel-replays it
 (`runners/lean_module.py`).
 
+A task's fields, which its runner reads: `vars` `module` (its name), `package` (its Lake package's name) and `options`
+(the package's `leanOptions`, as JSON), which Lake puts in a module's setup file; `inputs` its source (the id after
+`lean-module:`), its package's lakefile and every file the package's `[[input_file]]` and `[[input_dir]]` targets name (a
+module may `include_str` one); `reads` the `olean` of every module of the tree it imports, transitively, since `lean`
+opens each of them, each at `out/lean/<module path>.olean`; `outputs` its own `olean` and `ilean` there and its `axioms`
+summary at `out/axioms/<module path>.json`.
+
 Packages, input files and import headers are read by `tools/verity/lean/module_keys.py`, as the Lean build cache reads
-them, so a task and the cache see one module the same way. A task's inputs are its source, its package's lakefile and
-every file the package's `[[input_file]]` and `[[input_dir]]` targets name (a module may `include_str` one). It reads the
-`olean` of every module of the tree it imports, transitively, since `lean` opens each of them. An import is resolved in
-the workspace of the module's package (it and the packages it requires by path) as `module_keys.keys` resolves it: a
-module of the toolchain or a fetched package (Mathlib and the rest) is the `lean` env's, and one the workspace can't
-resolve (no package or two claim it, or no file holds it) is left out, so the compile fails on it. The auditor's fixture
-packages (`lean_audit.packages` leaves them out) have no tasks."""
+them, so a task and the cache see one module the same way. An import is resolved in the workspace of the module's package
+(it and the packages it requires by path) as `module_keys.keys` resolves it: a module of the toolchain or of a fetched
+package (Mathlib and the rest) is the `lean` env's, and one the workspace can't resolve (no package or two claim it, or no
+file holds it) is left out, so the compile fails on it. The auditor's fixture packages (`lean_audit.packages` leaves them
+out) have no tasks."""
 from __future__ import annotations
 
 import importlib.util
@@ -22,7 +27,7 @@ from ..graph import GraphError
 
 KIND = "lean-module"
 LEAN = Path(__file__).resolve().parents[3] / "lean"
-#: lakefile settings that change how Lake compiles a module, which the runner doesn't pass: a package naming one has no tasks
+#: lakefile settings that change how Lake compiles a module, which no task passes on: the listing refuses a package naming one
 UNREAD = ("buildType", "moreLeanArgs", "weakLeanArgs", "dynlibs", "plugins", "backend", "precompileModules")
 #: each task's outputs: (name, directory under `out/`, extension of the module's path there)
 OUTPUTS = (("olean", "lean", ".olean"), ("ilean", "lean", ".ilean"), ("axioms", "axioms", ".json"))
@@ -132,6 +137,8 @@ def closures(direct: dict[str, list[str]]) -> dict[str, frozenset[str]]:
     """{source file: the source files of the tree's modules it imports, transitively}; GraphError on an import cycle."""
     memo: dict[str, frozenset[str]] = {}
     for start in sorted(direct):
+        if start in memo:
+            continue
         path, on = [(start, iter(direct[start]))], {start}
         while path:
             f, todo = path[-1]
