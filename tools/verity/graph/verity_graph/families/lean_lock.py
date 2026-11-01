@@ -1,0 +1,45 @@
+"""lean-lock: one task per audited Lake package (a `lean-audit.json`, the auditor's fixtures aside: `lean_audit.packages`),
+which recomputes the records of the guarantees its lock lists from the package's built modules and compares them with the
+committed lock (`runners/lean_lock.py`).
+
+Its records read the builds of the packages `lean_changed.closure` names: the package, those it requires by path, and those
+its `proved_in` names with theirs (Security's records read Security/Proofs, which requires the Flock verifier). Its inputs
+are every file of those packages and the auditor's (`lean_changed.closure_inputs`), and it reads the `olean` of each of
+their modules, so a change to any of them reruns it."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from . import lean_module as lm
+
+KIND = "lean-lock"
+
+
+def task_id(pkg: str) -> str:
+    return f"{KIND}:{pkg}"
+
+
+def closure(root: Path, pkg: str, pkgs: dict[str, lm.Package]) -> list[str]:
+    """``pkg``, the packages it requires by path, and those its `proved_in` names with theirs, as `lean_changed.closure`."""
+    def deps(q: str) -> tuple[str, ...]:
+        return pkgs[q].workspace[1:] if q in pkgs else ()
+    try:
+        named = json.loads((root / pkg / "lean-audit.json").read_text()).get("proved_in", [])
+    except (OSError, ValueError, AttributeError):
+        named = []  # the audit fails the policy
+    provers = sorted({lm.rel(root.resolve(), root.resolve() / pkg / q) for q in named if isinstance(q, str)})
+    return list(dict.fromkeys([pkg, *deps(pkg), *(d for q in provers for d in (q, *deps(q)))]))
+
+
+def tasks(root: Path, files: list[str]) -> list[dict]:
+    pkgs, owner = lm.modules(root, files)
+    tool = lm.la.tool_files(files)
+    out = []
+    for pkg in lm.la.packages(files):
+        cl = closure(root, pkg, pkgs)
+        out.append({"id": task_id(pkg), "vars": {"package": pkg},
+                    "inputs": sorted({*(f for q in cl for f in lm.la.own_files(q, files)), *tool}),
+                    "reads": [{"task": lm.task_id(f), "output": "olean"} for f, (d, _) in sorted(owner.items()) if d in cl],
+                    "outputs": [{"name": "records", "path": f"out/{pkg}/lean-audit.json"}]})
+    return out
