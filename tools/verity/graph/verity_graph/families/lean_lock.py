@@ -5,7 +5,8 @@ committed lock (`runners/lean_lock.py`).
 Its records read the builds of the packages `lean_changed.closure` names: the package, those it requires by path, and those
 its `proved_in` names with theirs (Security's records read Security/Proofs, which requires the Flock verifier). Its inputs
 are every file of those packages and the auditor's (`lean_changed.closure_inputs`), and it reads the `olean` of each of
-their modules, so a change to any of them reruns it."""
+their modules that has a task (`lean_module`), so a change to any of them reruns it. A `roots` entry that names no module
+of the tree has no task to read, and the runner fails the lock on it, as the check's `lake build +ROOT` does."""
 from __future__ import annotations
 
 import json
@@ -34,7 +35,7 @@ def closure(root: Path, pkg: str, pkgs: dict[str, lm.Package]) -> list[str]:
 
 
 def tasks(root: Path, files: list[str]) -> list[dict]:
-    pkgs, owner = lm.modules(root, files)
+    pkgs, owner, _ = lm.imports(root, files)
     tool = lm.la.tool_files(files)
     out = []
     for pkg in lm.la.packages(files):
