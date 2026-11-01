@@ -634,7 +634,8 @@ def test_an_unchanged_head_and_base_tree_is_not_preflighted_again_and_a_new_base
 
 def test_a_syncs_preflights_start_only_within_their_budget_and_a_pr_not_yet_preflighted_waits_off_next_untold(world):
     """A sync's preflights start only while they've taken under `PREFLIGHT_BUDGET_S` together: past it a PR waits off `next`,
-    with the PRs that contain it, told nothing, and a later sync preflights it."""
+    with the PRs that contain it, told nothing, and the next sync preflights it whatever its budget, so the PRs before it
+    can't skip it sync after sync."""
     now = [0.0]
     calls: list[int] = []
 
@@ -654,8 +655,30 @@ def test_a_syncs_preflights_start_only_within_their_budget_and_a_pr_not_yet_pref
     assert entries[3].why.endswith("which waits for its preflight"), entries[3].why
     state = q.load_state()
     assert state["conflicts"] == {} and state["waiting"] == {} and "waiting off it for their preflight (#2 #3)" in world.logs[-1]
+    assert state["preflight_waited"] == [2]
     assert [m.pr for m in q.sync()[0]] == [1, 2] and calls == [1, 2]
     assert [m.pr for m in q.sync()[0]] == [1, 2, 3] and calls == [1, 2, 3]
+
+
+def test_a_pr_the_preflight_budget_skipped_is_preflighted_next_sync_whatever_the_budget(world):
+    """The PRs before it spend the budget in the same order each sync; one it skipped runs the next sync past the budget, so
+    it waits at most one sync for its turn."""
+    now = [0.0]
+    calls: list[int] = []
+
+    def slow(pr, base, commit, members):
+        calls.append(pr.number)
+        now[0] += PREFLIGHT_BUDGET_S
+        return None
+
+    for n in (1, 2, 3):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    q = world.queue()
+    q.preflight, q.clock = slow, lambda: now[0]
+    assert [m.pr for m in q.sync()[0]] == [1] and calls == [1]
+    assert q.load_state()["preflight_waited"] == [2, 3]
+    assert [m.pr for m in q.sync()[0]] == [1, 2, 3] and calls == [1, 2, 3]
+    assert q.load_state()["preflight_waited"] == []
 
 
 def test_a_conflict_in_any_file_besides_the_pins_still_refuses_the_merge(world):

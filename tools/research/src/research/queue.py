@@ -1229,6 +1229,9 @@ class Queue:
         self.preflight: Callable[[PR, str, str, list[Member]], str | None] | None = None
         self.clock: Callable[[], float] = time.monotonic
         self._preflight_s = 0.0
+        #: the PRs whose preflight the budget skipped last sync (run this sync whatever it), and those it skips now
+        self._preflight_waited: set[int] = set()
+        self._preflight_waits: set[int] = set()
         #: releases the workdir's lock (`_lock`): a command that only reads calls it once its clone and fetches are done, so a
         #: listing that reads hundreds of members' labels doesn't refuse a verdict meanwhile
         self.unlock: Callable[[], None] = lambda: None
@@ -1846,15 +1849,17 @@ class Queue:
         its merge onto ``tip`` above ``members``, recorded per (head, base) in ``flights`` (the state's `preflights`): a
         pair whose verdict is recorded, for the same merged tree, isn't run again.  The base is taken by its tree: the
         queue's merges carry the time they're made, so a rebuilt `next` names the same members' merges anew.  A preflight
-        starts only while this sync's have taken under `PREFLIGHT_BUDGET_S`; past it the PR waits off `next` for a later sync.
-        One that raises admits it, logged, and is run again only if its pair comes again."""
+        starts only while this sync's have taken under `PREFLIGHT_BUDGET_S`; past it the PR waits off `next` for a later sync,
+        whose preflights run it whatever their budget (the state's `preflight_waited`), so a PR the budget skipped isn't skipped
+        again by the same PRs before it.  One that raises admits it, logged, and is run again only if its pair comes again."""
         base_tree, tree = _out(self.workdir, "rev-parse", f"{tip}^{{tree}}", f"{commit}^{{tree}}").split()
         key = f"{pr.head}:{base_tree}"
         for got in (flights["now"].get(key), flights["before"].get(key)):
             if got is not None and got.get("tree") == tree:
                 flights["now"][key] = got
                 return True, got.get("why")
-        if self._preflight_s >= PREFLIGHT_BUDGET_S:
+        if self._preflight_s >= PREFLIGHT_BUDGET_S and pr.number not in self._preflight_waited:
+            self._preflight_waits.add(pr.number)
             return False, (f"its preflight onto `{self.branch}` hasn't run: this sync's preflights took their "
                            f"{PREFLIGHT_BUDGET_S:g} s, so a later sync runs it")
         start = self.clock()
@@ -1983,6 +1988,7 @@ class Queue:
         verdicts: dict[str, list[str]] = {}
         flights = {"before": state.get("preflights") or {}, "now": {}}
         self._preflight_s = 0.0
+        self._preflight_waited, self._preflight_waits = set(state.get("preflight_waited") or ()), set()
         unrun: set[int] = set()
         merged = False
         if tip != main:                                         # the moves among the members `next` keeps
@@ -2052,6 +2058,7 @@ class Queue:
                 heads = {p.head for p in prs}
                 kept = {key: rec for key, rec in {**flights["before"], **flights["now"]}.items() if rec.get("head") in heads}
                 state["preflights"] = dict(list(kept.items())[-GATE_VERDICTS:])
+                state["preflight_waited"] = sorted(self._preflight_waits)
             if gates:
                 newest = {**{h: v for h, v in before.items() if h not in verdicts}, **verdicts}
                 state["gate_verdicts"] = {"main": main, "gates": list(gates), "of": dict(list(newest.items())[-GATE_VERDICTS:])}
