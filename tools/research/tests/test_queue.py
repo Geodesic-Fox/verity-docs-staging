@@ -2426,7 +2426,7 @@ def test_a_head_that_changes_a_lock_is_marked_only_on_a_records_run_of_it_that_p
 def test_under_land_into_checked_a_head_is_judged_against_checked_not_main(world, capsys):
     """Under `land_into = "checked"` a lock change lands on `checked` well before `main` follows it, and a PR that merges
     `checked` (to resolve a conflict with one landed there) carries it: against `main` the gate blamed that PR for every lock
-    the landings changed (#6663, 1 Nov).  Against `checked` it judges the PR's own change, so a lock change of its own is still
+    the landings changed.  Against `checked` it judges the PR's own change, so a lock change of its own is still
     refused, naming `checked`."""
     world.with_store_remote()
     _move_main(world, {"tools/verity/check/drive.toml": 'land_into = "checked"\n'})
