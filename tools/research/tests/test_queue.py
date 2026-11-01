@@ -3987,13 +3987,11 @@ def test_the_sync_leaves_off_next_a_head_whose_lock_merge_drops_what_next_needs_
     assert set(json.loads(_git(world.origin, "show", "refs/heads/next:pkg/lean-audit.json"))["guarantees"]) == {"F", "G2", "H", "K"}
 
 
-def test_preflight_trees_go_under_RESEARCH_PREFLIGHT_ROOT_when_no_root_is_given(tmp_path, monkeypatch):
-    """Drive's pod keeps TMPDIR on a network volume, where a merged tree's `uv sync` can't hardlink from uv's cache and outruns
-    the budget; `RESEARCH_PREFLIGHT_ROOT` puts the trees on a local disk instead, and a root passed in still wins."""
-    from research.queue import PREFLIGHT_ROOT_ENV, Preflight
 
-    monkeypatch.setenv(PREFLIGHT_ROOT_ENV, str(tmp_path / "fast"))
-    assert Preflight(tmp_path, "origin", None).root == tmp_path / "fast"
-    assert Preflight(tmp_path, "origin", None, root=tmp_path / "given").root == tmp_path / "given"
-    monkeypatch.delenv(PREFLIGHT_ROOT_ENV)
+def test_drive_and_ready_take_the_preflight_root_they_are_given(tmp_path):
+    """Drive's pod keeps TMPDIR on a network volume, where a merged tree's `uv sync` can't hardlink from uv's cache and outruns
+    the budget; `--preflight-root` puts the trees on a local disk instead, and without it they go to the temporary directory."""
+    from research.queue import Preflight
+
+    assert Preflight(tmp_path, "origin", None, root=tmp_path / "fast").root == tmp_path / "fast"
     assert Preflight(tmp_path, "origin", None).root == Path(tempfile.gettempdir())

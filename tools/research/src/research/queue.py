@@ -2862,9 +2862,6 @@ PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("integrations/
 PREFLIGHT_UNCOLLECTED: dict[str, str] = {}
 #: the merged tree's environment, as the quick tier's `uv run --locked` has it (a fresh tree syncs from uv's cache in seconds)
 PREFLIGHT_SYNC = ("uv", "sync", "--locked", "--all-packages", "--extra", "torch-cpu", "-q")
-#: where the merged trees go (default: tempfile's): a tree must share a filesystem with uv's cache for its sync to hardlink, so drive
-#: on the control pod, whose TMPDIR is a network volume, sets it to the container disk
-PREFLIGHT_ROOT_ENV = "RESEARCH_PREFLIGHT_ROOT"
 #: what the merged tree's checks may take together; what hasn't finished by then is named and refuses nothing.  Every suite's
 #: collection but circuit-check's takes about 18 s on 4 workers of a 4-core VM; `PREFLIGHT_LINTS` add up to a minute
 PREFLIGHT_BUDGET_S = 120.0
@@ -3485,7 +3482,7 @@ class Preflight:
         self.budget_s, self.jobs, self.clock, self.log, self.free = budget_s, jobs, clock, log, free
         self.fetch = fetch or self._fetch_fixtures
         self.lean, self.lean_s, self.lean_modules = lean, lean_s, lean_modules
-        self.root = Path(root or os.environ.get(PREFLIGHT_ROOT_ENV) or tempfile.gettempdir())
+        self.root = Path(root or tempfile.gettempdir())
 
     def __call__(self, pr: PR, prs: list[PR]) -> str | None:
         """None when the head may be marked; else the refusal."""
@@ -4877,6 +4874,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--mark", action="store_true", help="ready: mark it with no quick tier (the after-landing run tests it)")
     ap.add_argument("--again", action="store_true", help="ready: mark a head that was ejected (only when the ejection was wrong); "
                                                           "lean-check: rerun a commit whose recorded Lean check passed")
+    ap.add_argument("--preflight-root", type=Path, default=None, metavar="DIR",
+                    help="ready, drive: where the preflight's merged trees go (default: the temporary directory); a tree must "
+                         "share a filesystem with uv's cache for its sync to hardlink (drive on the control pod, whose TMPDIR is a "
+                         "network volume, passes the container disk)")
     ap.add_argument("--no-preflight", action="store_true",
                     help="ready: skip the preflight (the lander's): the head merged onto a fresh `next` must merge cleanly, contain "
                          "no open PR that isn't admitted, and pass `pins.py --stale`, the invariant tests (module strings, pins, "
@@ -5028,7 +5029,8 @@ def main(argv: list[str]) -> int:
         if a.command == "ready":
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             tier = MarkOnly() if a.mark else RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
-            pre = None if a.no_preflight else Preflight(top, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by))
+            pre = None if a.no_preflight else Preflight(top, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by),
+                                                             root=a.preflight_root)
             return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre, sha=a.sha, as_json=a.json,
                          records=RecordsGate(top, remote, store))
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
@@ -5120,7 +5122,8 @@ def main(argv: list[str]) -> int:
         if a.command == "drive":
             q._drive_only("main", "once", a.dry_run)          # its landings push `main`, its syncs `next`
         if a.command in ("sync", "drive"):
-            q.preflight = Preflight(q.workdir, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by), log=q.log).onto
+            q.preflight = Preflight(q.workdir, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by), log=q.log,
+                                    root=a.preflight_root).onto
         if a.command == "sync":
             q.hand_sync(dry_run=a.dry_run)
             return 0
