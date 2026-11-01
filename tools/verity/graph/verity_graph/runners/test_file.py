@@ -96,7 +96,7 @@ def environment(task: dict, tests: dict, work: Path, suite: Path) -> dict[str, s
         env.setdefault(k, "check")
     for k in ("GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
         env.setdefault(k, "check@localhost")
-    inside = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p and Path(p).resolve().is_relative_to(ROOT)]
+    inside = [p for p in env.get("PYTHONPATH", "").split(os.pathsep) if p and Path(p).resolve().is_relative_to(ROOT)]
     env.update(VERITY_SUITE_ROOT=str(ROOT), VERITY_SUITE_ALLOW="[]", VERITY_SUITE_DENY="[]", VERITY_SUITE_WATCH="[]",
                VERITY_SUITE_MARKDOWN="1", VERITY_SUITE_PROGRAMS=json.dumps(tests.get("artifacts", [])),
                VERITY_SUITE_REPORT=str(work / REPORT), VERITY_SUITE_READS=str(work / READS), VERITY_SUITE_DIR=str(suite),
