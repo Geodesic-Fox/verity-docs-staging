@@ -390,15 +390,15 @@ def listed_tasks(rec: dict) -> tuple[dict | None, str | None]:
     return None, f"`verity tasks list` exited {rc}: {tail}"
 
 
+#: the plan's file in its directory (check.py's `AUTO_PLAN`), which each shard sends as its run's input
+AUTO_PLAN = "check-shard-plan.json"
 #: a sharded after-landing run's auto plan (`plan_shards`): a worktree of the tip ($2) in the queue's clone, under TRAIN_TREES
 #: as train.sh's are when set, `check.py --shard-plan` there with the rest of its arguments into `AUTO_PLAN` in the plan's
 #: directory ($1), the worktree removed after; its venv kept between plans
 PLAN_JOB = ('set -e; d=$1 r=$PWD; t="${TRAIN_TREES:-${1%/*}}/plan-${1##*/}"; mkdir -p "${t%/*}"; '
             'export UV_PROJECT_ENVIRONMENT="${t%/*}/plan-venv"; git worktree add -q --detach "$t" "$2"; '
             'trap \'cd "$r"; git worktree remove --force "$t"\' EXIT; cd "$t"; shift 2; '
-            'uv run -q python tools/verity/check/check.py --shard-plan --out "$d/check-shard-plan.json" "$@"')
-#: the plan's file in its directory (check.py's `AUTO_PLAN`), which each shard sends as its run's input
-AUTO_PLAN = "check-shard-plan.json"
+            'uv run -q python tools/verity/check/check.py --shard-plan --out "$d/' + AUTO_PLAN + '" "$@"')
 
 
 def plan_shards(repo: Path, tip: str, steps: str, max_shards: int | None = None) -> dict:
@@ -1900,10 +1900,13 @@ class Driver:
         background (`plan_shards`: `check.py --shard-plan`, as the records step runs) and followed each tick in ``pl["plan"]``.
         {"n", "digest", "file", "predicted_s"} once made, every shard launched `--shard auto:K/N` with its file; {} once it
         failed or ran past `PLAN_WAIT_S` (stopped), told, and the run launches unsharded; None while it is made.  The answer stays
-        the tip's, so a run of it launched again is of the same plan; a plan of another tip removes the last one's file."""
+        the tip's while its file does, so a run of it launched again is of the same plan; a plan of another tip removes the last
+        one's file."""
         rec, q = pl.get("plan"), self.q
         if rec and rec["tip"] == tip and "made" in rec:
-            return rec["made"]
+            if not rec["made"] or Path(rec["made"]["file"]).is_file():
+                return rec["made"]
+            q.log(f"research queue drive: the auto shard plan of {tip[:12]}: its file {rec['made']['file']} is gone; made again")
 
         def done(made: dict, why: str) -> dict:
             pl["plan"] = {"tip": tip, "made": made, "out": rec["out"]}
@@ -1914,7 +1917,7 @@ class Driver:
                                                            "runs unsharded")
             return made
 
-        if not rec or rec["tip"] != tip:
+        if not rec or rec["tip"] != tip or "made" in rec:
             if rec and rec.get("out"):
                 shutil.rmtree(rec["out"], ignore_errors=True)
             cap = int(str(self.after_landing_shards).partition(":")[2] or 0) or None

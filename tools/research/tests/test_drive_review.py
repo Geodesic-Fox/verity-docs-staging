@@ -207,9 +207,12 @@ class Planner:
         h.d.planned = lambda rec: self.answer
 
     def plan(self, repo, tip, steps, max_shards=None) -> dict:
+        from research.drive import AUTO_PLAN
+
         self.asked.append((tip, steps, max_shards))
         out = self.tmp / f"plan-{len(self.asked)}"
         out.mkdir()
+        (out / AUTO_PLAN).write_text("{}\n")
         return {"dir": str(out / "job"), "pid": None, "out": str(out)}
 
 
@@ -249,11 +252,12 @@ def _plan_doc(n: int) -> dict:
     return {"kind": "check-shard-plan/v1", "n": n, "digest": "d" * 64, "predicted_s": 3600.0}
 
 
-def test_an_auto_after_landing_run_launches_the_planners_n_shards_of_one_plan_after_the_records_step(world, monkeypatch):
+@pytest.mark.parametrize("gone", [False, True])
+def test_an_auto_after_landing_run_launches_the_planners_n_shards_of_one_plan_after_the_records_step(world, monkeypatch, gone):
     """`after_landing_shards = "auto:MAX"`: the plan (`check.py --shard-plan --deferred STEPS --max-shards MAX`) is made once a
     tip beside circuit-check's records step, and the run launches once both are done: the plan's N shards, each `--shard
     auto:K/N` with the plan's file and the records' artifact.  A shard that never started launches the run again on the same
-    plan; `main` is verified once every shard passed."""
+    plan, or on a new one when its file is gone (a restart of the pod); `main` is verified once every shard passed."""
     from research.drive import AUTO_PLAN
 
     h = Review(world, monkeypatch)
@@ -276,9 +280,14 @@ def test_an_auto_after_landing_run_launches_the_planners_n_shards_of_one_plan_af
         (main, f"auto:{k}/2", plan, art) for k in (1, 2)]
     assert h.postland()["run"]["plan"] == "d" * 64 and planner.asked == [(main, ",".join(AFTER_LANDING), 4)]
     h.run_state.update({"r-post-1": ("done", 0, None), "r-post-2": ("done", 75, None)})
+    if gone:
+        os.unlink(plan)
+        h.tick()
+        assert len(h.posted) == 3 and len(planner.asked) == 2 and not (world.tmp / "plan-1").exists(), "a new plan first"
+        plan = str(world.tmp / "plan-2" / AUTO_PLAN)
     h.tick()
-    assert [kw.get("shard") for _, _, kw in h.posted[3:]] == ["auto:1/2", "auto:2/2"] and len(planner.asked) == 1, \
-        "a shard that never started: the run again, whole, on the plan it had"
+    assert [(kw.get("shard"), kw.get("shard_plan")) for _, _, kw in h.posted[3:]] == [("auto:1/2", plan), ("auto:2/2", plan)]
+    assert len(planner.asked) == 1 + gone, "a shard that never started: the run again, whole, on the plan it had"
     h.evidence = [_steps_run(world.tmp, "r-post-3", {s: "passed" for s in AFTER_LANDING})]
     h.run_state.update({"r-post-3": ("done", 0, None), "r-post-4": ("done", 0, None)})
     h.tick()
