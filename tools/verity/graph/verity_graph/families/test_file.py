@@ -11,15 +11,18 @@ the commit's files alone:
   (a function's, a `TYPE_CHECKING` block's), relative ones from the file's package, absolute ones where the workspace's packages
   put their names (`Layout`), where pytest puts them (each imported file's directory above its packages, the suite's
   `pythonpath`), and a name neither has from the importing file's own directory; a constant name given to `import_module`,
-  `__import__`, `importorskip` or `run_module`, a conftest's `pytest_plugins`, and a `.py` file a path loader is given that a
-  string in the call names (from the file's directory or one above it). A computed name can't be followed
-  (`Info.unfollowed`); what it loads is an undeclared read when the runner meets it;
+  `__import__`, `importorskip` or `run_module`, a conftest's `pytest_plugins`, and a `.py` file a path loader is given that the
+  call's strings name, in one string or in parts joined by `/` (from the file's directory or one above it); where it builds the
+  path from a name (`_load("gamma")`), each `.py` file of its directory a string of it names; and each module of a package that
+  imports them all (`pkgutil.iter_modules(__path__)`). Another computed name can't be followed (`Info.unfollowed`); what it
+  loads is an undeclared read when the runner meets it;
 - the closures of what the test file and its conftests start or load: each `.py` file a string in them names (a script a test
   runs), each module they run as `python -m NAME`, and where they load a module by a path they build, each name a string gives
-  that a `.py` file has;
+  that a `.py` file has there or above;
 - the suite's declared inputs (`[tool.verity.tests] inputs`, a directory as its files) less their Python, which the closure has
-  where it is imported, and less Markdown under a directory unless the suite lists a `.md` (`suites.markdown`); the fixture
-  registry when an entry of it that git doesn't hold (a fetched fixture) is under the suite's directory or its inputs;
+  where it is imported, but for the whole tree (`.`), and less Markdown under a directory unless the suite lists a `.md`
+  (`suites.markdown`); the fixture registry when an entry of it that git doesn't hold (a fetched fixture) is under the suite's
+  directory or its inputs;
 - each `pyproject.toml` from the test file's directory up to the root;
 - the read guard the runner loads into pytest (`GUARD`); the core adds the runner itself.
 
@@ -62,10 +65,13 @@ _BY_NAME = ("import_module", "__import__", "importorskip", "run_module")
 _CALLS = (*_BY_NAME, "spec_from_file_location", "run_path", "SourceFileLoader")
 _CALL = re.compile(rf"\b({'|'.join(_CALLS)})[ \t]*\(")
 _CONSTANT = re.compile(r"""\s*[rRuU]?(['"])([\w.]+)\1\s*[,)]""")
-#: a string naming a `.py` file
+#: a string naming a `.py` file, and a `.py` path of string parts (`ROOT / "tools" / "check.py"`)
 _PYFILE = re.compile(r"""["']([\w./-]*[\w-]\.py)["']""")
+_PARTS = re.compile(r"""(?:["'][\w.-]+["']\s*/\s*)+["'][\w.-]*[\w-]\.py["']""")
 #: a module a test runs as `python -m NAME`, in a command's list
 _DASH_M = re.compile(r"""["']-m["']\s*,\s*[rRuU]?["']([A-Za-z_][\w.]*)["']""")
+#: a loader's path built from a name (`HERE / f"{name}.py"`, `name + ".py"`), and the names a file's strings give
+_BUILT = re.compile(r"""[fF][rR]?["'][^"'\n]*\{[^}]+\}\.py["']|\+\s*["']\.py["']""")
 _BARE = re.compile(r"""["']([A-Za-z_]\w*)["']""")
 _PLUGINS = re.compile(r"^pytest_plugins[ \t]*=", re.M)
 
@@ -223,6 +229,11 @@ def _statement(text: str, start: int) -> str:
     return "".join(out)
 
 
+def _pyfiles(text: str) -> list[str]:
+    """The `.py` paths the strings of ``text`` name: each `.py` string, and each path of string parts joined by `/`."""
+    return [*_PYFILE.findall(text), *("/".join(re.findall(r"""["']([\w.-]+)["']""", m)) for m in _PARTS.findall(text))]
+
+
 def _requests(stmt: str) -> list[tuple[int, str, tuple[str, ...]]] | None:
     """The imports one statement makes, each (level, module, names imported from it), or None when it isn't an import statement
     of the forms the regular expressions read (the caller parses it)."""
@@ -353,10 +364,10 @@ class Imports:
                     reqs.append((0, c.group(2), ()))
                 else:
                     unfollowed += 1
-            elif loaded := [p for s in _PYFILE.findall(call) if (p := self._named(path, s))]:
+            elif loaded := [p for s in _pyfiles(call) if (p := self._named(path, s))]:
                 fixed += loaded
             else:
-                unfollowed, by_path = unfollowed + 1, True
+                unfollowed, by_path = unfollowed + 1, by_path or bool(_BUILT.search(call))
         for line in _PLUGINS.finditer(text) if "pytest_plugins" in text else ():
             for s in re.findall(r"""["']([\w.]+)["']""", _statement(text, line.start())):
                 reqs.append((0, s, ()))
@@ -378,9 +389,13 @@ class Imports:
                     fixed += self.walk(b, module, names)
             elif self.tree.has(here, top):
                 fixed += self.walk(here, module, names)
-        scripts = {p for s in _PYFILE.findall(text) if (p := self._named(path, s))} if ".py'" in text or '.py"' in text else set()
+        if "iter_modules(__path__)" in text:            # a package that imports each of its modules
+            fixed += [f for f in self.tree.under(here) if _parent(f) == here and f.endswith(".py")]
+        scripts = {p for s in _pyfiles(text) if (p := self._named(path, s))} if ".py'" in text or '.py"' in text else set()
         if by_path:                     # a module loaded by a path it builds from a name (`_load("gamma")`): each name with a file
-            scripts |= {p for s in set(_BARE.findall(text)) if (p := self._named(path, s + ".py"))}
+            bare = set(_BARE.findall(text))
+            fixed += [p for s in bare if (p := _join(here, s + ".py")) in self.tree.files]
+            scripts |= {p for s in bare if (p := self._named(path, s + ".py"))}
         modules = set(_DASH_M.findall(text)) if "-m" in text else set()
         got = self._info[path] = Info(tuple(sorted(set(fixed) - {path})), local, unfollowed, tuple(sorted(scripts - {path})),
                                       tuple(sorted(modules)))
@@ -508,8 +523,9 @@ def test_files(tree: Tree, suite: Suite, suites: list[Suite]) -> list[str]:
 
 
 def declared(tree: Tree, suite: Suite, fixtures: list[str]) -> list[str]:
-    """The suite's declared inputs less their Python (and their directories' Markdown unless it lists a `.md`), and the fixture
-    registry when a fetched fixture is under the suite or one of them."""
+    """The suite's declared inputs less their Python, an import list the closure replaces (and their directories' Markdown unless
+    it lists a `.md`), and the fixture registry when a fetched fixture is under the suite or one of them. The whole tree (`.`) is
+    no import list: a suite declares it whose tests read every file (the root's lints, the graph's listing)."""
     markdown = any(p.endswith(".md") for p in suite.inputs)
     out: set[str] = set()
     for p in suite.inputs:
@@ -518,7 +534,7 @@ def declared(tree: Tree, suite: Suite, fixtures: list[str]) -> list[str]:
             if not p.endswith(".py"):
                 out.add(p)
             continue
-        out.update(f for f in tree.under(p) if not f.endswith(".py") and (markdown or not f.endswith(".md")))
+        out.update(f for f in tree.under(p) if (p in ("", ".") or not f.endswith(".py")) and (markdown or not f.endswith(".md")))
     if fetches(suite, fixtures):
         out.add(REGISTRY)
     return sorted(out)
