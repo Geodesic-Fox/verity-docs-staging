@@ -42,7 +42,7 @@ def _sibling(name: str):
 
 
 H = _sibling("headers")
-parts, name = H.parts, H.name
+parts, name, imports = H.parts, H.name, H.imports
 SCHEMA = "lean-module/v2"
 #: a Lake artifact's name in its cache: its 64-bit content hash and its extension
 ARTIFACT = re.compile(r"[0-9a-f]{16}\.[a-z.]+")
