@@ -117,6 +117,11 @@ progress goes to stderr. It exits 0 for passed or skipped, 1 for failed. A split
 gives (`{suite: the listing's splits timings}`), so it runs the listed files under the listed key; without it, of this
 machine's timing record. A suite's verdict is the join of its parts' (`suites.combine_parts`).
 
+A recorded check publishes its live record (`live.py`) on the store's remote as each step ends and every few minutes, so
+it can be followed from any machine with the store's key, without its node: `verity ci ls` lists the recent checks, running
+and ended, and `verity ci inspect RUN` shows a check's steps with their state, elapsed time, an ETA from each step's median
+over recent recorded checks, and its reds so far. What isn't recorded shows as unknown, never as passed.
+
 ## Landing
 
 PRs land through the merge queue (`research queue drive`): its flags are `drive.toml` and its admission rules are
