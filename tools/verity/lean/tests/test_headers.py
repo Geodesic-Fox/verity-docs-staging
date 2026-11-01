@@ -85,7 +85,8 @@ def test_a_tab_or_a_byte_order_mark_is_no_space():
 
 def test_a_header_cut_off_has_none():
     for src in ("/- never closed\nimport A\n", "import A\nimport", "import all", "module\nimport all\n",
-                "import import\n", "module\npublic import -- no name\n", "import /-- doc -/ A\n"):
+                "import import\n", "module\npublic import -- no name\n", "import /-- doc -/ A\n",
+                "module\nimport ModSys.\n", "import .A\n", "import A..B\n"):
         assert H.header(src) is None and H.imports(src) is None, src
 
 

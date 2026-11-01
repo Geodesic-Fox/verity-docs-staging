@@ -59,6 +59,7 @@ comment lines takes theirs'; any other conflict stays git's.
 from __future__ import annotations
 
 import argparse
+import functools
 import importlib.util
 import json
 import os
@@ -73,7 +74,6 @@ HERE = Path(__file__).resolve().parent
 _spec = importlib.util.spec_from_file_location("lean_audit_for_merge", HERE / "check.py")
 A = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(A)
-H = A.sibling("headers")
 
 #: the driver's name in `.gitattributes` and git's config
 NAME = "lean-audit"
@@ -465,8 +465,15 @@ def kept(o: set, a: set, b: set) -> set:
     return (a & b) | (a - o) | (b - o)
 
 
+@functools.cache
+def _headers():
+    """`headers.py`, loaded only to merge a `.lean` file: the record driver runs where `merge.py` and `check.py` are alone."""
+    return A.sibling("headers")
+
+
 def _import(line: str) -> bool:
     """Whether ``line`` is one import and nothing else, in any form a header takes (`headers.py`: `public import`...)."""
+    H = _headers()
     h = H.header(line)
     return h is not None and len(h.imports) == 1 and not h.module and not h.prelude and H.skip(line, h.end) == len(line)
 

@@ -409,17 +409,19 @@ def left_by(tree: Path) -> dict | None:
 
 
 #: the outputs a module's trace names that Lake writes beside it in `lib/lean`: its oleans (`o`: `.olean`, and in a `module`
-#: file `.olean.server` and `.olean.private`), `.ilean` (`i`), and in a `module` file `.ir` (`r`) and `.ir.sig` (`rs`)
+#: file `.olean.server` and `.olean.private`), `.ilean` (`i`), and in a `module` file `.ir` (`r`) and `.ir.sig` (`rs`). All
+#: but the `.ilean` are in the olean format, which starts `olean`.
 LIB_OUTPUTS = ("o", "i", "r", "rs")
 
 
 def damaged(lib: Path) -> list[Path]:
     """The traces under ``lib`` (a `.lake/build/lib/lean`) whose module an interrupted build or a restore left half-written:
-    an output the trace lists beside it that is missing (`LIB_OUTPUTS`), an olean without the olean header, an output
-    whose `.hash` is not the trace's or is older than the output, or a trace that is not JSON. Lake rebuilds a module whose
-    outputs are missing, but takes one whose trace matches and whose files exist as built, half-written or not, and reads an output's hash from its
-    `.hash` without hashing the output. Every Lake path writes the `.hash` after its output, but two leave an older one: a
-    build killed after `lean` wrote its outputs, and a restore from Lake's cache that unpacks a `.ltar` over the outputs.
+    an output the trace lists beside it that is missing (`LIB_OUTPUTS`), one in the olean format without its header, an
+    output whose `.hash` is not the trace's or is older than the output, or a trace that is not JSON. Lake rebuilds a module
+    whose outputs are missing, but takes one whose trace matches and whose files exist as built, half-written or not, and
+    reads an output's hash from its `.hash` without hashing the output. Every Lake path writes the `.hash` after its output,
+    but two leave an older one: a build killed after `lean` wrote its outputs, and a restore from Lake's cache that unpacks
+    a `.ltar` over the outputs.
     A module that imports one then records the old hash for the new bytes, and a later build on the other side of the
     change replays it beside a module built against the new ones (a clash such as `Proofs.Pouw`'s on
     `W1.Instr.exec.eq_10`). So each loses its trace and its `.hash` files (`forget`) for Lake to rebuild it."""
@@ -434,8 +436,8 @@ def damaged(lib: Path) -> list[Path]:
             for name in names:
                 digest, _, ext = name.partition(".")
                 f = base.with_name(f"{base.name}.{ext}")
-                if not f.is_file() or (ext.split(".")[0] == "olean" and f.open("rb").read(5) != b"olean"):
-                    raise ValueError(f"{f.name} missing or not an olean")
+                if not f.is_file() or (ext != "ilean" and f.open("rb").read(5) != b"olean"):
+                    raise ValueError(f"{f.name} missing or not in the olean format")
                 if (h := f.with_name(f"{f.name}.hash")).is_file():
                     if h.read_text().strip() != digest:
                         raise ValueError(f"{h.name} is not the trace's")
