@@ -496,7 +496,7 @@ def test_git_merges_two_branches_that_each_import_a_new_module_with_the_installe
         monkeypatch.setenv(k, v)
     repo = tmp_path / "repo"
     (repo / "tools" / "verity" / "lean").mkdir(parents=True)
-    for f in ("merge.py", "check.py"):
+    for f in ("merge.py", "check.py", "headers.py"):
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
     (repo / ".gitattributes").write_text(f"*.lean merge={M.LEAN}\n")
     g = repo / "G.lean"
