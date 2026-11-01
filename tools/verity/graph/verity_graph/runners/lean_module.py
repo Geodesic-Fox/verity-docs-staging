@@ -5,6 +5,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+#: the files of the Lean tool a task runs: inputs of every lean-module task
+TOOLS = tuple(f"tools/verity/lean/{f}" for f in ("Facts.lean", "Replay.lean", "sandbox.sh"))
+
 
 def run(task: dict, work: Path) -> dict:
     return {"status": "error", "detail": {"error": "the lean-module runner isn't written yet"}}

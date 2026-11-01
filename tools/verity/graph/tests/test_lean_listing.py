@@ -11,6 +11,7 @@ from conftest import toy_tree
 
 from verity_graph import ROOT, graph
 from verity_graph.families import lean_lock, lean_module
+from verity_graph.runners.lean_module import TOOLS
 
 LISTERS = {"lean-module": lean_module.tasks, "lean-lock": lean_lock.tasks}
 TOOLCHAIN = "leanprover/lean4:v4.34.0\n"
@@ -52,6 +53,7 @@ FILES = {
     "tools/verity/lean/tests/fixtures/ctl/Ctl.lean": "def c := 0\n",
     "tools/verity/lean/check.py": "",
     "tools/verity/check/common.py": "",
+    **{f: "" for f in TOOLS},
     f"{graph.RUNNERS}/lean_module.py": "",
     f"{graph.RUNNERS}/lean_lock.py": "",
 }
@@ -80,7 +82,8 @@ def test_modules_of_packages_with_a_parent_src_dir_read_their_imports_transitive
     b = ts["lean-module:Sec/Proofs/B.lean"]
     assert b["vars"] == {"module": "Proofs.B", "package": "proofs", "options": "{}"}
     assert ts["lean-module:Sec/Definitions/A.lean"]["vars"]["options"] == '{"autoImplicit":false}'
-    assert b["inputs"] == sorted(["Sec/Proofs/B.lean", "Sec/Proofs/lakefile.toml", *graph.runner_sources("lean-module")])
+    assert b["inputs"] == sorted(["Sec/Proofs/B.lean", "Sec/Proofs/lakefile.toml", *TOOLS,
+                                  *graph.runner_sources("lean-module")])
     assert b["reads"] == built("Sec/Definitions.lean", "Sec/Definitions/A.lean", "Sec/Proofs/C.lean", "Sec/Proofs/D.lean"), \
         "public, meta and all imports are read, each with what it imports; the toolchain's are the env's"
     assert b["outputs"] == [{"name": n, "path": f"out/{p}"} for n, p in (

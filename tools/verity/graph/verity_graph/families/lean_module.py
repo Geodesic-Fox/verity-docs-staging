@@ -5,11 +5,12 @@ reaches has none: its lock exempts it, or the lock check fails it as an orphan.
 
 A task's fields, which its runner reads: `vars` `module` (its name), `package` (its Lake package's name) and `options`
 (the package's `leanOptions`, as JSON), which Lake puts in a module's setup file; `inputs` its source (the id after
-`lean-module:`), its package's lakefile and every file the package's `[[input_file]]` and `[[input_dir]]` targets name (a
-module may `include_str` one); `outputs` its `olean` and `ilean` at `out/lean/<module path>`, its `axioms` summary at
-`out/axioms/<module path>.json` and, for a `module` file, the module system's parts `lean` writes beside its `olean`
-(`PARTS`); `reads` the `olean` of every module of the tree it imports, transitively, since `lean` opens each of them, and
-every part of each `module` file among them: Lake gives a legacy importer every part, and the replay reads the private one.
+`lean-module:`), its package's lakefile, every file the package's `[[input_file]]` and `[[input_dir]]` targets name (a
+module may `include_str` one) and the Lean tool's files the runner runs (`runners.lean_module.TOOLS`); `outputs` its
+`olean` and `ilean` at `out/lean/<module path>`, its `axioms` summary at `out/axioms/<module path>.json` and, for a
+`module` file, the module system's parts `lean` writes beside its `olean` (`PARTS`); `reads` the `olean` of every module
+of the tree it imports, transitively, since `lean` opens each of them, and every part of each `module` file among them:
+Lake gives a legacy importer every part, and the replay reads the private one.
 
 Packages, input files and lock roots are read by `tools/verity/lean/module_keys.py`, and import headers by
 `tools/verity/lean/headers.py`, as the Lean build cache reads them, so a task and the cache see one module the same way. An
@@ -184,6 +185,8 @@ def closures(direct: dict[str, list[str]]) -> dict[str, frozenset[str]]:
 
 
 def tasks(root: Path, files: list[str]) -> list[dict]:
+    from ..runners.lean_module import TOOLS  # not at the top: the runner imports this module
+
     pkgs, owner, direct, system = imports(root, files)
     closure = closures(direct)
     out = []
@@ -193,7 +196,7 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
         out.append({"id": task_id(f),
                     "vars": {"module": mod, "package": p.lake.name,
                              "options": json.dumps(p.options, sort_keys=True, separators=(",", ":"))},
-                    "inputs": sorted({f, p.lakefile, *p.inputs}),
+                    "inputs": sorted({f, p.lakefile, *p.inputs, *TOOLS}),
                     "reads": [r for g in sorted(closure[f]) for r in reads(g, system)],
                     "outputs": [{"name": n, "path": out_path(mod, n)}
                                 for n in (*(o[0] for o in OUTPUTS), *(PARTS if f in system else ()))]})
