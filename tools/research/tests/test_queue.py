@@ -584,6 +584,38 @@ def _gate_says(main: str, what: str, merged: bool = False) -> str:
             f"{where} runs it)")
 
 
+def test_a_landing_gate_left_in_its_directory_still_judges(tmp_path, monkeypatch):
+    """On drive's NFS TMPDIR the gate script just run is often left as a .nfsXXXX file, so removing its directory fails with
+    ENOTEMPTY; every tick crashed on that (1 Nov).  The gate's verdict stands and the directory is left for the sweep."""
+    import errno
+    import tempfile
+
+    from research.queue import run_gate
+
+    (tmp_path / "tmp").mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path / "tmp"))
+    _git(tmp_path, "init", "-q", "-b", "main")
+    for p, text in GATED.items():
+        (tmp_path / p).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / p).write_text(text)
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "gated")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "bad.txt").write_text("x\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "bad")
+    rmdir = os.rmdir
+
+    def nfs_rmdir(path, *a, **k):
+        if "queue-gate-" in str(path):
+            raise OSError(errno.ENOTEMPTY, "Directory not empty", str(path))
+        return rmdir(path, *a, **k)
+
+    monkeypatch.setattr(os, "rmdir", nfs_rmdir)
+    rc, out = run_gate(tmp_path, base, _git(tmp_path, "rev-parse", "HEAD"), "gates/g.py")
+    assert rc == 1 and json.loads(out)["failures"][0]["why"] == "touches bad.txt", out
+
+
 def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_the_members_a_sync_merges_are_judged(world, monkeypatch):
     """A landing gate judges a PR as the sync merges it onto `next`, never at landing, where ejecting a
     member low on `next` rebuilds it and cancels the Lean check running there.  A member the sync keeps isn't judged again; one
