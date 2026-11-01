@@ -112,10 +112,11 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
         raise GraphError(f"binding files outside what circuit-check's suite declares it reads: {', '.join(missing[:5])} (add "
                          f"them to {CHECKER}/pyproject.toml's [tool.verity.tests] inputs)")
     reads = [{"task": CATALOG, "output": RECORDS["name"]}]
-    shared = [*ins, f"{RUNNERS}/circuit_binding.py"]          # the catalog's and coverage's runners use the binding runner's
+    shared = [*ins, f"{RUNNERS}/circuit_binding.py"]          # the catalog's and coverage's runners import the binding runner
     return [{"id": CATALOG, "kind": "circuit-catalog", "about": "build every circuit-check catalog binding's record",
              "inputs": shared, "outputs": [RECORDS], "resources": {"cores": 16, "mem_gb": 64, "disk_gb": 8}},
             {"id": "circuit-coverage:catalog", "kind": "circuit-coverage", "inputs": shared, "reads": reads,
+             "resources": {"cores": 1, "mem_gb": 16, "disk_gb": 2},
              "about": "the circuit-check catalog's bindings are the circuit-binding tasks'",
              "vars": {"bindings": json.dumps(sorted(found), separators=(",", ":")), "records": RECORDS["path"]}},
             *({"id": f"circuit-binding:{f}:{e}", "inputs": ins, "reads": reads,
