@@ -2098,6 +2098,10 @@
    "owner": "@proofs",
    "digest": "cf654f484182486a9c4bded7e33bb67077ec7112c33fd7f3bff30edeb0bd1492"
   },
+  "Verity.Commits": {
+   "owner": "@proofs",
+   "digest": "d52dead901517c8f0c7ccb600d9d81469ff650189855e2b28992f76bf6602215"
+  },
   "Verity.Committed.Honest": {
    "owner": "@lean",
    "digest": "c3f32aeb6eaac8b444a4289e3b60c65616ec8e84eb541e1b0aaa7272e9b3c3f1"
@@ -2121,10 +2125,6 @@
   "Verity.Partition.IsCK": {
    "owner": "@lean",
    "digest": "a78011b108a9369070c518c56ec7264ee084cb9aab661d2ab5ba77a6b4c26cd2"
-  },
-  "Verity.Registered": {
-   "owner": "@proofs",
-   "digest": "3778760cbac2e147aa72e75c7d7a8ea0ffd2cf16a061bc3fefe48c076a8f75d0"
   },
   "Verity.Sound": {
    "owner": "@proofs",
@@ -12001,6 +12001,12 @@
    "assumptions": [],
    "type_hash": "d29489247f5da3d50fd1a297d4dedec5e94940fa1ff83ecab62fd5b8fae592df"
   },
+  "Verity.SecurityProofs.CommittedMeets": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.CommittedMeets : Verity.Guarantees.CommittedMeets"],
+   "assumptions": [],
+   "type_hash": "23ce138a5a4b4f8bdc80e54091214851203a150bac2e97dd721d86e5f82557c4"
+  },
   "Verity.SecurityProofs.Compose": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.Compose : Verity.Guarantees.Compose"],
@@ -12180,12 +12186,6 @@
    "signature": ["Verity.SecurityProofs.RefineWrong : Verity.Guarantees.RefineWrong"],
    "assumptions": [],
    "type_hash": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6"
-  },
-  "Verity.SecurityProofs.RegisteredMeets": {
-   "owner": "@proofs",
-   "signature": ["Verity.SecurityProofs.RegisteredMeets : Verity.Guarantees.RegisteredMeets"],
-   "assumptions": [],
-   "type_hash": "20861215c23df66e4b3c08f6ba2721de029e7b1e815b169414feebe4d281342e"
   },
   "Verity.SecurityProofs.SampleAfterRecorded": {
    "owner": "@soundness",
@@ -13302,7 +13302,6 @@
    "Verity.SecurityProofs.SoundBind": "frozen (no-function): A composition rule for sound games (Verity.Game), over every game, acceptance, claim and error, from which a protocol states its guarantee from its parts' guarantees; it is not about a Lean function's acceptance.",
    "Verity.SecurityProofs.PrivateFitsOfLocal": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for RegisteredMeets) registration and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.PrivateOutBitsLe": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for RegisteredMeets) registration and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
-   "Verity.SecurityProofs.RegisteredMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for RegisteredMeets) registration and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
    "Nci.Cover.SecurityProofs.FanOutIntensity": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named UpdateHardness and ColumnsIncompressible (Security/Definitions/Nci/Assumptions/Cover.lean, Security/Definitions/Nci/Assumptions/CoverFanOut.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.FanOutCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named UpdateHardness and ColumnsIncompressible (Security/Definitions/Nci/Assumptions/Cover.lean, Security/Definitions/Nci/Assumptions/CoverFanOut.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.FanOutReadIntensity": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named ValueReadHardness and ColumnsIncompressible (Security/Definitions/Nci/Assumptions/Cover.lean, Security/Definitions/Nci/Assumptions/CoverFanOut.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
@@ -13494,7 +13493,8 @@
    "Pous.SecurityProofs.ObligationWide320_honest": "frozen (no-function): ObligationWide320's honest witness, arithmetic: P2's per-round floor p = 0.043 and bad-event mass 2^-137 meet its RoundsBound premise at 320 rounds and 2^-20, and at the registered point's 2^19 blocks its WideBlockCount, TagsInjective and StateWithin premises hold; it is about no function of the PoUS code and rests on no named assumption.",
    "Pous.SecurityProofs.ObligationWide320_nontrivial": "frozen (no-function): ObligationWide320's nontrivial witness: at 2^19 blocks and 320 reads the sure event, which a verifier that accepts everything passes, has probability 1, above 2^-20; it is about no function of the PoUS code and rests on no named assumption.",
    "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance."
+   "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Verity.SecurityProofs.CommittedMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for CommittedMeets) commitment and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -16045,9 +16045,6 @@
    "Verity.SecurityProofs.RefineWrong": {
     "∀ (g : Fin C.N), SetLike.instMembership.mem Pc.committed g → Eq (Y g) (X g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Verity.SecurityProofs.RegisteredMeets": {
-    "Eq (Verity.Advice.Registration.root H F A r) root": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "Verity.SecurityProofs.ServingBlockSum": {
     "Finset.instPartialOrder.le V C.computed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (u : Fin B), SetLike.instMembership.mem S u → Real.instLE.le ((Finset.instInter.inter V (P.gates u)).sum fun v => ω v) (qS u)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -16081,6 +16078,9 @@
    },
    "Flock.SecurityProofs.IntegrityHorizonBlocks": {
     "∀ (t : Nat), instLTNat.lt t S.T → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a per-step bound that is no plain range, on `main` before the inline rule reached this branch, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Verity.SecurityProofs.CommittedMeets": {
+    "Eq (Verity.Advice.Committed.root H F A r) root": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -21518,7 +21518,7 @@
    ]
   },
   "Definitions.Claims.Sampling": {
-   "digest": "127c4c76bcb3bf1d51439b2f0d227ada915710a7b437d6a64927c4ee7373862c",
+   "digest": "252a9e37765bfa79b757801f71422bf2a9740c2c2921f22af45d9ed99a194f34",
    "definitions": {
     "Claims.Sampling.AuditStatement": "14dca2945e169db647822bc5ada687c2bc9d3c764e14fe1a86a63ed6862061f8",
     "Claims.Sampling.AuditStatement.design": "91e2b9592fce2faa8cd2c622f9b00f2a3a45f4a39d15b8793549795948ce108d",
@@ -21612,6 +21612,8 @@
     "Claims.Sampling.Partition.blocks": "c3f8849c01316fe1aaf8dce50b3b62c8d87fb01902d6e62d71a629aa9981dedc",
     "Claims.Sampling.Partition.classes": "29fd716148a7711eade08bfcedaa3e27e73db1897070ece8d8cbe987092968f6",
     "Claims.Sampling.Partition.gates": "a7aa78b4c9df86161d96e5171783aa597b46e54801f533984fa20cccf4193290",
+    "Claims.Sampling.Partition.rus": "10777adc5994a81b09c8af3f294707525aaddf608893de5be95fa459559c510d",
+    "Claims.Sampling.Partition.sizes": "bc0005b8a3db8c1603fb0a051760b1bb2c422a599d96103777481f8154623c2e",
     "Claims.Sampling.PrivateCircuit": "9813f5b18d83cd45f9d1ae8139ea289b797dd039267411c9256e418fc22578d5",
     "Claims.Sampling.PrivateCircuit.Fits": "24112cd715fb564fa24e1e75189fddbcb14df7f2ba073735ddb87bbf657c5241",
     "Claims.Sampling.PrivateCircuit.args": "8be38f16f5683514d112fc2ca764c6f7f4c32fd5f6b506d8798764044a8da29c",
@@ -21636,8 +21638,17 @@
     "Claims.Sampling.Query": "8b0f68d5f4f1e79282adb0797878c15261606d156c382f52a1a52aacb8e609ba",
     "Claims.Sampling.R": "3f9bdbc4144449b2bf68bce494c6dc6145f28a6832b15aba575b7e0741951eae",
     "Claims.Sampling.RCount": "c0f9b80ba26ed25d7b7f50e14e3d53f980129fe3868836fe84ac08db68a7f33d",
+    "Claims.Sampling.RU": "266cb8fa7028a98566778b90b4dc5f1c7162184bca8d2db14935e6c8ca3471a4",
+    "Claims.Sampling.RU.gates": "575b6a2c969be554899dd1f35632546ea6c49f84b30f92e7ef9e24489c0a6e19",
+    "Claims.Sampling.RU.ref": "0d02d00d154262a94d2af0b59090a83af2ce901ae2f2fa409559843c7e6276d4",
     "Claims.Sampling.RelS": "33cd8ec6255a0a63bb4a6b0176309bf1929fa939087aec157093b63b954854ab",
     "Claims.Sampling.Rhon": "3cb4e93f0cf7943b424a7be761d9ead3a164dd325bc59d460cf20629ca8f41ba",
+    "Claims.Sampling.Rule": "119a7e1a4042d032cbd72e9f835beec48a384651205f0f9f4945b96358e9d3ed",
+    "Claims.Sampling.Rule.Pa": "6aef11846c3e06e45b20687467cfbf6585ce92a02dcba1e2aa39cca7963ec0b5",
+    "Claims.Sampling.Rule.Pa._sparseCasesOn_1": "bde3b99871e72ebf871a41005112686b2e8836e0c1d1aeb54b9a8b91cddffc30",
+    "Claims.Sampling.Rule.WellFormed": "c06fd4439009cda1d3860c024a4b04201705d7bd90976cafb0d4f06f11c43c86",
+    "Claims.Sampling.Rule.check": "aa06bd5138c0b70b37184bf7387876ba40c0cf3546d7ba002283d67b7a45e691",
+    "Claims.Sampling.Rule.first": "b1fdf6cd63af06591942938dd58f331784a85f2774eebe1cc7532fafc60351ea",
     "Claims.Sampling.Scope": "c86322865f5a384db4b92a4249ffaf091d6f819532151b7cda01648c6ca2847f",
     "Claims.Sampling.ScopeMatches": "fdfa3c09024fb1004acaf69395fedd3d51621c94a7c3347300b495284753e070",
     "Claims.Sampling.SimLeak": "09d8f97491abb50db7ae3b76512b6db4be7f02e3145e8c344d23d39f1c87b6ce",
@@ -21679,8 +21690,10 @@
     "Claims.Sampling.leafLayer": "b9c7bfa5d2605f500bad7c2ccbe228688fdfdeac3531aa6433f79c05e004b278",
     "Claims.Sampling.missAt": "4cd3005129b864d69f120637e09625f1dce9a7cc6ecfc21201a36fe81e4ae2fe",
     "Claims.Sampling.nPU": "b8b194b7475994808dea70fc2ff62d8050051a565b561b5f5570648206ab83ac",
+    "Claims.Sampling.nRU": "0f9c3924add8bceaa2ca362878fa692e138b206349f602a0ee772bd4ade4ae82",
     "Claims.Sampling.ofOC": "d438f3f55a130d155018272891d7e2500c147459e7bf774352897170b5d40edd",
     "Claims.Sampling.ownLog": "d831bb479cd3a7a58bb73ff8f84e52e9e02c57779891142a3152c93a80ce9e3a",
+    "Claims.Sampling.ruSizes": "9c1723293b38381638f59bf6fc5d73f5bf845228e6e4c51669ab6330b2a7c745",
     "Claims.Sampling.slack": "46c756ddc847c82296f6b0ca19b922850004679965f0b7abc0329bea687d90bd",
     "Claims.Sampling.strataPa": "4066df1a938977271f39b9ef03423176dba7f7a74bbb7dc0c3d70a84f894e88d",
     "Claims.Sampling.strataSizes": "3e65e4ae902fc50503e561c9df3e8d1def7433f99dd2f385d8fe65e581ba6f67",
@@ -21973,8 +21986,14 @@
    ]
   },
   "Definitions.Core.Advice": {
-   "digest": "a2e25b694bc132cfe5dbc53e1bdf0f26f4f0758e80f03350905654d702e864f1",
+   "digest": "aa698e6169678c10b2555c8f503011f5b5b4aef5dc613084c59f15894d7d91b9",
    "definitions": {
+    "Verity.Advice.Committed": "4e174ceee455a13262d0e97f5cdd8d21d010e413fb82d547f441099dc2c79038",
+    "Verity.Advice.Committed.P": "a9180440cab194886f1d705c7d89265739fb5b47faac5c7e8a1eb19117ba4ca9",
+    "Verity.Advice.Committed.hashInputs": "a60bfe54cfe03cdc800351344e77691fb91bd19337aecd9d0b8d7293d289d462",
+    "Verity.Advice.Committed.n": "45fb15c70eb75c1ccfe54b90ee2d4bffff71c8571492d59cb03386b107ba3fb4",
+    "Verity.Advice.Committed.root": "2c3008ad0949d13fc302ff60ce70c8a908f5f80f50dc70429a6cac3f810f7e9a",
+    "Verity.Advice.Committed.salt": "599adc6bff46dde5fe938e1bd79ac4457f8b694218090563ef00ca473c4d5ac0",
     "Verity.Advice.Framing": "13cd31ed31eeff9c40606fc9030a26638b54a47bb1c7ce8c2bf1a249a352f5fd",
     "Verity.Advice.Framing.Separated": "89bf09e0b9e2b02bc60528ddcc4bce060d8726e861ed61d07d2a4774a37bde8d",
     "Verity.Advice.Framing.leaf": "bf4365eb0e9dbf52c35de90765c928758c019a6d7f981c8409f378a06c3198f2",
@@ -21984,12 +22003,6 @@
     "Verity.Advice.Framing.pad": "4a91f4240526fbed292361126d273210dbbb49e5e4c76cbccf84cfd9a11164c6",
     "Verity.Advice.Framing.rowPrefix": "864db8071ba5cc717ce5c40c3ae66fad4490070ae4fc8c2a4dd136803ba9afeb",
     "Verity.Advice.Framing.saltPrefix": "413346e557ac896442347ae2c8f6b6116ed3dded791d41bb110b072cbbfa1c8e",
-    "Verity.Advice.Registration": "63501ede3617bae83f18c220eb11c44c4ab4d272fb5c4c4a21dc06d46b66b4b7",
-    "Verity.Advice.Registration.P": "e729bbf0d07ee52acfc01dc2503d7375e7847b8331d4afc52eb40c71af96370b",
-    "Verity.Advice.Registration.hashInputs": "42e44633ac6b63bfccdef5c0bf2dcd4bf43cbe74416f5155368a96311b48c327",
-    "Verity.Advice.Registration.n": "69c036aab223d7841c5f5c9865359bb771ce2668dbdd60208861e697b5f0077b",
-    "Verity.Advice.Registration.root": "d8a86671062d5a741727caaaf5629c6a33119b939eec372f0bb2e1c5529f9f37",
-    "Verity.Advice.Registration.salt": "b8b725178d7af75eade81093167e480f246518003c27b955ece0054d1c9e60a1",
     "Verity.Advice.Rows": "d6b3071c8a0b434e3004cfa522927969c825ad175302573f12cf2ee9389f567e",
     "Verity.Advice.Rows.Decodes": "2e9228b3a4629702b902a2f18b295af7675ae8c2269eb61a4afd2e591bb697ac",
     "Verity.Advice.Rows.decode": "f3e3696fe15ada28c5e1ec8d4e8af9b51664b0717ad99a20f5ce60b080141a51",
@@ -22005,7 +22018,7 @@
     "Verity.Advice.rowInput": "e4f45cd2cb576a4445a3bec2df74d16aa4963241cc75498c9f78c3e9b350b151",
     "Verity.Advice.saltInput": "a569d0eb1b9698594b64c8adfae3f195e0fbdd0235fb79f091a4a689ec46a75f"
    },
-   "guarantees": ["Verity.SecurityProofs.RegisteredMeets"]
+   "guarantees": ["Verity.SecurityProofs.CommittedMeets"]
   },
   "Definitions.Core.Assumptions": {
    "digest": "a6b1940a89d9e1e3257e570c806ade30787f6cc303b568efa4fd90125fead4dd",
@@ -22458,6 +22471,7 @@
     "Verity.SecurityProofs.AndSizeLe",
     "Verity.SecurityProofs.BlockDescription",
     "Verity.SecurityProofs.CKSize",
+    "Verity.SecurityProofs.CommittedMeets",
     "Verity.SecurityProofs.Compose",
     "Verity.SecurityProofs.ComposeCone",
     "Verity.SecurityProofs.ContainsImplements",
@@ -22475,7 +22489,6 @@
     "Verity.SecurityProofs.PrivateFitsOfLocal",
     "Verity.SecurityProofs.PrivateOutBitsLe",
     "Verity.SecurityProofs.RefineWrong",
-    "Verity.SecurityProofs.RegisteredMeets",
     "Verity.SecurityProofs.ServingBlockSum",
     "Verity.SecurityProofs.ToCircuitAnd"
    ]
@@ -22603,7 +22616,7 @@
     "Hash.SecurityProofs.EmbeddingReadBinding",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding",
-    "Verity.SecurityProofs.RegisteredMeets"
+    "Verity.SecurityProofs.CommittedMeets"
    ]
   },
   "Definitions.Core.Draw": {
@@ -23043,16 +23056,16 @@
    "guarantees": ["Verity.SecurityProofs.NaiveBeatsStrassenServed", "Verity.SecurityProofs.NaiveBeatsStrassenServedSize"]
   },
   "Definitions.Core.Guarantees.PrivatePartition": {
-   "digest": "e0397d4508252f58fa2184b2f671c0c48a1a5971a4ca779d4a56100919783045",
+   "digest": "3277afc6bc0fce86e6322a1c6cd51cc282ea4cc511e7f7fd95780c056ed0d53d",
    "definitions": {
+    "Verity.Guarantees.CommittedMeets": "5688ec09dba8b97215da2635651326c72224091b6985904ca44e5c1b328e7d92",
     "Verity.Guarantees.PrivateFitsOfLocal": "bda50bc4624e8b69a82ebb9ea924780d4296e5d46627155c12176a3b424e4610",
-    "Verity.Guarantees.PrivateOutBitsLe": "2bc4f92c0528b91c666d92d814289a5e6ee11ed256b9aefb902aa3f9ed17ef94",
-    "Verity.Guarantees.RegisteredMeets": "eafb3516996dea1b25e5f208275e3c41de88bbc736d55ac8f560fb18286b6f7e"
+    "Verity.Guarantees.PrivateOutBitsLe": "2bc4f92c0528b91c666d92d814289a5e6ee11ed256b9aefb902aa3f9ed17ef94"
    },
    "guarantees": [
+    "Verity.SecurityProofs.CommittedMeets",
     "Verity.SecurityProofs.PrivateFitsOfLocal",
-    "Verity.SecurityProofs.PrivateOutBitsLe",
-    "Verity.SecurityProofs.RegisteredMeets"
+    "Verity.SecurityProofs.PrivateOutBitsLe"
    ]
   },
   "Definitions.Core.Guarantees.TC": {
@@ -23225,11 +23238,9 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
     "Flock.SecurityProofs.EndToEndRegisteredFlat",
-    "Flock.SecurityProofs.IntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlockCarried",
     "Flock.SecurityProofs.IntegrityBlocks",
     "Flock.SecurityProofs.IntegrityHorizon",
-    "Flock.SecurityProofs.IntegrityHorizonBlocks",
     "Flock.SecurityProofs.IntegrityHorizonCarried",
     "Flock.SecurityProofs.IntegrityPeriod",
     "Flock.SecurityProofs.IntegrityPeriodLog",
@@ -23653,6 +23664,7 @@
     "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
     "Verity.SecurityProofs.BlockDescription",
     "Verity.SecurityProofs.CKSize",
+    "Verity.SecurityProofs.CommittedMeets",
     "Verity.SecurityProofs.Compose",
     "Verity.SecurityProofs.ComposeCone",
     "Verity.SecurityProofs.CorrectOfOpening",
@@ -23665,7 +23677,6 @@
     "Verity.SecurityProofs.PrivateFitsOfLocal",
     "Verity.SecurityProofs.PrivateOutBitsLe",
     "Verity.SecurityProofs.RefineWrong",
-    "Verity.SecurityProofs.RegisteredMeets",
     "Verity.SecurityProofs.ServingBlockSum"
    ]
   },
@@ -23690,11 +23701,12 @@
    ]
   },
   "Definitions.Core.PrivatePartition": {
-   "digest": "2b380d0e87f5ec31a826f900b8670091d3f4889009414316e9234a7cda384647",
+   "digest": "bbc6c453f4dc2624a706226e138795cbf540a9ec7cf705ee1b6767eeda514b25",
    "definitions": {
     "Verity.Calls": "a53969f84e6274782fa92e782aef23dbc0c600275220f0999517694aa386abb0",
     "Verity.Calls.returned": "b6ea8f95f9d58a8d75d5b134fe0ff42315b1c6baba77a46b69aa87e1aa1ccd19",
     "Verity.Calls.toPartition": "24b6f8215c4f2cf219475ac1774724a4bc7689434ed9f18f591ca60bb51cf9a6",
+    "Verity.Commits": "d52dead901517c8f0c7ccb600d9d81469ff650189855e2b28992f76bf6602215",
     "Verity.Partition.Fits": "456fe0bfb32a76c54987890b6b913fb75e37419dd3cbaf4607c4903ee32ef8c9",
     "Verity.Partition.FitsLocally": "8bc2d5170ca9e1848fc8e9cfa283d048b98ed61ec44e401861ed89b9bb01bb19",
     "Verity.Partition.Meets": "d9947b317895c4fd0697f63fc544a9946914ebfadaf54e4702c8e59cca0b4a24",
@@ -23706,13 +23718,12 @@
     "Verity.Predicates.X": "929c6b8b8ab8dcee830c4b6aaef718f1a813afcf4687d60f71974d39785c1c29",
     "Verity.Predicates.maxGates": "81e5b1266951a4416a67877da81ad55ee8804135a6a139a2856df7af409dcdfd",
     "Verity.Predicates.maxInBits": "6b96c844ba4735fc268a338eaa79ae1b23e27d65a0e8176a9d702505149d3d8d",
-    "Verity.Predicates.units": "8bde5c6c212a94a5b83d49d43519fd9bdeb3b7758ee4bc2177407ddc4aa47817",
-    "Verity.Registered": "3778760cbac2e147aa72e75c7d7a8ea0ffd2cf16a061bc3fefe48c076a8f75d0"
+    "Verity.Predicates.units": "8bde5c6c212a94a5b83d49d43519fd9bdeb3b7758ee4bc2177407ddc4aa47817"
    },
    "guarantees": [
+    "Verity.SecurityProofs.CommittedMeets",
     "Verity.SecurityProofs.PrivateFitsOfLocal",
-    "Verity.SecurityProofs.PrivateOutBitsLe",
-    "Verity.SecurityProofs.RegisteredMeets"
+    "Verity.SecurityProofs.PrivateOutBitsLe"
    ]
   },
   "Definitions.Core.Scalar": {
@@ -37428,11 +37439,9 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
     "Flock.SecurityProofs.EndToEndRegisteredFlat",
     "Flock.SecurityProofs.EndToEnd_refSetup",
-    "Flock.SecurityProofs.IntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlockCarried",
     "Flock.SecurityProofs.IntegrityBlocks",
     "Flock.SecurityProofs.IntegrityHorizon",
-    "Flock.SecurityProofs.IntegrityHorizonBlocks",
     "Flock.SecurityProofs.IntegrityHorizonCarried",
     "Flock.SecurityProofs.IntegrityPeriod",
     "Flock.SecurityProofs.IntegrityPeriodLog",
@@ -58572,6 +58581,8 @@
    "guarantees": [
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.IntegrityBlock",
+    "Flock.SecurityProofs.IntegrityHorizonBlocks",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -58611,6 +58622,8 @@
    "guarantees": [
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
+    "Flock.SecurityProofs.IntegrityBlock",
+    "Flock.SecurityProofs.IntegrityHorizonBlocks",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -63225,11 +63238,9 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
     "Flock.SecurityProofs.EndToEndRegisteredFlat",
-    "Flock.SecurityProofs.IntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlockCarried",
     "Flock.SecurityProofs.IntegrityBlocks",
     "Flock.SecurityProofs.IntegrityHorizon",
-    "Flock.SecurityProofs.IntegrityHorizonBlocks",
     "Flock.SecurityProofs.IntegrityHorizonCarried",
     "Flock.SecurityProofs.IntegrityPeriod",
     "Flock.SecurityProofs.IntegrityPeriodLog",
@@ -63290,11 +63301,9 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
     "Flock.SecurityProofs.EndToEndRegisteredFlat",
-    "Flock.SecurityProofs.IntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlockCarried",
     "Flock.SecurityProofs.IntegrityBlocks",
     "Flock.SecurityProofs.IntegrityHorizon",
-    "Flock.SecurityProofs.IntegrityHorizonBlocks",
     "Flock.SecurityProofs.IntegrityHorizonCarried",
     "Flock.SecurityProofs.IntegrityPeriod",
     "Flock.SecurityProofs.IntegrityPeriodLog",
@@ -63354,11 +63363,9 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
     "Flock.SecurityProofs.EndToEndRegisteredFlat",
-    "Flock.SecurityProofs.IntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlockCarried",
     "Flock.SecurityProofs.IntegrityBlocks",
     "Flock.SecurityProofs.IntegrityHorizon",
-    "Flock.SecurityProofs.IntegrityHorizonBlocks",
     "Flock.SecurityProofs.IntegrityHorizonCarried",
     "Flock.SecurityProofs.IntegrityPeriod",
     "Flock.SecurityProofs.IntegrityPeriodLog",
@@ -63411,11 +63418,9 @@
     "Flock.SecurityProofs.EndToEndRegisteredDrawn",
     "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat",
     "Flock.SecurityProofs.EndToEndRegisteredFlat",
-    "Flock.SecurityProofs.IntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlockCarried",
     "Flock.SecurityProofs.IntegrityBlocks",
     "Flock.SecurityProofs.IntegrityHorizon",
-    "Flock.SecurityProofs.IntegrityHorizonBlocks",
     "Flock.SecurityProofs.IntegrityHorizonCarried",
     "Flock.SecurityProofs.IntegrityPeriod",
     "Flock.SecurityProofs.IntegrityPeriodLog",
