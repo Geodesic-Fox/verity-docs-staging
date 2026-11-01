@@ -3563,7 +3563,8 @@ def _restated(d: dict) -> None:
 
 #: the head's lock -> what its merge onto `next` drops that `next` needs; None: the head leaves the lock alone
 LOCK_DROPS = {
-    "a dropped premise": (lambda d: d["shape"]["inline"]["G"].pop("p1"), ["pkg/lean-audit.json: shape.inline[G]: p1"]),
+    # the record driver keeps a premise one side dropped while the merged record lists its guarantee (#6753)
+    "a dropped premise": (lambda d: d["shape"]["inline"]["G"].pop("p1"), []),
     "a dropped frozen key": (lambda d: d["shape"]["frozen"].pop("F"), ["pkg/lean-audit.json: shape.frozen[F]"]),
     "a renamed guarantee": (_renamed, []),
     "a removed guarantee": (_removed, []),
