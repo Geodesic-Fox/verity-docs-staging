@@ -9,7 +9,7 @@ import os
 import signal
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[4]
 spec = importlib.util.spec_from_file_location("check_lean_slot", ROOT / "tools" / "verity" / "check" / "lean_slot.py")
 LS = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(LS)
-NOW = datetime(2026, 10, 3, 17, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 3, 17, 0, tzinfo=UTC)
 
 
 class Exec(Exception):
@@ -78,7 +78,7 @@ def test_n_requests_take_the_n_slots_and_the_next_waits_until_one_frees(slots):
 
 
 def test_a_waiter_names_each_holder_and_repeats_the_list_every_few_minutes(slots, monkeypatch):
-    """The holders' pid, run, who and since when, so a waiting audit's log says whom it waits behind (the lander, 3 Oct)."""
+    """The holders' pid, run, who and since when, so a waiting audit's log says whom it waits behind."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-me")
     me = os.getpid()
     held = [_hold(slots / f"lean-audit-{i}.lock", {"pid": me, "run": f"r-{i}", "tree": "/src/740daff33", "by": by,

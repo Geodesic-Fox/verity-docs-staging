@@ -10,7 +10,8 @@ the merge gate (`gate = false`: circuit-check, ratchet-gate), which run after la
     ... --deferred STEP,...                                 only those ci.toml jobs and what they need, after the preflight: the
                                                             post-landing run drive launches on `checked`'s tip (`train.sh
                                                             --deferred`), recorded as `DEFERRED_KIND`, which no gate takes;
-                                                            with --shard K/N, only those of shard K's parts (drive's
+                                                            with --shard K/N, only those of shard K's parts, the last
+                                                            shard's with those no shard holds (ratchet-gate) (drive's
                                                             `after_landing_shards`: one run per shard, at once)
     ... --no-regenerate                                     lean-audit fails on a lock record difference rather than passing on
                                                             a regenerated record (drive's after-landing run)
@@ -65,6 +66,12 @@ the merge gate (`gate = false`: circuit-check, ratchet-gate), which run after la
     uv run python tools/verity/check/check.py --record --shard K/N --on M
                                                             shard K of ci.toml's plan with N shards, on machine M (each shard
                                                             on a pod of the lander's choosing): an Attempt no gate takes alone
+    uv run python tools/verity/check/check.py --shard auto:K/N --shard-plan-file PLAN
+                                                            shard K of the auto plan PLAN (`shards.py`, `--shard-plan --out`)
+    uv run python tools/verity/check/check.py --shard-plan [--max-shards M] [--n N] [--deferred STEP,...] [--costs FILE]
+               [--no-gather] [--json] [--out FILE]          the auto plan of this tree, run nothing: its tasks' costs from the
+                                                            newest recorded checks (none with --no-gather) and this machine's
+                                                            caches, or FILE's {part: seconds} over them
     uv run python tools/verity/check/check.py --record --combine RUN...
                                                             the shards RUN..., one per K, recorded as one check of this commit
                                                             when they are together a passing one (`research merge` reads them)
@@ -86,6 +93,10 @@ When circuit-check is on the gate and its parts ran in more than one shard, the 
 (`circuit_join`: each shard's `CC_SHARDS` from its Attempt's run files, through `circuit-check --combine`), and fails unless
 that gives the verdict the unsharded `--all` gives: a by-calls root whose callee another shard checked, and a known failure
 that no longer fails, are judged only there.
+An auto plan (`--shard auto:K/N`, `shards.py`) has finer parts: each suite of pytest and lean-suites (`pytest:SUITE`,
+`lean-suites:SUITE`) is a part of its own, packed by measured cost; the plan travels with each shard as its run's input
+(`AUTO_PLAN`; unrecorded, `--shard-plan-file PLAN`), which refuses one whose parts aren't its tree's, and its result names the plan's digest, floor and predicted wall time
+(`shard.plan`), so a combine joins only shards of one plan.
 
 First the preflight, seconds in all: whether `uv.lock` is current (`uv lock --check`), the repository's wall-clock lint and its
 tree's own tests (`LINTS`: markdown caps, report-genre names, secret-like literals, blob and data budgets). The groups start only
@@ -225,6 +236,7 @@ import threading
 import time
 import weakref
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -279,6 +291,8 @@ COMMON = _load("common")
 SPANS = _load("spans")
 #: the test runner (`suites.py`), for where the steps' Python imports this tree's packages from
 SUITES = _load("suites")
+#: the shard planner (`shards.py`): auto plans
+SHARDS = _load("shards")
 cache_dir = COMMON.cache_dir
 cores = COMMON.cores
 _sha256 = COMMON.sha256
@@ -316,6 +330,8 @@ LEAN_DEPS_URLS_ENV = "CHECK_LEAN_DEPS_URLS"
 SHARD_PARTS = "check-shard-parts.json"
 #: the commit a `--record --on` check's --base REF names, among its inputs: ratchet-gate judges the merges above it
 BASE_FILE = "check-base.txt"
+#: an auto shard's plan (`shards.py`), among its inputs (unrecorded: `--shard-plan-file`)
+AUTO_PLAN = "check-shard-plan.json"
 #: what a `--record --on` check runs under on the machine: a free check slot's lock and cores (slot.py), from the shipped tree
 SLOT_WRAP = ["python3", "tools/verity/check/slot.py", "--"]
 #: the least slot memory a train check that runs pytest or circuit-check takes (slot.py's MIN_MEM_ENV): the train slots' mem=. In a
@@ -526,8 +542,8 @@ def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False
 
 #: the checks `--on auto` or `--on M1,M2` placed from this launcher and hasn't yet seen in their machine's check line, by commit:
 #: until one shows there (or PLACED_S passes: train.sh's wait for a launch), it counts as a priority waiter on its machine, so
-#: checks placed at once go to different machines (23 Oct 13:04Z: drive's four parallel launches all read cpu-1's one free
-#: slot as theirs, and three queued there for an hour while cpu-4's stood free)
+#: checks placed at once go to different machines (without it, parallel launches all read one machine's one free slot as
+#: theirs, and queued there while another machine's slot stood free)
 PLACED = Path(tempfile.gettempdir()) / "verity-check-placed.json"
 PLACED_S = 1800
 
@@ -769,8 +785,8 @@ def memory_gb(root: Path = Path("/")) -> int:
     """The memory this process may use: the least of MemAvailable and what each cgroup limit over it leaves, v2 or v1 (a pod's
 /proc/meminfo is the host's; on a VM the limits are on its own cgroup's ancestors, such as a run's session scope). A v2
 cgroup's page cache (active_file and inactive_file in its memory.stat) is in its memory.current, but the kernel reclaims it at
-the limit, so it counts as left, as in slot.py's `memory_gb`: 27 Oct 00:48Z, vy-nebius-cpu-1's user slice held 336 GB of
-cache in its 691 of 700 GB, and main's after-landing lean-agreement refused to run with "0 GB"."""
+the limit, so it counts as left, as in slot.py's `memory_gb`: a user slice can hold hundreds of GB of cache near its limit,
+and counted as used it leaves a step refusing to run with "0 GB"."""
     def read(p: Path) -> str | None:
         try:
             return p.read_text().strip()
@@ -800,7 +816,6 @@ cache in its 691 of 700 GB, and main's after-landing lean-agreement refused to r
 
 #: the share of this process's memory the agreement's verifier processes may count on: lean-suites (and, unsharded, the
 #: suites and circuit-check) run beside it, and on a 128 GB pod the whole budget for the agreement OOM-killed 36 of them
-#: (tip 38's shard 2/3, 6 Oct)
 AGREEMENT_MEMORY_SHARE = 2
 
 
@@ -1208,8 +1223,8 @@ def verdicts_in(pack: Path, run_dir: Path | None, only: str | None = None) -> di
 AFTER_LEAN = SUITES.AFTER_LEAN
 
 
-#: what pytest and the Lean steps hold beside circuit-check in one run, in GiB: in r20261012-155204-6475, pytest and lean-audit
-#: held 160 to 350 between them, and circuit-check, given the slot's whole mem=, took the run's scope to its cap (an OOM kill)
+#: what pytest and the Lean steps hold beside circuit-check in one run, in GiB: pytest and lean-audit have held 160 to 350
+#: between them, and circuit-check, given the slot's whole mem=, took the run's scope to its cap (an OOM kill)
 SIBLINGS_GB = 350
 
 
@@ -1283,7 +1298,8 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     a = max(1, n // 2)
     b = max(1, n - a)
     if only is not None:
-        names = {p.partition(":")[0] for p in only}
+        # and the builds they need: an auto shard runs them beside its parts (`shards.py`); a hand-written plan's shard holds them
+        names = DECLARATION.needed(JOBS, sorted({p.partition(":")[0] for p in only}))
         a, b = (n if not names & {"flock-circuit-build", "circuit-check", "flock-rust-tests"} else a), (n if "pytest" not in names else b)
     with_lean = only is None or any(x.startswith("lean") for x in names)
     beside = with_lean or "pytest" in names
@@ -1295,12 +1311,16 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     tail = ["--timeouts", "--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
             *(["--run", os.environ["RESEARCH_RUN_ID"]] if os.environ.get("RESEARCH_RUN_ID") else [])]
     lean = lean_steps(out, cache, urls, regenerate)
+    # an auto shard's suites (`pytest:SUITE`, `lean-suites:SUITE`): only those
+    held = {job: [p.partition(":")[2] for p in only or () if p.partition(":")[0] == job and p.partition(":")[2]]
+            for job in SHARDS.SUITE_JOBS}
     after_lean: list[str] = []
     if len(lean) > 1:
         after_lean = [x for s in AFTER_LEAN for x in ("--skip", s)]
-        lean_suites = [*suites, *AFTER_LEAN, "--lean-built", "--json", str(out / "suites-lean.json"), "--logs", str(out / "suites"), *tail]
+        lean_suites = [*suites, *(held["lean-suites"] or AFTER_LEAN), "--lean-built", "--json", str(out / "suites-lean.json"),
+                       "--logs", str(out / "suites"), *tail]
         lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
-    pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
+    pytest = [*suites, *held["pytest"], "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check"), "--catalog-units"] if circuit_cache else []),
           *(["--mem-gb", str(cc_mem_gb(slot_gb, beside, with_lean))] if slot_gb is not None else []),
@@ -1355,21 +1375,216 @@ def deferred_parts(steps: str) -> list[str]:
     return [p for p in shard_parts() if p.partition(":")[0] in chosen]
 
 
-def shard(spec: str, gated: bool = True) -> dict:
+def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file: Path | None = None) -> dict:
     """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, but those of a job off the merge
-    gate unless ``gated`` is False (an after-landing `--deferred` shard runs them), "all": every part a recorded unsharded
-    check covers (`gated_parts`)}, on this tree's Lake packages (`declaration.resolve`).  DeclarationError when there is no
-    such plan or shard, or the tree can't be listed."""
+    gate unless ``gated`` is False (an after-landing `--deferred` shard runs them, and its last shard also the parts no shard
+    of the plan holds, ratchet-gate's, so the N shards together run every part drive's after-landing run passes), "all":
+    every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages (`declaration.resolve`).
+    DeclarationError when there is no such plan or shard, or the tree can't be listed.  `auto:K/N`: shard K of the auto plan
+    (`auto_shard`)."""
+    if spec.startswith("auto:"):
+        return auto_shard(spec, gated, plan_file, jobs)
     m = re.fullmatch(r"(\d+)/(\d+)", spec)
     plans = DECLARATION.plans()
     if not m or int(m.group(2)) not in plans or not 1 <= int(m.group(1)) <= int(m.group(2)):
         raise DECLARATION.DeclarationError(f"--shard {spec}: ci.toml's plans are {', '.join(f'K/{n}' for n in sorted(plans))}")
     k, n = int(m.group(1)), int(m.group(2))
     parts_of = _parts_of()
+    shards = DECLARATION.resolve(plans[n], JOBS, parts_of)
+    held = {p for s in shards for p in s}
+    mine = set(shards[k - 1]) | ({p for p in DECLARATION.all_parts(JOBS, parts_of) if p not in held} if k == n and not gated else set())
     return {"k": k, "n": n,
-            "parts": [p for p in DECLARATION.resolve(plans[n], JOBS, parts_of)[k - 1]
-                      if not gated or p.partition(":")[0] not in OFF_GATE],
+            "parts": [p for p in DECLARATION.all_parts(JOBS, parts_of)
+                      if p in mine and (not gated or p.partition(":")[0] not in OFF_GATE)],
             "all": DECLARATION.all_parts(DECLARATION.gated(JOBS), parts_of)}
+
+
+#: `--shard auto:K/N`, an auto plan's shard
+AUTO_SHARD = re.compile(r"auto:([1-9]\d*)/([1-9]\d*)")
+
+
+def auto_parts(gated: bool = True, jobs: set[str] | None = None, circuit_shards: int | None = None) -> list[str]:
+    """The auto plan's parts on this tree (`shards.parts`): those of the jobs on the gate (or, not ``gated``, of every job),
+    of ``jobs`` alone when given; circuit-check in ``circuit_shards`` parts when given, else its ci.toml `shards`."""
+    js = [replace(j, shards=circuit_shards) if circuit_shards and j.name == "circuit-check" else j
+          for j in (DECLARATION.gated(JOBS) if gated else JOBS) if jobs is None or j.name in jobs]
+    return SHARDS.parts(DECLARATION.all_parts(js, _parts_of()), [s.name for s in SUITES.discover()], list(AFTER_LEAN),
+                        (FLOCK_LEAN / "lakefile.toml").exists())
+
+
+def shard_needs() -> dict[str, list[str]]:
+    """What a shard runs beside a part (`shards.builds`): each job's `needs` and `after`, and each audited package's provers
+    (`lean_audit.provers`, the packages its `proved_in` names, which its audit audits beside it)."""
+    la = _lean_audit()
+    return {**{j.name: [*j.needs, *([j.after] if j.after else [])] for j in JOBS},
+            **{f"lean-audit:{p}": [f"lean-audit:{q}" for q in qs] for p in _parts_of()["lean-audit"] if (qs := la.provers(p))}}
+
+
+def auto_plan(costs: tuple[dict, dict, dict], max_shards: int = SHARDS.MAX_SHARDS, deferred: str | None = None,
+              n: int | None = None, given: dict[str, float] | None = None) -> dict:
+    """The auto plan (`shards.plan`) of this tree's parts (`auto_parts`: of the jobs on the gate, or with ``deferred``, of those
+    steps and what they need) at ``costs`` (`measure`'s suites, audits and steps, `shards.priced`), ``given``'s {part: seconds}
+    over them, read as steps' seconds too (a job's whole, spread over its parts)."""
+    jobs = DECLARATION.needed(JOBS, [s for s in deferred.split(",") if s]) if deferred else None
+    names = auto_parts(deferred is None, jobs)
+    given = {p: float(s) for p, s in (given or {}).items()}
+    measured = {**SHARDS.priced(names, costs[0], costs[1], {**costs[2], **given}), **{p: s for p, s in given.items() if p in names}}
+    return SHARDS.plan(SHARDS.tasks(names, measured), shard_needs(), max_shards, n)
+
+
+def _cost_json(f: Path, skipped: list[str]):
+    """``f``'s JSON, or None when it can't be read, said in ``skipped``."""
+    try:
+        return json.loads(f.read_text())
+    except (OSError, ValueError) as e:
+        skipped.append(f"{f}: {type(e).__name__}")
+        return None
+
+
+def measured_costs(check_roots: list[Path], test_roots: list[Path],
+                   skipped: list[str] | None = None) -> tuple[dict[str, float], dict[str, float]]:
+    """(each suite's seconds, each Lake package's audit seconds) in these verdict caches: a suite's newest kept pass (its
+    `seconds`), else a `durations.json` of one of ``test_roots`` (`suites.py`'s last run there); a package's newest passing audit
+    with the kernel replay (its report's `seconds.total`).  A file that can't be read prices nothing and is named in
+    ``skipped``."""
+    skipped = [] if skipped is None else skipped
+    suites: dict[str, float] = {}
+    when: dict[str, str] = {}
+    for root in test_roots:
+        for f in [*root.glob("*.json"), *root.glob(f"{SUITES.PER_TEST}/*/{SUITES.WHOLE}--*.json")]:
+            e = _cost_json(f, skipped)
+            if (isinstance(e, dict) and isinstance(e.get("suite"), str) and isinstance(e.get("seconds"), (int, float))
+                    and e["seconds"] > 0 and str(e.get("when") or "") >= when.get(e["suite"], "")):
+                suites[e["suite"]], when[e["suite"]] = float(e["seconds"]), str(e.get("when") or "")
+    for root in test_roots:
+        durations = _cost_json(root / "durations.json", skipped) if (root / "durations.json").is_file() else None
+        for s, v in durations.items() if isinstance(durations, dict) else ():
+            if s not in suites and isinstance(v, (int, float)) and v > 0:
+                suites[s] = float(v)
+    audits: dict[str, float] = {}
+    at: dict[str, float] = {}
+    for root in check_roots:
+        for f in (root / "lean-audit").glob("*.json"):
+            doc = _cost_json(f, skipped)
+            rep = doc.get("report") if isinstance(doc, dict) else None
+            pkg, sec = (rep.get("package"), rep.get("seconds")) if isinstance(rep, dict) else (None, None)
+            if not (isinstance(pkg, str) and isinstance(sec, dict) and "replay" in sec and not rep.get("failures")
+                    and isinstance(sec.get("total"), (int, float))):
+                continue
+            if (mtime := f.stat().st_mtime) >= at.get(pkg, -1.0):
+                audits[pkg], at[pkg] = float(sec["total"]), mtime
+    return suites, audits
+
+
+def recorded_steps(store, rids: list[str], skipped: list[str] | None = None) -> dict[str, float]:
+    """The seconds each step took in the newest of the recorded runs ``rids`` (newest first) where it passed, from their results'
+    steps: under the step's name, or under its part when it ran one part (a shard's), circuit-check's spread over its parts.  A
+    run whose result can't be read prices nothing and is named in ``skipped``."""
+    skipped = [] if skipped is None else skipped
+    out: dict[str, float] = {}
+    for rid in rids:
+        try:
+            art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("result")
+            meta = store.get_manifest(art).meta if art else None
+        except Exception as e:  # noqa: BLE001  (a run whose result can't be read prices nothing)
+            skipped.append(f"{rid}: {type(e).__name__}: {e}")
+            continue
+        for s in (meta or {}).get("steps") or [] if isinstance(meta, dict) else []:
+            sec, ps = s.get("seconds"), s.get("parts") or []
+            if s.get("status") != "passed" or not isinstance(sec, (int, float)) or sec <= 0:
+                continue
+            if len(ps) == 1:
+                out.setdefault(ps[0], float(sec))
+            elif not ps:
+                out.setdefault(s["step"], float(sec))
+            elif s["step"] == "circuit-check":
+                for p in ps:
+                    out.setdefault(p, float(sec) / len(ps))
+    return out
+
+
+def measure(d: Path, gather: bool = True, store=None) -> tuple[tuple[dict, dict, dict], list[str]]:
+    """((suites, audits, steps), notes): the costs the newest recorded checks measured, their verdict packs (`gathered_packs`,
+    unpacked under ``d``) and their results' step seconds (`recorded_steps`), unless not ``gather``, and this machine's caches
+    (`measured_costs`)."""
+    check_roots = [cache_dir()]
+    test_roots = [VERDICTS.roots()["tests"], *sorted((Path.home() / ".cache" / "verity").glob("tests-slot-*"))]
+    steps: dict[str, float] = {}
+    notes, skipped = [], []
+    if gather:
+        try:
+            from research.store.local import LocalStore
+
+            store = store or LocalStore()
+            packs = gathered_packs(d, store)
+            for i, (_rid, pack) in enumerate(packs):
+                roots = {"check": d / f"pack-{i}" / "check", "tests": d / f"pack-{i}" / "tests"}
+                was = VERDICTS.roots
+                VERDICTS.roots = lambda r=roots: r
+                try:
+                    VERDICTS.import_(pack)
+                finally:
+                    VERDICTS.roots = was
+                check_roots.insert(0, roots["check"])
+                test_roots.insert(0, roots["tests"])
+            steps = recorded_steps(store, [rid for rid, _ in packs], skipped)
+            notes.append(f"costs from the {len(packs)} newest recorded checks ({', '.join(rid for rid, _ in packs)}) and this "
+                         "machine's caches")
+        except Exception as e:  # noqa: BLE001  (no store: price from this machine's caches, and say so)
+            notes.append(f"no recorded checks' costs ({type(e).__name__}: {e}): this machine's caches alone")
+    costs = (*measured_costs(check_roots, test_roots, skipped), steps)
+    if skipped:
+        notes.append(f"{len(skipped)} unreadable cost source(s) priced nothing: {', '.join(skipped[:3])}")
+    return costs, notes
+
+
+def shard_plan_main(argv: list[str]) -> int:
+    """`--shard-plan`: print the auto plan of this tree (`auto_plan`), running nothing."""
+    import argparse
+
+    ap = argparse.ArgumentParser(prog="check.py --shard-plan", description="the auto plan of this tree, running nothing")
+    ap.add_argument("--max-shards", type=int, default=SHARDS.MAX_SHARDS, help="the most shards (default %(default)s)")
+    ap.add_argument("--n", type=int, help="this many shards, not the planner's N")
+    ap.add_argument("--deferred", metavar="STEP,...", help="plan these steps and what they need (drive's after-landing run)")
+    ap.add_argument("--costs", type=Path, help="a JSON {part: seconds} over the measured costs")
+    ap.add_argument("--no-gather", action="store_true", help="price from this machine's caches alone, not the recorded checks")
+    ap.add_argument("--json", action="store_true", help=f"print the plan as {SHARDS.KIND}")
+    ap.add_argument("--out", type=Path, help="also write the plan here")
+    a = ap.parse_args(argv)
+    with tempfile.TemporaryDirectory(prefix="check-shard-plan-") as d:
+        costs, notes = measure(Path(d), not a.no_gather)
+    try:
+        doc = {**auto_plan(costs, a.max_shards, a.deferred, a.n, json.loads(a.costs.read_text()) if a.costs else None),
+               "notes": notes}
+    except (DECLARATION.DeclarationError, ValueError, OSError) as e:
+        print(f"check: --shard-plan: {e}", file=sys.stderr)
+        return 2
+    if a.out:
+        a.out.write_text(json.dumps(doc, indent=1) + "\n")
+    print(json.dumps(doc, indent=1) if a.json else "\n".join([*(f"shard plan: note: {x}" for x in notes), *SHARDS.lines(doc)]))
+    return 0
+
+
+def auto_shard(spec: str, gated: bool = True, plan_file: Path | None = None, jobs: set[str] | None = None) -> dict:
+    """`--shard auto:K/N`: {"k", "n", "parts": shard K's parts of the auto plan, "all": the plan's parts, "plan": its summary}.
+    The plan is ``plan_file`` (in a recorded run, its `AUTO_PLAN` input); DeclarationError when there is none, or its parts aren't exactly this tree's: every part of the jobs on the gate (not ``gated``: of every job), of
+    ``jobs`` alone when given (a post-landing run's steps and what they need)."""
+    m = AUTO_SHARD.fullmatch(spec)
+    if not m or not 1 <= int(m.group(1)) <= int(m.group(2)):
+        raise DECLARATION.DeclarationError(f"--shard {spec}: an auto shard is auto:K/N, K in 1..N")
+    k, n = int(m.group(1)), int(m.group(2))
+    path = plan_file if plan_file is not None and plan_file.is_file() else None
+    if path is None:
+        raise DECLARATION.DeclarationError(f"--shard {spec}: no auto plan ({AUTO_PLAN} among the run's inputs, or "
+                                           "--shard-plan-file): `--record --shard auto` plans once and launches every shard with it")
+    try:
+        doc = json.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        raise DECLARATION.DeclarationError(f"--shard {spec}: {path} can't be read ({type(e).__name__}: {e})") from None
+    want = auto_parts(gated, jobs)
+    if why := SHARDS.check(doc, n, want):
+        raise DECLARATION.DeclarationError(f"--shard {spec}: {path.name} is no auto plan of this tree: {why}")
+    return {"k": k, "n": n, "parts": doc["shards"][k - 1]["parts"], "all": want, "plan": SHARDS.summary(doc)}
 
 
 def _parts_of() -> dict[str, list[str]]:
@@ -1624,10 +1839,10 @@ ON_NODE = ("preflight-fixtures",)
 def fetchable_fixtures(root: Path = ROOT, url: str | None = None, head=None, store=None) -> tuple[dict[str, str], list[str]]:
     """({id: where}, [id]): where each fetched fixture (a `fixtures/artifacts.json` entry whose path git doesn't hold) can come
     from on this machine, and those that can come from nowhere: the public export, asked for its manifest only (one HEAD, no
-    blob), else the tree already holding its bytes, else this machine's store holding its manifest and every blob.  The closing
-    train's check (cb20, 10 Oct) failed `lean-suites` after its launch on #1716's rec-coins fixture, preserved privately and
-    never exported: node 1 fetches from the public export and its own store, and had it in neither.  A copy put in the node's
-    store keeps a train moving before the export.  Raises when the public export is needed and there is none."""
+    blob), else the tree already holding its bytes, else this machine's store holding its manifest and every blob.  A fixture
+    preserved privately and never exported is in neither the public export nor a node's own store, so a check there fails
+    after its launch; a copy put in the node's store keeps a train moving before the export.  Raises when the public export
+    is needed and there is none."""
     from concurrent.futures import ThreadPoolExecutor
 
     from research.store.fetchset import public_url
@@ -1734,9 +1949,9 @@ def _kill_after_grace(p: subprocess.Popen) -> None:
 
 
 #: a running step none of whose outputs (`outputs`) has changed for this long is hung. pytest sat 23-24 h on one hung test after
-#: lean-suites failed, holding its train slot, and circuit-check beside it its share of memory (r20261025-021824-ba9f,
-#: r20261025-023312-fa65); a passing step's longest quiet stretch is about an hour (circuit-check's plan before its first target,
-#: one 35-minute target, a cold Lean package's build)
+#: lean-suites failed, holding its train slot, and circuit-check beside it its share of memory; a passing step's longest
+#: quiet stretch is about an hour (circuit-check's plan before its first target, one 35-minute target, a cold Lean package's
+#: build)
 IDLE_S = 3 * 3600
 #: and one still running after this long is over its budget, whatever it writes (the longest steps passed in 3-4 h)
 STEP_BUDGET_S = 12 * 3600
@@ -2033,7 +2248,7 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
             rec = {"step": name, "status": "failed", "rc": rc, "log": log.name, "detail": hung}
         elif rc == -signal.SIGTERM:
             # a cancel (`research cancel`) signals the run's whole process group, so a step can die of it before this check's
-            # handler marks it stopped: it found nothing (lean-agreement "failed" with an empty log, r20261026-062546-11fc)
+            # handler marks it stopped: it found nothing (it would otherwise read as "failed" with an empty log)
             rec = {"step": name, "status": "stopped", "rc": rc, "log": log.name,
                    "detail": "stopped: killed by a SIGTERM this check did not send (a cancel of the run)"}
         elif rc == 0 and name == "lean-audit" and (why := lean_fast(out)):
@@ -2249,6 +2464,8 @@ def main(argv: list[str]) -> int:
         return slots_view(argv[1:])
     if argv[:1] == ["--plan"]:
         return _load("plan").main(argv[1:], sys.modules[__name__])
+    if argv[:1] == ["--shard-plan"]:
+        return shard_plan_main(argv[1:])
     if "--record" in argv:
         if rid := os.environ.get("RESEARCH_RUN_ID"):
             print(f"check: --record inside a recorded run ({rid}): it launches its own `research run`, which places the check "
@@ -2272,15 +2489,25 @@ def main(argv: list[str]) -> int:
         i = rest.index("--verdicts-in")
         pack, rest = Path(rest[i + 1]), rest[:i] + rest[i + 2:]
     sharded = None
+    run_dir = Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None
+    plan_file = run_dir / "inputs" / AUTO_PLAN if run_dir is not None else None
+    if "--shard-plan-file" in rest[:-1] and run_dir is None:
+        i = rest.index("--shard-plan-file")
+        plan_file, rest = Path(rest[i + 1]), rest[:i] + rest[i + 2:]
     if "--shard" in rest and rest.index("--shard") + 1 < len(rest):
         i = rest.index("--shard")
+        later = rest[rest.index("--deferred") + 1] if "--deferred" in rest[:-1] else None
         try:
-            sharded = shard(rest[i + 1], gated="--deferred" not in rest)
+            sharded = shard(rest[i + 1], gated=later is None, plan_file=plan_file,
+                            jobs=DECLARATION.needed(JOBS, [s for s in later.split(",") if s]) if later else None)
         except DECLARATION.DeclarationError as e:
             print(f"check: {e}", file=sys.stderr)
             return 2
         rest = rest[:i] + rest[i + 2:]
         print(f"check: shard {sharded['k']}/{sharded['n']}: {', '.join(sharded['parts'])}", flush=True)
+        if p := sharded.get("plan"):
+            print(f"check: shard plan {p['digest'][:12]}: N = {p['n']}, floor {p['floor_s'] / 60:.1f} min, predicted wall "
+                  f"{p['predicted_s'] / 60:.1f} min, this shard {p['seconds'][sharded['k'] - 1] / 60:.1f} min", flush=True)
     deferred = None
     if "--deferred" in rest and rest.index("--deferred") + 1 < len(rest):
         i = rest.index("--deferred")
@@ -2297,7 +2524,8 @@ def main(argv: list[str]) -> int:
             print(f"check: {e}", file=sys.stderr)
             return 2
         if sharded:
-            if not (mine := [p for p in sharded["parts"] if p in mine]):
+            chosen = {p.partition(":")[0] for p in mine}
+            if not (mine := [p for p in sharded["parts"] if p.partition(":")[0] in chosen]):
                 print(f"check: --deferred {deferred} --shard {sharded['k']}/{sharded['n']}: that shard holds none of those steps",
                       file=sys.stderr)
                 return 2
@@ -2326,7 +2554,6 @@ def main(argv: list[str]) -> int:
         print(f"check: {sys.executable} would run this tree's steps against another checkout's code ({away}); run check with "
               f"{ROOT}'s own environment: `uv run --extra torch-cpu python tools/verity/check/check.py` there", file=sys.stderr)
         return 2
-    run_dir = Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None
     only = sharded["parts"] if sharded else None
     if only is None and OFF_GATE and cache and run_dir is not None:
         try:
