@@ -22,7 +22,8 @@ dependencies the node does not keep.
 `tools/verity/lean/check.py --build --no-replay --no-runs` on PKG in a tree kept per slot, which prints what the audit prints,
 `--update`'s review included, after a build of only what changed since that slot's last run, which restores each module the
 node's artifact cache holds under its sha256 key (`check.py --artifacts`, `lean_audit.LakeArtifacts`, the one the audit
-reads); each package whose check.py passes puts the modules its build compiled there. It first waits for one of the
+reads); each package whose check.py passes, its report saying it built in the sandbox, puts the modules its build
+compiled there. It first waits for one of the
 node's Lean slots of pool `build` (`lean_slot.py`; pool `any` never stands in for it), never one of the `audit` pool's, where
 hour-long audits hold every slot, whatever slot (LEAN_SLOT) the process that started it holds. Where SLOTS lists no `build`
 pool, or with `--dev-cache` (a slot tree whose dependencies are fetched cold builds them from source), it takes the `--dev-cache` path
@@ -873,9 +874,9 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 if got == 0:
                     ok.append(p)
                     try:
-                        log(f"lean-records: {p}: {artifacts.put({tree / p}, since)} module version(s) new in the "
-                            "artifact cache")
-                    except OSError as e:
+                        log(f"lean-records: {p}: {artifacts.put({tree / p: report(mine_out, tree / p)}, since, log)} "
+                            "module version(s) new in the artifact cache")
+                    except (OSError, ValueError) as e:
                         log(f"lean-records: {p}: the artifact cache was not written: {e}")
                 rc = rc or got
             for p in ok:
@@ -1126,6 +1127,15 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
 def reports(out: Path, pkg: str, p: str) -> Path:
     """Where check.py's reports on ``p`` go: ``out`` for PKG, `requirer-<path>/` under it for a requirer."""
     return out if p == pkg else out / f"requirer-{re.sub(r'[^A-Za-z0-9]+', '_', p)}"
+
+
+def report(out: Path, at: Path) -> dict:
+    """check.py's report on the package at ``at`` among those it left under ``out`` (`audit.json`), or {} when it holds
+    none; OSError or ValueError when `audit.json` can't be read."""
+    doc = json.loads((out / "audit.json").read_text())
+    reps = doc.get("packages") if isinstance(doc, dict) else None
+    return next((r for r in reps if isinstance(r, dict) and Path(str(r.get("package"))).resolve() == at.resolve()), {}) \
+        if isinstance(reps, list) else {}
 
 
 def check_argv(at: Path, out: Path, update: bool, moved: Path | None, dev: bool = False,

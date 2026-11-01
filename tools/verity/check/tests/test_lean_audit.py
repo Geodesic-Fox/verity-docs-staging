@@ -347,6 +347,10 @@ def _built(pkg: Path, mod: str, outputs: dict[str, str], imports: tuple[str, ...
         i: {"olean": str(build / "lib/lean" / f"{i.replace('.', '/')}.olean")} for i in imports}}))
 
 
+#: check.py's report on a build in the sandbox, the only kind `LakeArtifacts.put` indexes
+SANDBOXED = {"sandbox": True}
+
+
 def _package(tmp: Path) -> Path:
     """Package `p`, library `P` (its default target): `P.A`, `P.B` importing it, and `P` importing both, all built."""
     pkg = tmp / "pkg"
@@ -371,7 +375,7 @@ def test_the_artifact_cache_indexes_each_module_under_its_key_after_what_it_impo
     keyed, lib, store = LA.MK.keys(pkg), pkg / ".lake/build/lib/lean", tmp_path / "store"
     (lib / "P/B.olean.hash").write_text("0" * 16)
     arts = LA.LakeArtifacts(store)
-    assert arts.put({pkg}) == 1 and [e for e, _ in arts.added] == [f"keys/{keyed['P.A'].key}.json"]
+    assert arts.put({pkg: SANDBOXED}) == 1 and [e for e, _ in arts.added] == [f"keys/{keyed['P.A'].key}.json"]
     names = ["a" * 16 + ".olean", "b" * 16 + ".ilean", "c" * 16 + ".c"]
     assert json.loads((store / "keys" / f"{keyed['P.A'].key}.json").read_text()) == {
         "module": "P.A", "scope": "p", "hash": hashlib.sha256(b"P/A").hexdigest()[:16],
@@ -379,10 +383,10 @@ def test_the_artifact_cache_indexes_each_module_under_its_key_after_what_it_impo
         "sha256": {n: hashlib.sha256(f"P/A.{n.split('.', 1)[1]} {n.split('.')[0]}".encode()).hexdigest() for n in names}}
     assert sorted(f.name for f in (store / "artifacts").iterdir()) == sorted(names)
     (lib / "P/B.olean.hash").write_text("d" * 16)
-    assert arts.put({pkg}) == 2 and arts.put({pkg}) == 0, "P.B, then P, which imports it"
+    assert arts.put({pkg: SANDBOXED}) == 2 and arts.put({pkg: SANDBOXED}) == 0, "P.B, then P, which imports it"
     assert sorted(f.name for f in (store / "keys").iterdir()) == sorted(f"{k.key}.json" for k in keyed.values())
     _built(pkg, "P/A", {"olean": "7" * 16, "ilean": "8" * 16, "c": "9" * 16})
-    assert arts.put({pkg}) == 0 and arts.added[-1][0] == f"keys/{keyed['P.A'].key}.json"
+    assert arts.put({pkg: SANDBOXED}) == 0 and arts.added[-1][0] == f"keys/{keyed['P.A'].key}.json"
     assert json.loads((store / "keys" / f"{keyed['P.A'].key}.json").read_text())["outputs"]["o"] == ["7" * 16 + ".olean"], \
         "a newer build of a module replaces its entry"
 
@@ -395,16 +399,29 @@ def test_only_a_module_the_run_compiled_goes_into_the_artifact_cache(tmp_path):
     lib = pkg / ".lake/build/lib/lean"
     for t in lib.rglob("*.trace"):
         os.utime(t, (1000, 1000))
-    assert LA.LakeArtifacts(tmp_path / "s1").put({pkg}, since=1000) == 0
+    assert LA.LakeArtifacts(tmp_path / "s1").put({pkg: SANDBOXED}, since=1000) == 0
     os.utime(lib / "P/A.trace", (1001, 1001))
-    assert LA.LakeArtifacts(tmp_path / "s1").put({pkg}, since=1000) == 1
+    assert LA.LakeArtifacts(tmp_path / "s1").put({pkg: SANDBOXED}, since=1000) == 1
     trace = json.loads((lib / "P/A.trace").read_text())
     (lib / "P/A.trace").write_text(json.dumps(trace | {"synthetic": True}))
-    assert LA.LakeArtifacts(tmp_path / "s2").put({pkg}) == 0, "P.A restored: it, and P.B and P after it, stay out"
+    assert LA.LakeArtifacts(tmp_path / "s2").put({pkg: SANDBOXED}) == 0, "P.A restored: it, and P.B and P after it, stay out"
     (lib / "P/A.trace").write_text(json.dumps(trace))
     (tmp_path / "s3" / "artifacts").mkdir(parents=True)
     (tmp_path / "s3" / "artifacts" / ("a" * 16 + ".olean")).write_text("other bytes under P.A's artifact's name")
-    assert LA.LakeArtifacts(tmp_path / "s3").put({pkg}) == 0
+    assert LA.LakeArtifacts(tmp_path / "s3").put({pkg: SANDBOXED}) == 0
+
+
+def test_a_build_outside_the_sandbox_indexes_nothing(tmp_path):
+    """Where `unshare` is missing, check.py builds without the sandbox, and compile-time code runs as the user: it could
+    leave in the build any outputs, traces and `setup.json` it chose, which `put` would index under a module's key for
+    every later build on the node to restore. Only a build whose check.py report says it ran in the sandbox goes in."""
+    pkg, store, said = _package(tmp_path), tmp_path / "store", []
+    arts = LA.LakeArtifacts(store)
+    for rep in ({"sandbox": False}, {}, {"sandbox": "true"}, None):
+        assert arts.put({pkg: rep}, log=said.append) == 0 and arts.added == [], rep
+    assert not (store / "keys").exists() and not (store / "artifacts").exists()
+    assert len(said) == 4 and all(s.endswith("none of its modules go into the artifact cache") for s in said)
+    assert arts.put({pkg: SANDBOXED}, log=said.append) == 3 and len(said) == 4
 
 
 def test_the_artifact_cache_drops_its_oldest_past_the_cap_counting_only_what_it_alone_holds(tmp_path):
@@ -433,7 +450,7 @@ def test_the_artifact_cache_drops_its_oldest_past_the_cap_counting_only_what_it_
 
 def _bundle_of(tmp: Path, pkg: Path) -> tuple[Path, str]:
     arts = LA.LakeArtifacts(tmp / "node-a")
-    arts.put({pkg})
+    arts.put({pkg: SANDBOXED})
     dest = tmp / "lean-artifacts.tar.gz"
     assert arts.bundle(dest) == len(arts.added) > 0
     return dest, hashlib.sha256(dest.read_bytes()).hexdigest()
@@ -557,7 +574,10 @@ def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_pat
     _tree(tmp_path, monkeypatch)
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
 
-    def put(self, pkgs, since=None):
+    put_with = []
+
+    def put(self, reports, since=None, log=print):
+        put_with.append({p.name: rep for p, rep in reports.items()})
         self.added = [(f"keys/{'1' * 64}.json", ["e" * 16 + ".olean"])]
         return 1
 
@@ -568,6 +588,8 @@ def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_pat
         assert LA.run(tmp_path / f"out{n}", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
                       log=lambda s: None, bundle=bundle) == 1
         assert (tmp_path / f"out{n}" / "lean-artifacts.tar.gz").exists() == bundle
+        assert put_with[-1] == {"a": json.loads((tmp_path / f"out{n}" / "audit.json").read_text())["packages"][0]}, \
+            "the passing package, with check.py's report on it, which says whether it was built in the sandbox"
     out = tmp_path / "steps"
     monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
     step = lambda: dict((name, argv) for name, argv, _ in CHECK.lean_steps(out))["lean-audit"]

@@ -663,7 +663,7 @@ def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_
         return got
 
     arts = LA.LakeArtifacts(store)
-    assert arts.put({pkg}) == len(mods)
+    assert arts.put({pkg: {"sandbox": True}}) == len(mods)
     lib = pkg / ".lake" / "build" / "lib" / "lean"
     was = {f: f.read_bytes() for f in lib.rglob("*.olean")}
     thms = pkg / "Control" / "Thms.lean"

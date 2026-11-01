@@ -728,9 +728,9 @@ class LakeArtifacts:
     outputs of, each under its sha256 key (`keys/<key>.json`, `module_keys`): the module, its package, Lake's input hash, the
     outputs its trace names and the sha256 of each. The builds of check's audit and of a records run read it through a Lake
     cache directory of their own, which `module_keys.stage` fills with the modules whose keys it indexes (`check.py
-    --artifacts`), and never write it; after a run passes, each module its build compiled goes in (`put`). A module version
-    any earlier passing run on this node built is then restored whatever tree comes next, not only the one its package's kept
-    build (`WarmBuilds`) came from. The audit still checks every statement against the restored `.olean` files and replays
+    --artifacts`), and never write it; after a run passes, each module its build compiled in the sandbox goes in (`put`). A
+    module version any earlier passing run on this node built is then restored whatever tree comes next, not only the one
+    its package's kept build (`WarmBuilds`) came from. The audit still checks every statement against the restored `.olean` files and replays
     every declaration through the kernel.
 
     Between nodes, the module versions a recorded check's audit added travel as one bundle in its run's files (`bundle`); the
@@ -748,16 +748,22 @@ class LakeArtifacts:
         fcntl.flock(f, fcntl.LOCK_EX)
         return f
 
-    def put(self, pkgs: set[Path], since: float | None = None) -> int:
-        """Index each module of ``pkgs``' builds that the build compiled (a trace written after ``since``, and not one Lake
-        restored) under its key; the number of entries new to the index. A module goes in only when `module_keys.indexable`,
-        when each output its trace names is in the build with that hash (`<file>.hash`), and once every workspace module it
-        imports is indexed; its artifacts before the entry naming them, one the cache holds already kept only with the same
-        bytes. A newer build replaces the entry under the same key, so the entries of a module and its imports stay one
-        build's."""
+    def put(self, reports: dict[Path, dict], since: float | None = None, log=print) -> int:
+        """Index each module of the builds of ``reports``' packages (each with check.py's report on it) that the build
+        compiled (a trace written after ``since``, and not one Lake restored) under its key; the number of entries new to
+        the index. Only a build whose report says it ran in the sandbox (`"sandbox": true`) goes in: outside it, compile-time
+        code runs as the user and could leave any outputs, traces and `setup.json` it chose in the build, each then indexed
+        as its module's. A module goes in only when `module_keys.indexable`, when each output its trace names is in the
+        build with that hash (`<file>.hash`), and once every workspace module it imports is indexed; its artifacts before
+        the entry naming them, one the cache holds already kept only with the same bytes. A newer build replaces the entry
+        under the same key, so the entries of a module and its imports stay one build's."""
         with self._lock():
             n = 0
-            for pkg in sorted(pkgs):
+            for pkg in sorted(reports):
+                if not isinstance(rep := reports[pkg], dict) or rep.get("sandbox") is not True:
+                    log(f"lean-audit: {pkg}: its report doesn't say it was built in the sandbox, so none of its modules go "
+                        "into the artifact cache")
+                    continue
                 ws = MK.workspace(pkg)
                 if isinstance(ws, str):
                     continue
@@ -1080,8 +1086,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
            regenerate: bool = False, bundle: bool = False) -> tuple[list[str], list[str]]:
     """Audit ``missed`` on a scratch tree of their inputs (the packages they require by path included), and store each pass.
     ``regenerate`` (`check.py --regenerate`, a train's check) passes a package whose every failure is a record difference;
-    such a pass is never stored, since its lock changes when the train commits the record.  Each passing package's build
-    goes into the artifact cache (`LakeArtifacts.put`), and ``bundle`` (a recorded check) writes the module versions it
+    such a pass is never stored, since its lock changes when the train commits the record.  Each passing package's build in
+    the sandbox goes into the artifact cache (`LakeArtifacts.put`), and ``bundle`` (a recorded check) writes the module versions it
     indexed to ``out`` for other nodes (`LakeArtifacts.bundle`).  Returns (the failed, the audited)."""
     deps.mkdir(parents=True, exist_ok=True)
     # beside the dependencies: moves, not copies. Resolved, because check.py names each package by its resolved path, and a
@@ -1136,9 +1142,11 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     finally:
         warm.give_back(passed)
         if not fresh:
-            kept = {work / p for p in audited if p in reports and not reports[p].get("failures")}
+            ok = [p for p in audited if p in reports and not reports[p].get("failures")]
+            kept = {work / p for p in ok}
             try:
-                log(f"lean-audit: {artifacts.put(kept, since)} module version(s) new in the artifact cache")
+                log(f"lean-audit: {artifacts.put({work / p: reports[p] for p in ok}, since, log)} module version(s) new in "
+                    "the artifact cache")
                 if bundle and artifacts.added:
                     dest = next(out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz" for i in range(1, 99)
                                 if not (out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz").exists())
