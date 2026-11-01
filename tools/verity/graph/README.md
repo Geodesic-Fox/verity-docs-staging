@@ -96,8 +96,9 @@ it from the cases in that file, which is a change to the contract.
 
 The executor makes a fresh work directory, puts each artifact the task reads there at the path its producer's output
 declares (two reads or a read and an output that would land on one path are refused when listing), and runs the task's
-argv with `--work DIR` appended, from the checkout's root. `verity graph run` finds the task by listing its family (and what
-it reads), runs its kind's runner through `runners.execute`, and prints result/v1 as one canonical line:
+argv with `--work DIR` appended, from the checkout's root. `verity graph run` finds the task with `graph.task_graph`, which
+runs the family's lister but completes, digests and keys only the task and what it reads, runs its kind's runner through
+`runners.execute`, and prints result/v1 as one canonical line:
 
 ~~~json
 {"schema": "verity-result/v1", "task": "<id>", "key": "sha512:<hex>", "status": "pass|fail|error",
