@@ -340,7 +340,7 @@ def main(argv: list[str] | None = None) -> int:
                                                     "move's is tools/move/lean.py, the rename move's tools/move/rename.py)")
     ap.add_argument("--script-arg", action="append", default=[], metavar="ARG",
                     help="an argument for the script, repeated in order; one that starts with - as --script-arg=ARG "
-                         "(the rename move: --script tools/move/rename.py --script-arg=--map --script-arg tools/move/security_map.toml)")
+                         "(the rename move: --script tools/move/rename.py --script-arg=--map --script-arg tools/move/MAP.toml)")
     ap.add_argument("--push-to", metavar="NEWBRANCH", help="push the clean result to this new branch")
     ap.add_argument("--remote", default="origin")
     ap.add_argument("--dry-run", action="store_true", help="report only; never push")
