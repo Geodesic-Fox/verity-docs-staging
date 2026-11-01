@@ -698,6 +698,38 @@ def _gate_says(main: str, what: str, merged: bool = False) -> str:
             f"{where} runs it)")
 
 
+def test_a_landing_gate_left_in_its_directory_still_judges(tmp_path, monkeypatch):
+    """On drive's NFS TMPDIR the gate script just run is often left as a .nfsXXXX file, so removing its directory fails with
+    ENOTEMPTY; every tick crashed on that (1 Nov).  The gate's verdict stands and the directory is left for the sweep."""
+    import errno
+    import tempfile
+
+    from research.queue import run_gate
+
+    (tmp_path / "tmp").mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path / "tmp"))
+    _git(tmp_path, "init", "-q", "-b", "main")
+    for p, text in GATED.items():
+        (tmp_path / p).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / p).write_text(text)
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "gated")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    (tmp_path / "bad.txt").write_text("x\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "bad")
+    rmdir = os.rmdir
+
+    def nfs_rmdir(path, *a, **k):
+        if "queue-gate-" in str(path):
+            raise OSError(errno.ENOTEMPTY, "Directory not empty", str(path))
+        return rmdir(path, *a, **k)
+
+    monkeypatch.setattr(os, "rmdir", nfs_rmdir)
+    rc, out = run_gate(tmp_path, base, _git(tmp_path, "rev-parse", "HEAD"), "gates/g.py")
+    assert rc == 1 and json.loads(out)["failures"][0]["why"] == "touches bad.txt", out
+
+
 def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_the_members_a_sync_merges_are_judged(world, monkeypatch):
     """A landing gate judges a PR as the sync merges it onto `next`, never at landing, where ejecting a
     member low on `next` rebuilds it and cancels the Lean check running there.  A member the sync keeps isn't judged again; one
@@ -913,6 +945,60 @@ def test_an_older_head_two_prs_were_seen_at_is_carried_by_the_marked_one(world):
     members, entries = q.sync()
     assert entries[7].after == entries[7].older == (5,), entries[7].why
     assert [m.pr for m in members] == [5, 7]
+
+
+def _carried_on_next(world: World) -> tuple[Queue, str]:
+    """#5 at `old`, unmarked; #6, #5's own lane's rebuild on `old` (so it carries #5's commits), marked and merged onto `next`;
+    then #5 moves on, still unmarked.  `old` is an older head of #5's that only #6 brings to `next`."""
+    old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, old, ready=False)
+    world.gh.put(6, world.change({"r.txt": "rebuilt\n"}, base=old), body="Lane `lane-5`.")
+    q = world.queue()
+    assert [m.pr for m in q.sync()[0]] == [6]                                  # the queue sees #5 at `old`
+    world.gh.put(5, world.change({"x.txt": "x = 2\n"}, base=old), ready=False)
+    return q, old
+
+
+def test_a_pr_holding_an_older_head_that_admitted_members_already_bring_waits_for_nothing(world):
+    """#7 holds `old`, once #5's head, but not #6's head, which brings `old` to `next`: #7 lands nothing of #5's that `next`
+    doesn't already land, so it doesn't wait for unmarked #5.  Once #6 isn't admitted, #6 carries nothing and #7 waits again."""
+    q, old = _carried_on_next(world)
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))             # #7 branched from #5 at `old`, beside #6
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [6, 7] and entries[7].after == entries[7].older == (), entries[7].why
+    world.gh.ready.discard((6, world.gh.prs[6].head))                           # #6's mark withdrawn: it leaves `next`
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [] and entries[7].older == (5,)
+    assert entries[7].why == "contains #5's commits (at an older head), which isn't admitted"
+
+
+def test_a_pr_holding_an_older_head_no_member_brings_still_waits(world):
+    """As above, but #7 branched from #5 at `mid`, a later head the queue saw #5 at that #6 doesn't bring: #7 waits for #5 at
+    `mid`, though `next` brings the older `old`."""
+    q, old = _carried_on_next(world)
+    world.gh.put(5, mid := world.change({"x.txt": "x = 2\n"}, base=old), ready=False)
+    q.sync()                                                                    # the queue sees #5 at `mid`
+    world.gh.put(5, world.change({"x.txt": "x = 3\n"}, base=mid), ready=False)
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=mid))
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [6] and entries[7].older == (5,) and entries[7].held == {5: mid}
+    assert entries[7].why == "contains #5's commits (at an older head), which isn't admitted"
+
+
+def test_a_member_of_next_doesnt_excuse_its_own_commits(world):
+    """#7 went onto `next` while #5's head `old`, which #7 holds, was marked; #5 moves on unmarked and its mark at `old` goes
+    (so it doesn't stay at `old`, `Queue._pending`).  `next` holds `old` only through #7's own merge (and #5's merge at the head
+    it left), so #7 waits for #5."""
+    old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, old)
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))
+    q = world.queue()
+    assert [m.pr for m in q.sync()[0]] == [5, 7]
+    world.gh.put(5, world.change({"x.txt": "x = 2\n"}, base=old), ready=False)
+    world.gh.ready.discard((5, old))
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [] and entries[7].after == entries[7].older == (5,)
+    assert entries[7].why == "contains #5's commits (at an older head), which isn't admitted"
 
 
 def _merge(world: World, into: str, other: str) -> str:
@@ -2565,10 +2651,11 @@ def _lock(**entries: str) -> str:
 
 def _published(world: World, commit: str, *, pkg: str = "pkg", passed: bool = True, path: str = "slot",
                files: dict[str, str] | None = None, steps: list | None = None, at: float | None = None,
-               argv: list[str] | None = None) -> str:
+               argv: list[str] | None = None, state: str | None = None, rc: int | None = None, meta: dict | None = None) -> str:
     """A run of ``commit`` that another machine published to the store's remote, as `research run` does: a records run
     (`lean_changed.py --records PKG`, result `lean-fast/v1`) with ``files`` as its run files, or with ``steps`` a check; ``at``
-    its start (its id's time), else now; ``argv`` its command, else the records run's."""
+    its start (its id's time), else now; ``argv`` its command, else the records run's; ``state`` and ``rc`` its attempt's end,
+    else done and 0 when it passed, failed and 1 when not; ``meta`` more of its result (a shard's `shard`)."""
     from research.runs import new_run_id
 
     node = LocalStore(world.tmp / "node", config_path=world.tmp / "store.toml")
@@ -2581,13 +2668,15 @@ def _published(world: World, commit: str, *, pkg: str = "pkg", passed: bool = Tr
         outputs["run_files"] = node.put_artifact("run-files/v1", {}, tree=tree)
     kind = "check/v1" if steps is not None else "lean-fast/v1"
     meta = {"schema": "research/result/v0.1", "kind": kind, "run_id": rid, "validation": {"status": "passed" if passed else "failed"},
-            **({"steps": steps} if steps is not None else {"workload_fingerprint": {"package": pkg, "update": True, "path": path}})}
+            **({"steps": steps} if steps is not None else {"workload_fingerprint": {"package": pkg, "update": True, "path": path}}),
+            **(meta or {})}
     outputs["result"] = node.put_artifact(kind, meta)
     node.put_attempt({
         "schema": "research/attempt/v0.1", "id": rid, "tool": {"name": "python3", "version": None}, "derivation": "drv:" + "0" * 64,
         "reuse_key": None, "argv": argv or ["python3", "tools/verity/lean/lean_changed.py", "--records", pkg, "--update"], "params": {},
         "key_params": [], "inputs": {}, "conditions": {}, "key_conditions": [], "source": {"commit": commit, "dirty": False},
-        "closure": None, "execution": {}, "cost": None, "status": {"state": "done" if passed else "failed", "rc": 0 if passed else 1},
+        "closure": None, "execution": {}, "cost": None,
+        "status": {"state": state or ("done" if passed else "failed"), "rc": rc if rc is not None else 0 if passed else 1},
         "outputs": outputs, "telemetry": None})
     for art in outputs.values():
         node.push(art)
@@ -2684,8 +2773,102 @@ def test_a_package_passes_as_a_requirer_on_a_reused_path_or_in_a_lean_check_and_
                       "lean-audit/x/lean-audit.json": "{}"})
     assert _mark(world, 2, h) == 1                                     # it passed by regenerating this lock: not the head's
     rid = _published(world, h, steps=[{"step": "lean-audit", "status": "passed"}],
-                     files={"lean-audit/audit.json": json.dumps({"passed": True, "regenerated": {}})})
+                     files={"lean-audit/audit.json": _lean_audit("pkg")})
     assert _mark(world, 2, h) == 0 and f"the Lean check {rid} of {h[:12]} passed it" in world.logs[-1]
+
+
+def _lean_audit(*passed: str, failed: dict[str, str] | None = None) -> str:
+    """A Lean check's `lean-audit/audit.json` (`lean_audit.run`): a report of each package it audited, by its path in the
+    repository, ``passed`` with none and ``failed`` with its failure, and nothing regenerated."""
+    reps = [{"package": p, "failures": []} for p in passed] + [{"package": p, "failures": [f]} for p, f in (failed or {}).items()]
+    return json.dumps({"passed": not failed, "failed": sorted(failed or {}), "cached": {}, "packages": reps, "regenerated": {}})
+
+
+BOTH = {LOCK: _lock(A="2"), "pkg/Proofs/lean-audit.json": _lock(B="2")}
+
+
+def test_a_lean_check_vouches_only_for_the_packages_its_own_report_shows_it_audited_and_passed(world, capsys):
+    """A check's `lean-audit` step passing says nothing of a package the check never audited: a shard audits only its own
+    parts, and a check limited to some packages lists only those.  The gate once read every package a check didn't regenerate
+    as passed, so a shard that audited only `Security/Proofs` vouched for `Security`, whose lock at that head was stale.  A
+    check whose report passes every package vouches for each; one whose report lists a package as failed, or doesn't list it,
+    vouches for none of those."""
+    world.with_store_remote()
+    h = world.change(BOTH)
+    shard = {"k": 1, "n": 2, "parts": ["lean-audit:pkg/Proofs"], "all": ["lean-audit:pkg", "lean-audit:pkg/Proofs"]}
+    rid = _published(world, h, steps=[{"step": "lean-audit", "status": "passed", "parts": ["lean-audit:pkg/Proofs"]}],
+                     files={"lean-audit/audit.json": _lean_audit("pkg/Proofs")}, meta={"shard": shard})
+    capsys.readouterr()
+    assert _mark(world, 1, h) == 1
+    err = capsys.readouterr().err
+    assert "it changes the Lean lock of pkg against `main`" in err and "--records pkg --update" in err
+    assert f"the Lean check {rid} is a shard that audited only pkg/Proofs, not pkg" in err
+    assert any(f"records gate: pkg/Proofs: the Lean check {rid} of {h[:12]} passed it" in line for line in world.logs)
+
+    lying = _published(world, h, steps=[{"step": "lean-audit", "status": "passed", "parts": ["lean-audit:pkg/Proofs"]}],
+                       files={"lean-audit/audit.json": _lean_audit("pkg", "pkg/Proofs")}, meta={"shard": shard})
+    assert _mark(world, 1, h) == 1                                     # a report beyond its parts: still only its parts count
+    assert f"the Lean check {lying} is a shard that audited only pkg/Proofs, not pkg" in capsys.readouterr().err
+
+    for report in (_lean_audit("pkg/Proofs"), _lean_audit("pkg/Proofs", failed={"pkg": "replay: T: stale"}),
+                   json.dumps({"passed": True, "regenerated": {}})):
+        capsys.readouterr()
+        other = _published(world, h, steps=[{"step": "lean-audit", "status": "passed"}], files={"lean-audit/audit.json": report})
+        assert _mark(world, 1, h) == 1
+        err = capsys.readouterr().err
+        assert "it changes the Lean lock of pkg against `main`" in err
+        assert (f"the Lean check {other} failed pkg" if "stale" in report else
+                f"the Lean check {other}'s lean-audit/audit.json lists no audit of pkg") in err
+
+    full = _published(world, h, steps=[{"step": "lean-audit", "status": "passed"}],
+                      files={"lean-audit/audit.json": _lean_audit("pkg", "pkg/Proofs", "lib")})
+    assert _mark(world, 1, h) == 0
+    assert any(f"records gate: pkg: the Lean check {full} of {h[:12]} passed it" in line for line in world.logs)
+
+    h2 = world.change({**BOTH, "pkg/A.lean": "theorem a : True := trivial\n"})
+    rid2 = _published(world, h2, steps=[{"step": "lean-audit", "status": "passed", "parts": ["lean-audit:pkg"]}],
+                      files={"lean-audit/audit.json": _lean_audit("pkg")}, meta={"shard": {**shard, "k": 2, "parts": ["lean-audit:pkg"]}})
+    _published(world, h2, steps=[{"step": "lean-audit", "status": "passed", "parts": ["lean-audit:pkg/Proofs"]}],
+               files={"lean-audit/audit.json": _lean_audit("pkg/Proofs")}, meta={"shard": shard})
+    assert _mark(world, 2, h2) == 0                                    # two shards: each vouches for its own part
+    assert any(f"records gate: pkg: the Lean check {rid2} of {h2[:12]} passed it" in line for line in world.logs)
+
+
+def test_a_cancelled_or_unfinished_lean_check_vouches_for_nothing(world, capsys):
+    """A check cancelled or killed after its `lean-audit` step passed (rc 137) didn't finish the run its records describe, and
+    one stopped by a signal published no verdict (`not_run`): neither vouches for any package, whatever its report says."""
+    world.with_store_remote()
+    h = world.change(BOTH)
+    steps = [{"step": "lean-audit", "status": "passed"}]
+    files = {"lean-audit/audit.json": _lean_audit("pkg", "pkg/Proofs")}
+    ids = [_published(world, h, steps=steps, files=files, state="cancelled", rc=137),
+           _published(world, h, steps=steps, files=files, passed=False, rc=137),
+           _published(world, h, steps=steps, files=files, state="running"),
+           _published(world, h, steps=steps, files=files, meta={"validation": {"status": "not_run"}})]
+    capsys.readouterr()
+    assert _mark(world, 1, h) == 1
+    err = capsys.readouterr().err
+    assert "it changes the Lean lock of pkg/Proofs, pkg against `main`" in err
+    for rid in ids:
+        assert f"the Lean check {rid} didn't finish" in err
+    assert not any("records gate:" in line for line in world.logs)
+
+
+def test_a_records_run_vouches_for_exactly_the_packages_it_passed(world, capsys):
+    """A records run of `pkg` that passed vouches for `pkg` and for each package its own reports show it passed (a requirer,
+    one audited beside it), and for no other package whose lock the head changes."""
+    world.with_store_remote()
+    h = world.change({**BOTH, "lib/lean-audit.json": _lock(C="2")})
+    rid = _published(world, h, files={"lean-audit/audit.json": _audit(),
+                                      "lean-audit/audit-Proofs/report.json": json.dumps(
+                                          {"package": "/w/lean-records/build-0/pkg/Proofs", "failures": []})})
+    capsys.readouterr()
+    assert _mark(world, 1, h) == 1
+    err = capsys.readouterr().err
+    assert "it changes the Lean lock of lib against `main`" in err and "--records lib --update" in err
+    assert "--records pkg --update" not in err and "--records pkg/Proofs --update" not in err
+    for pkg in ("pkg", "pkg/Proofs"):
+        assert any(f"records gate: {pkg}: records run {rid} of {h[:12]} passed it" in line for line in world.logs)
 
 
 def test_a_package_audited_beside_pkg_is_read_from_its_own_report(world, capsys):
