@@ -3088,14 +3088,20 @@ class Driver:
         return parents[2] if len(parents) > 2 else None
 
     def _clean_merge(self, tip: str, head: str) -> tuple[str | None, str]:
-        """(the tree of ``head`` merged onto ``tip``, "") when it merges with no conflict at all, as `Queue._merge` merges with
-        ``tip``'s merge drivers, else (None, why).  A git without `--attr-source` merges without them, which conflicts more."""
+        """(the tree of ``head`` merged onto ``tip``, "") when it merges as `Queue._merge` merges, with ``tip``'s merge drivers
+        and a merge whose every conflict is in a pin kept, each pin rebuilt from the merged tree (`repinned`), else (None,
+        why).  A git without `--attr-source` merges without them, which conflicts more."""
+        from .queue import repinned
+
         args = ("merge-tree", "--write-tree", "--name-only", "--no-messages", tip, head)
         r = _git(self.repo, f"--attr-source={tip}", *args, check=False)
         if r.returncode == 129 and "attr-source" in r.stderr:
             r = _git(self.repo, *args, check=False)
         if r.returncode == 1:
-            return None, f"conflict in {', '.join(dict.fromkeys(r.stdout.splitlines()[1:])) or 'a file'}"
+            files = list(dict.fromkeys(r.stdout.splitlines()[1:]))
+            if tree := repinned(self.repo, r.stdout.split()[0], tip, head, files):
+                return tree, ""
+            return None, f"conflict in {', '.join(files) or 'a file'}"
         if r.returncode:
             return None, f"doesn't merge: {(r.stderr or r.stdout).strip()[-200:]}"
         return r.stdout.split()[0], ""
