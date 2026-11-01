@@ -95,6 +95,13 @@ def test_a_lock_reads_every_package_its_records_read(tmp_path):
         assert t["outputs"] == [{"name": "records", "path": f"out/{pkg}/lean-audit.json"}]
 
 
+def test_a_lock_the_audit_refuses_is_listed_for_its_own_task_to_fail(tmp_path):
+    ts = listed(tmp_path, **{"Sec/lean-audit.json": "[", "Sec/Proofs/lean-audit.json": json.dumps({"proved_in": ["../../.."]})})
+    assert ts["lean-lock:Sec"]["reads"] == olean("Sec/Definitions.lean", "Sec/Definitions/A.lean"), \
+        "a lock that isn't JSON names no proved_in, as lean_audit.provers reads it"
+    assert len(ts["lean-lock:Sec/Proofs"]["reads"]) == 7, "a proved_in outside the tree adds no package"
+
+
 @pytest.mark.parametrize("changes, refusal", [
     ({"Sec/Proofs/D.lean": "import Proofs.C\n"}, "an import cycle"),
     ({"Sec/Other/lakefile.toml": 'name = "other"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Definitions"\n',

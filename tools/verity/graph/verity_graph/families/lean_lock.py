@@ -9,6 +9,7 @@ their modules, so a change to any of them reruns it."""
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from . import lean_module as lm
@@ -28,7 +29,7 @@ def closure(root: Path, pkg: str, pkgs: dict[str, lm.Package]) -> list[str]:
         named = json.loads((root / pkg / "lean-audit.json").read_text()).get("proved_in", [])
     except (OSError, ValueError, AttributeError):
         named = []  # the audit fails the policy
-    provers = sorted({lm.rel(root.resolve(), root.resolve() / pkg / q) for q in named if isinstance(q, str)})
+    provers = sorted({os.path.relpath(os.path.normpath(root / pkg / q), root) for q in named if isinstance(q, str)})
     return list(dict.fromkeys([pkg, *deps(pkg), *(d for q in provers for d in (q, *deps(q)))]))
 
 
