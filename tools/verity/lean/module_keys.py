@@ -1,18 +1,17 @@
 """A Lake module's sha256 key, under which the node's Lake artifact cache (`lean_audit.LakeArtifacts`) restores it.
 
 Lake names a module's outputs by its input hash, 64 bits of a hash that isn't cryptographic. The cache indexes each module
-it holds by a sha256 key of what its compilation reads instead (`keys`): the toolchain; the revision of every fetched
-dependency (the root's `lake-manifest.json`), which fixes every module the workspace's packages don't define; the lakefile of
-the package that defines it, which sets its options, and every file its `[[input_file]]` and `[[input_dir]]` targets name,
-which a module may read as it compiles (`include_str`); its source; and the keys of the workspace modules it imports. Before a
-package's build, `stage` fills a Lake cache directory of that build's own with each module whose key the cache indexes, every
-artifact checked against the sha256 the index holds. Lake reads only that directory and never writes it, and restores a
-module from it only where its own input hash agrees as well. A module without a key (a header this parser doesn't read, an
-import that no package or two packages claim, a `lakefile.lean` or a target this reading doesn't follow), or whose key isn't
-indexed, or with an artifact that
-differs, is built from source. Lake looks a module up by its package and input hash alone, so two staged modules with one
-input hash are both left out, and after the build `misrestored` names any module whose input hash is another staged
-module's, which fails the build.
+it holds by a sha256 key of the inputs Lake tracks for its compilation instead (`keys`): the toolchain; the revision of
+every fetched dependency (the root's `lake-manifest.json`), which fixes every module the workspace's packages don't define;
+the lakefile of the package that defines it, which sets its options, and every file its `[[input_file]]` and `[[input_dir]]`
+targets name, which a module may read as it compiles (`include_str`); its source; and the keys of the workspace modules it
+imports. Before a package's build, `stage` fills a Lake cache directory of that build's own with each module whose key the
+cache indexes, every artifact checked against the sha256 the index holds. Lake reads only that directory and never writes
+it, and restores a module from it only where its own input hash agrees as well. A module without a key (a header this parser
+doesn't read, an import that no package or two packages claim, a `lakefile.lean` or a target this reading doesn't follow),
+or whose key isn't indexed, or with an artifact that differs, is built from source. Lake looks a module up by its package
+and input hash alone, so two staged modules with one input hash are both left out, and after the build `misrestored` names
+any module whose input hash is another staged module's, which fails the build.
 
 A module enters the index (`LakeArtifacts.put`) only from a passing run that compiled it, and only where Lake read its
 header as this parser does (`indexable`): the workspace modules its `ir/<module>.setup.json` lists (`importArts`, every
