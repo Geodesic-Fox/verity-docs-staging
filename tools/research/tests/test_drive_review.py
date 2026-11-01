@@ -342,10 +342,10 @@ def test_a_lock_change_waits_for_a_passed_lean_check_of_a_next_commit_holding_it
     assert _main(world) == top and len(h.launched) == 1
 
 
-def _rebuild_next(world: World, monkeypatch) -> None:
-    """`next` made again from the same merges onto the same `main`, as a sync rebuilding it from below makes it: each commit new,
-    each tree the same."""
-    monkeypatch.setenv("GIT_COMMITTER_DATE", "2026-10-24T18:00:00Z")
+def _rebuild_next(world: World, monkeypatch, date: str = "2026-10-24T18:00:00Z") -> None:
+    """`next` made again from the same merges onto the same `main`, as a sync rebuilding it from below makes it: each commit new
+    (committed at ``date``), each tree the same."""
+    monkeypatch.setenv("GIT_COMMITTER_DATE", date)
     base = _main(world)
     commits = _git(world.origin, "rev-list", "--first-parent", "--reverse", f"{base}..next").split()
     top = base
@@ -379,25 +379,31 @@ def test_a_running_lean_check_holds_a_rebuilt_next_with_the_same_prs_heads_and_t
     assert _main(world) == new and len(h.launched) == 1
 
 
-def test_a_moved_lean_check_that_regenerated_locks_runs_again_on_the_rebuilt_commit(world, monkeypatch):
-    """`_land` builds the regenerated locks on the commit the check covers, and its lock gate takes only a run of that very
-    commit: a moved check that regenerated locks would cover the rebuilt `next` and be refused at every tick."""
+def test_a_moved_lean_check_that_regenerated_locks_lands_them_on_the_commit_it_moved_to(world, monkeypatch, tmp_path):
+    """A running check moved twice by rebuilds of `next` (`_rekey_lean`) keeps the commit it ran on as `rekeyed_from`, and once
+    it passes by regenerating records, `_land` commits them on the commit it holds now: the lock gate takes its run of the
+    commit it ran on, whose tree is that commit's, and nothing is checked again."""
     h = Review(world, monkeypatch)
     h.d.regenerate_locks = True
-    h.d._regenerated = lambda drive, run: True
-    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
-    world.gh.put(2, world.change({"a.txt": "2\n"}))
-    for n in (1, 2):
-        h.review(n)
+    world.gh.put(1, world.change({"pkg/A.lean": "theorem a : True := trivial\n", "pkg/lean-audit.json": '{"records": 1}\n'}))
+    h.review(1)
     h.tick()
-    _rebuild_next(world, monkeypatch)
+    one, (rid,) = _tip(world), h.lean_ids()
+    for date in ("2026-10-24T18:00:00Z", "2026-10-24T19:00:00Z"):
+        _rebuild_next(world, monkeypatch, date)
+        h.tick()
     new = _tip(world)
-    h.tick()
-    h.run_state[h.lean_ids()[0]] = ("done", 0, None)
-    h.evidence = [_steps_run(world.tmp, h.lean_ids()[0], {LEAN_STEP: "passed"})]
-    assert not h.tick().startswith("landed")
-    assert len(h.launched) == 2 and h.launched[1][0] == new, h.launched
-    assert h.d.q.load_state()["drive"]["lean"][new]["state"] is None
+    lean = h.d.q.load_state()["drive"]["lean"]
+    assert new != one and list(lean) == [new] and lean[new]["rekeyed_from"] == one, (lean, world.logs)
+    h.d.fetch = _live_run(tmp_path, rid, one, {"pkg": '{"records": 2}\n'})[1]
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #1"), world.logs
+    main = _main(world)
+    assert _git(world.origin, "rev-parse", "main^") == new and len(h.launched) == 1, h.launched
+    assert _git(world.origin, "show", f"{main}:pkg/lean-audit.json") == '{"records": 2}'
+    assert f"Checked: {rid} (the Lean check of {one[:12]}, passed by regenerating them)" in _git(
+        world.origin, "log", "-1", "--format=%B", main)
 
 
 def _lock_landing(world, monkeypatch, tmp_path, above: dict[str, str], lock: str | None = None,
@@ -569,6 +575,28 @@ def test_a_moved_running_check_keeps_only_the_members_above_the_lock_commit_and_
     assert not h.tick().startswith("landed")
     lean = h.d.q.load_state()["drive"]["lean"]
     assert h.cancelled == [] and list(lean) == [rebuilt] and lean[rebuilt]["rekeyed_from"] == new, (lean, world.logs)
+
+
+def test_a_check_carried_across_a_lock_commit_and_then_rekeyed_that_regenerated_records_is_checked_again(
+        world, monkeypatch, tmp_path):
+    """The lock gate takes a carried check's lock commit against the commit it was carried from, and a rekeyed one's against the
+    commit it holds: a check moved both ways is neither, so once it passes by regenerating records it runs again on its commit
+    rather than be refused at every tick."""
+    h, rid, top = _lock_landing(world, monkeypatch, tmp_path, {"pkg": '{"records": 3}\n'})
+    lock = _main(world)
+    _rebuild_next(world, monkeypatch)
+    h.tick()
+    rebuilt = _tip(world)
+    rec = h.d.q.load_state()["drive"]["lean"][rebuilt]
+    assert rec["carried"]["from"] == top and rec["rekeyed_from"], rec
+    h.review(2)
+    h.review(3)
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert not h.tick().startswith("landed"), world.logs
+    assert _main(world) == lock and len(h.launched) == 3 and h.launched[2][0] == rebuilt, h.launched
+    assert any(f"moved to {rebuilt[:12]} regenerated lock records, which don't hold there (it moved across a lock commit too, "
+               f"from {top[:12]})" in x for x in world.logs), world.logs
 
 
 def test_a_store_run_of_a_moved_checks_image_lands_its_records_checked_against_the_image(world, monkeypatch, tmp_path):

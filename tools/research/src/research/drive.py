@@ -39,8 +39,9 @@ Models and its package's Lake files, or a Lean source outside `Security/` of a p
 `queue.lean_change`, whatever its PR's title; Lean proofs alone land on the verdict, checked by the
 after-landing run) lands only once a lean-audit passed on a commit of `next` at or above it: drive's own Lean
 check (`train.sh TOP MACHINES --deferred lean-audit`, of the prefix's top, while `next` stays on its base for it), or any
-recorded run of the store whose lean-audit passed there; one that regenerated locks lands exactly at its commit,
-the locks on top, and `next` is rebuilt on that lock commit at once, each member above with its merge's tree and those records
+recorded run of the store whose lean-audit passed there; one that regenerated locks lands exactly at its commit, or at the
+commit a rekey moved it to across trees that differ in no file a Lean check reads (`_rekey_refusal`), the locks on top, and
+`next` is rebuilt on that lock commit at once, each member above with its merge's tree and those records
 no merge above changed (`_carry`), so `main` stays a commit of `next` and the Lean checks above move with their commits: one
 covers its new commit when it regenerated the records they differ in, the tree that lands being the one it checked with its
 own.  While one runs, a Lean change above it, reviewed or not, gets a check stacked at `next`'s top, below what came this tick
@@ -1814,14 +1815,16 @@ class Driver:
                 return rid, {pkg: path for pkg, (_, path) in recs.items() if path is not None}, None
         return "", {}, None
 
-    def _unvouched(self, rid: str, ran: str | None = None) -> str | None:
+    def _unvouched(self, rid: str, ran: str | None = None, rekeyed_from: str | None = None) -> str | None:
         """Why the merge gate refuses the lock commit at HEAD (`merge.regenerated_parent`, reading the records itself: from the
-        store, else from ``rid``'s run dir on its node), or None when it vouches for it.  ``ran``:
-        the commit ``rid`` checked, when `_carry` rebuilt it below HEAD."""
+        store, else from ``rid``'s run dir on its node), or None when it vouches for it.  ``ran``: the commit ``rid`` checked,
+        when `_carry` rebuilt it below HEAD; ``rekeyed_from``: the commit ``rid`` checked, when a rekey moved it to HEAD's
+        parent (`_rekey_lean`, `_move_lean`), which the gate holds to the low-risk rule with `lowrisk_excludes`."""
         from .merge import declared_command, produced, regenerated_parent
 
         if regenerated_parent(self.repo, "HEAD", self.q.store, tool="check", kinds=produced(self.repo, "check"),
-                              command=declared_command(self.repo, "check"), deferred=rid, fetch=self.fetch, ran=ran):
+                              command=declared_command(self.repo, "check"), deferred=rid, fetch=self.fetch, ran=ran,
+                              rekeyed_from=rekeyed_from, excludes=self.lowrisk_excludes):
             return None
         return (f"the merge gate refuses its lock commit: its records aren't byte for byte the ones {rid} regenerated "
                 "(`merge.regenerated_parent`, on the live run)")
@@ -1883,11 +1886,13 @@ class Driver:
                 files.append(dst)
             _git(self.repo, "add", "--", *files)
             rec = (drive.get("lean") or {}).get(m.commit) or {}
-            ran = (rec.get("carried") or {}).get("from") if rec.get("run") == rid else None
+            mine = rec.get("run") == rid
+            ran = (rec.get("carried") or {}).get("from") if mine else None
+            moved = rec.get("rekeyed_from") if mine and not rec.get("carried") else None
             _git(self.repo, "commit", "-q", "--allow-empty", "-m",
-                 f"Lock records regenerated for {prs}\n\nChecked: {rid} (the Lean check of {(ran or m.commit)[:12]}, passed by "
-                 f"regenerating them)\nRegenerated: {', '.join(files)}\n", env=IDENTITY)
-            if why := self._unvouched(rid, ran):
+                 f"Lock records regenerated for {prs}\n\nChecked: {rid} (the Lean check of {(ran or moved or m.commit)[:12]}, "
+                 f"passed by regenerating them)\nRegenerated: {', '.join(files)}\n", env=IDENTITY)
+            if why := self._unvouched(rid, ran, moved):
                 _git(self.repo, "reset", "-q", "--hard", base)
                 self.refuse(drive, f"lock-gate:{m.commit}", f"{prs} passed ({v.attempt}) but is held, not landed: {why}")
                 return None
@@ -2161,7 +2166,8 @@ class Driver:
     # -- the review landing (the module's docstring).  `drive["lean"]`: {the commit of `next` a Lean
     #    check ran on: {"ids" ([] with "launch", `detach`'s record, while its train.sh runs detached: `_resolve`), "at",
     #    "members": [[PR, head], ...] up to it, "tree", "stacked" or "hand" and "by" (`hand_lean`) when it is either,
-    #    "rekeyed_from" (`_rekey_lean`) or "carried" (`_carry`: {"from": the commit it ran on, "files" that commit's tree and
+    #    "rekeyed_from" (`_rekey_lean`, `_move_lean`: the commit it ran on, kept across a chain of rekeys) or "carried"
+    #    (`_carry`: {"from": the commit it ran on, "files" that commit's tree and
     #    this one's differ in, "ok" once `_carried_ok` judged it}) when it moved there, "state": None while it runs, else
     #    "passed" (with "run", the id that passed) or "failed" (with "why")}}, each dropped once its commit leaves `next`.
     #    `drive["postland"]` also keeps "verified_as" ({"steps", "no_cache"} of the run that verified `verified`, or ci's
@@ -2570,7 +2576,7 @@ class Driver:
         commit there of its highest member left, the members up to it)}), ("", {}) when there is no such check (the next sync
         rebuilds `next`), or (None, None), told to the log, when the lane waits for one that can't move: a check drive didn't
         launch runs (`_running_lean`: its run is of its commit), a passed one regenerated lock records or they can't be read
-        (they land only at the commit it ran on: `_lean_gate`), or (a) the members up to the commit it moves to aren't its
+        (they land at its commit before the lane moves it: `_lean_gate`), or (a) the members up to the commit it moves to aren't its
         own less ``gone`` (one doesn't merge cleanly again, or its record isn't `next`'s), or (b) that commit's tree and its own
         differ in a file `lowrisk_excludes` names.  A check of PRs in ``gone`` alone covers nothing left, and isn't moved."""
         from .queue import lowrisk
@@ -2587,7 +2593,7 @@ class Driver:
         elif regen := next((c for c, rec in keep.items()
                             if rec.get("state") == "passed" and self._regenerated_files(drive, rec["run"]) != set()), None):
             why = (f"the passed Lean check {_ids(keep[regen])} of {regen[:12]} regenerated lock records (or they can't be read), "
-                   "which land only at the commit it ran on")
+                   "which land at its commit before the lane moves it")
         top, images, broke, moves = tip, {}, "", {}
         for m in chain if keep and not why else ():
             if m.pr in gone:
@@ -2640,7 +2646,7 @@ class Driver:
         prs = " ".join(f"#{n}" for n in sorted(gone))
         for c, (new, members) in moves.items():
             rec = lean.pop(c)
-            lean[new] = {**rec, "members": members, "tree": self._tree(new), "rekeyed_from": c}
+            lean[new] = {**rec, "members": members, "tree": self._tree(new), "rekeyed_from": rec.get("rekeyed_from", c)}
             q.log(f"research queue drive: the Lean check {_ids(rec)} of {c[:12]} ({rec.get('state') or 'running'}) holds "
                   f"{new[:12]} of `{q.branch}` rebuilt on `{q.into}` {tip[:12]}: the same PRs up to #{members[-1][0]} at the "
                   f"same heads less {prs} (the low-risk lane's), and trees that differ in no file `lowrisk_excludes` names")
@@ -2757,7 +2763,8 @@ class Driver:
         """(the highest index of ``chain[:k]`` that may land, the Lean check whose regenerated locks land with it or another that
         holds its Lean changes, or ""): every Lean change below it (`queue.lean_change`) has a passed lean-audit of a commit of
         `next` at or above it (`_cover`) whose Lean is the Lean of what may land; one whose check regenerated locks lands exactly
-        at that commit, its locks on top (`_land`).  For the lowest Lean change without one, a Lean check is launched, or waited
+        at that commit, its locks on top (`_land`), a check a rekey moved there included unless `_rekey_refusal` says its
+        records don't hold there (then it is checked again).  For the lowest Lean change without one, a Lean check is launched, or waited
         for (`_lean_check`).  Nothing at or above a commit whose Lean check failed lands, but for one below a passed check of
         ``chain[:k]``, which checked the tree that lands (`_past_failed`), and when no Lean change's own commit is that one, `CI`
         is told.  ``reviewed``: the reviewed prefix's length, when a cut below it (`land_reviewed`) runs the gate on ``k``."""
@@ -2789,8 +2796,9 @@ class Driver:
                 del lean[commit]                    # what it checked and what lands differ by records it didn't regenerate
                 self._lean_check(drive, chain, top, i, dry_run, cut)
                 return min(i - 1, t), rid
-            if regen and lean.get(commit, {}).get("rekeyed_from"):
-                # `_land` builds the locks on ``commit``, and its lock gate takes only a run of that very commit
+            if regen and lean.get(commit, {}).get("run") == run and (why := self._rekey_refusal(lean[commit], commit)):
+                self.q.log(f"research queue drive: the Lean check {_ids(lean[commit])} moved to {commit[:12]} regenerated lock "
+                           f"records, which don't hold there ({why}): it is checked again")
                 del lean[commit]
                 self._lean_check(drive, chain, top, i, dry_run, cut)
                 return min(i - 1, t), rid
@@ -2873,6 +2881,19 @@ class Driver:
             return None
         carried["ok"] = set(carried["files"]) <= files
         return carried["ok"]
+
+    def _rekey_refusal(self, rec: dict, c: str) -> str | None:
+        """Why the lock records a passed Lean check that a rekey moved to ``c`` (`_rekey_lean`, `_move_lean`) regenerated can't
+        land on ``c`` (`_land`'s lock gate would refuse them), or None: they can when the commit it ran on, its `rekeyed_from`,
+        and ``c`` differ in no file but those the low-risk rule allows (`merge.rekey_refusal`), as the gate checks.  A check
+        `_carry` moved too isn't one the gate takes: its lock commit is taken against the commit it was carried from."""
+        from .merge import rekey_refusal
+
+        if not (origin := rec.get("rekeyed_from")):
+            return None
+        if rec.get("carried"):
+            return f"it moved across a lock commit too, from {rec['carried'].get('from', '')[:12]}"
+        return rekey_refusal(self.repo, origin, c, self.lowrisk_excludes)
 
     def _carry(self, drive: dict, chain: list[Member], t: int, lock: str) -> None:
         """After ``chain[:t + 1]`` landed with the lock commit ``lock`` on top, rebuild `next` on it, so `main` is again a commit
@@ -3044,7 +3065,8 @@ class Driver:
                 why = f"trees that differ in no file `lowrisk_excludes` names ({', '.join(sorted(files)[:3])})"
             else:
                 continue
-            lean[new] = {**lean.pop(c), "tree": self._tree(new), "rekeyed_from": c}
+            rec = lean.pop(c)
+            lean[new] = {**rec, "tree": self._tree(new), "rekeyed_from": rec.get("rekeyed_from", c)}
             self.q.log(f"research queue drive: the Lean check {_ids(rec)} of {c[:12]} holds {new[:12]} of the "
                        f"rebuilt `{self.q.branch}`: the same PRs at the same heads, {why}")
 
