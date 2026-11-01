@@ -4,8 +4,8 @@ committed lock (`runners/lean_lock.py`).
 
 Its records read the builds of the packages `lean_changed.closure` names: the package, those it requires by path, and those
 its `proved_in` names with theirs (Security's records read Security/Proofs, which requires the Flock verifier). Its inputs
-are every file of those packages and the auditor's (`lean_changed.closure_inputs`), and it reads the `olean` of each of
-their modules that has a task (`lean_module`), so a change to any of them reruns it. A `roots` entry that names no module
+are every file an audit of the package can read, those packages' and the auditor's (`lean_audit.inputs`), and it reads the
+`olean` of each of their modules that has a task (`lean_module`), so a change to any of them reruns it. A `roots` entry that names no module
 of the tree has no task to read, and the runner fails the lock on it, as the check's `lake build +ROOT` does."""
 from __future__ import annotations
 

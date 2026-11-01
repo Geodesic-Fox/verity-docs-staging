@@ -121,6 +121,17 @@ def test_this_tree_s_modules_and_imports_are_those_the_lean_build_cache_keys():
     assert keyed == direct
 
 
+@pytest.mark.slow
+def test_this_tree_s_locks_read_every_file_their_audit_can():
+    """On this checkout: each lock's inputs are every file an audit of its package can read (`lean_audit.inputs`), so a
+    change to a package its records read reruns it, as a Flock change reruns Security's."""
+    files = graph.tracked(ROOT)
+    ts = lean_lock.tasks(ROOT, files)
+    assert len(ts) == len(lean_module.la.packages(files))
+    for t in ts:
+        assert t["inputs"] == lean_module.la.inputs(t["vars"]["package"], files), t["id"]
+
+
 @pytest.mark.parametrize("changes, refusal", [
     ({"Sec/Proofs/D.lean": "import Proofs.C\n"}, "an import cycle"),
     ({"Sec/Other/lakefile.toml": 'name = "other"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Definitions"\n',
