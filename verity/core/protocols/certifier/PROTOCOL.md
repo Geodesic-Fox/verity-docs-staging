@@ -1054,13 +1054,9 @@ and proves that at most `2^c` decision streams are charged `c` bits or fewer ove
 pays for, so the weights `2^(−charge)` sum to at most 1. So with advice v1 the advice string's bounds hold with no
 assumption on the charge (`SecurityProofs.EncardAccSeqsWithinLeConstantRateV1`, `SecurityProofs.EncardDecodableWithinLeCompiledV1`,
 `SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1`). The windows these cover are decision-only: their four
-counts are sent as 0, which is `ChargeCount_v1`'s scope. Windows that send nonzero counts are covered once each is
-charged its decisions' charge plus a count code's length for its counts, under any count code whose lengths meet
-Kraft's inequality, as every prefix-free code's do (`SecurityProofs.EncardChargedLeCounted` and the three bounds
-`…V1Counted`): a window's weights are the decisions' times the counts', each summing to at most 1. The code is the
-same in every window and carries nothing across windows, and it is a parameter: a separate code, which is not how
-advice v1 sends counts (`code_v1` codes them inside the arithmetic coder, `ChargeCount_v2`'s window). That window is
-covered as sent: Lean mirrors `ChargeCount_v2{N, H, O}`'s reference (`window_charge.py`'s `reference_window`) one for
+counts are sent as 0, which is `ChargeCount_v1`'s scope. Windows that send nonzero counts are covered as advice v1
+sends them (`code_v1` codes them inside the arithmetic coder, `ChargeCount_v2`'s window); the earlier bounds under a
+separate count code (`…V1Counted`) are retired lemmas. That window is covered as sent: Lean mirrors `ChargeCount_v2{N, H, O}`'s reference (`window_charge.py`'s `reference_window`) one for
 one (`Security/Definitions/NetworkCertifier/WindowCharge.lean`), every count and value inside the coder, and proves
 that at most `2^c` advice values (each window's decisions, hits and order entries) are charged `c` bits or fewer
 (`SecurityProofs.EncardChargedLeWhole`, and the three bounds `…V1Whole`): two windows' symbol sequences from one carry
@@ -1100,7 +1096,7 @@ committed bits plus log2 of the number of possible faulty sets, except with prob
 
 The inference-only policy charges an isolation block the ingress covert capacity from the last wipe before it starts,
 plus what survived that wipe. `capacity.k_share` expresses bits as a share of K, which the caller passes in bits
-(`calibrate(k_bits=…)`, `--k-bits`): 9.12e7 under NCI's inference-only policy (α·Γ = 9.6e−11 × 9.5e17). The
+(`calibrate(k_bits=…)`, `--k-bits`): 9.12e7 under the inference-only policy (α·Γ = 9.6e−11 × 9.5e17). The
 calibration report records the K it used.
 
 Every statement in the table's Lean column is a guarantee in `Security/lean-audit.json`, frozen as no-function: each is
