@@ -136,7 +136,7 @@ class Cubin:
         major, minor = torch.cuda.get_device_capability(device)
         return cls(noise_cubin(f"{major}{minor}"))
 
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path) -> None:
         torch.zeros(1, device="cuda")
         self.lib = C.CDLL("libcuda.so.1")
         self.image = Path(path).read_bytes()
@@ -191,7 +191,7 @@ def seed_words(seeds: list[bytes], device) -> torch.Tensor:
     return torch.from_numpy(w.copy()).to(device)
 
 
-def noise_blocks(seeds: list[bytes], n: int, device, cubin: Cubin | None) -> torch.Tensor:
+def noise_blocks(seeds: list[bytes], n: int, device: torch.device | str, cubin: Cubin | None) -> torch.Tensor:
     """(U, n, 16) int64 halves on `device`: the kernel's when `cubin` is given, else hashlib's."""
     if cubin is None:
         return noise_blocks_cpu(seeds, n).to(device)
@@ -207,7 +207,8 @@ def stream_blocks(m: int, n: int, k: int) -> int:
     return HT.Layout(m, n, k).blocks
 
 
-def call_streams(seeds: list[bytes], counts: list[int], device, cubin: Cubin | None) -> list[torch.Tensor]:
+def call_streams(seeds: list[bytes], counts: list[int], device: torch.device | str,
+                 cubin: Cubin | None) -> list[torch.Tensor]:
     """Each call's stream, blocks 0 .. counts[c] - 1 of seeds[c] (its seed_c), as (counts[c], 16) int64 halves on `device`:
     the kernel's (`h1_noise_calls`, one launch for every call) when `cubin` is given, else hashlib's."""
     if len(seeds) != len(counts):
@@ -399,7 +400,7 @@ def call_receipts(call: Call, salt: bytes, base: int, root_a: bytes, root_b: byt
 
 
 def reference(call: Call, salt: bytes, base: int, root_a: bytes, root_b: bytes, u: int,
-              gated=None, j10r: bool = False) -> tuple[list[int], list[int]]:
+              gated: np.ndarray | None = None, j10r: bool = False) -> tuple[list[int], list[int]]:
     """`h1tile.reference` on unit u of the call: (z, receipt); `gated`, the tile's 32 admit bits, is `PouwH1Tile_v4`'s
     input (a dead tile, every bit 0, has the zero receipt), None the ungated unit (a dead tile's receipt as its noise gives
     it). `j10r`: `h1tile.j10r_reference`, ``call`` = base and ``blocks`` its tile's `h1tile.j10r_blocks` at the call's M."""
@@ -415,8 +416,8 @@ def reference(call: Call, salt: bytes, base: int, root_a: bytes, root_b: bytes, 
     return HT.reference(a, b, salt, base + u, (root_a, root_b), gated=bits)
 
 
-def gated_receipts(call: Call, admit, salt: bytes, base: int, root_a: bytes, root_b: bytes, cubin: Cubin | None = None,
-                   chunk: int | None = None) -> tuple[np.ndarray, list[int]]:
+def gated_receipts(call: Call, admit: np.ndarray, salt: bytes, base: int, root_a: bytes, root_b: bytes,
+                   cubin: Cubin | None = None, chunk: int | None = None) -> tuple[np.ndarray, list[int]]:
     """The call's receipts under its admit bits, `PouwH1Tile_v4`'s (a tile's live bit is the OR of its 32 rows' admit
     bits, the bits the tally reads): a live unit's is `h1tile`'s, whatever its rows' bytes, a dead unit's the canonical
     empty receipt (zero words) with no noise derived; and the live units."""
@@ -428,7 +429,8 @@ def gated_receipts(call: Call, admit, salt: bytes, base: int, root_a: bytes, roo
     return out, live
 
 
-def gated_reference(call: Call, admit, salt: bytes, base: int, root_a: bytes, root_b: bytes, u: int) -> list[int]:
+def gated_reference(call: Call, admit: np.ndarray, salt: bytes, base: int, root_a: bytes, root_b: bytes,
+                    u: int) -> list[int]:
     """Unit u's receipt under the call's admit bits: `PouwH1Tile_v4`'s on its tile's 32 bits (`reference(gated=...)`)."""
     i, _ = call.units[u]
     return reference(call, salt, base, root_a, root_b, u, gated=np.asarray(admit)[R * i:R * i + R])[1]
@@ -470,7 +472,7 @@ class Receipts:
     def __init__(self, served: Any, run: Any = None, units: Any = None, device: Any = None,
                  weight: Callable[[Any], torch.Tensor] | None = None,
                  roots: Callable[[Any], tuple[bytes, bytes]] | None = None, keep: Callable[[Any], bool] | None = None,
-                 skip_dead: bool = False, launches: int = 4, cubin: Any = None, j10r: bool | None = None):
+                 skip_dead: bool = False, launches: int = 4, cubin: Any = None, j10r: bool | None = None) -> None:
         if launches < 1:
             raise ValueError(f"a batch takes at least one launch, not {launches}")
         self.served, self.run, self.units, self.launches, self.cubin = served, run, units, launches, cubin
