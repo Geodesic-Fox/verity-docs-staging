@@ -15,6 +15,8 @@ from typing import NamedTuple
 
 #: the words of a header, none of which names a module there
 WORDS = ("module", "prelude", "public", "meta", "import", "all")
+#: a module's name: components joined by dots, none empty (`import A.` is refused), each `«»`-quoted or bare
+NAME = re.compile(r"(?:«[^»]*»|[^.«»]+)(?:\.(?:«[^»]*»|[^.«»]+))*")
 
 
 def parts(mod: str) -> list[str]:
@@ -79,7 +81,7 @@ def _token(src: str, i: int) -> tuple[str, int]:
 
 
 def header(src: str) -> Header | None:
-    """``src``'s header, or None when it is cut off: a comment left open, or an import without a module's name."""
+    """``src``'s header, or None when it is cut off: a comment left open, or an import without a module's name (`NAME`)."""
     flags, i, end = {}, 0, 0
     for word in ("module", "prelude"):
         if (k := skip(src, i)) < 0:
@@ -106,7 +108,7 @@ def header(src: str) -> Header | None:
             if (k := skip(src, j)) < 0:
                 return None
             t, j = _token(src, k)
-        if not t or t in WORDS:
+        if t in WORDS or not NAME.fullmatch(t):
             return None
         out.append(Import(name(t), "public" in words, "meta" in words, every))
         i = end = j
