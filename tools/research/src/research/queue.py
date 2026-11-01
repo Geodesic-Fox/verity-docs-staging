@@ -22,7 +22,7 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    once it ends); or, with
                                                    --mark, on the owner's word alone (`MarkOnly`).  First the records gate
                                                    (`RecordsGate`, which --no-preflight keeps) refuses a head that changes a Lean
-                                                   lock against `main` unless a records run or Lean check in the store passed
+                                                   lock against the landing branch unless a records run or Lean check passed
                                                    that package, of the head or of a commit whose files of the package and the
                                                    packages it requires (tests and docs aside), lean-toolchain and the Lean
                                                    checker (tools/verity/lean) are the head's, naming the run to start; then,
@@ -131,10 +131,11 @@ failure `next` has too refuses nothing, and what keeps a check from running is s
 checks it).  `--no-preflight` skips it, for the lander.
 
 Records gate.  A head whose own records run printed `AUDIT: FAIL` fails a train's Lean check, about 50 minutes later.
-So `ready` (and `judge`) first refuse a head whose change against `main` touches a `lean-audit.json`
+So `ready` (and `judge`) first refuse a head whose change against the landing branch (drive.toml's `land_into` at `main`:
+`checked`, else `main`) touches a `lean-audit.json`
 unless the store holds a records run or a Lean check of that head that passed each such package on its lock, or of a commit whose
 inputs for the package are the head's (its files and those of the packages it requires, tests and docs aside; `lean-toolchain`
-and the checker whole), or vouches for it through a head that only merged `main` or committed the record a run regenerated (`RecordsGate`).  It reads the store's remote
+and the checker whole), or vouches for it through a head that only merged the landing branch or committed the record a run regenerated (`RecordsGate`).  It reads the store's remote
 and refuses when it can't; `--no-preflight` doesn't skip it.
 
 `next`.  Its first-parent chain above `checked` (`Queue.base`) is the queue, and each merge commit's trailers name its PR, head and owner: git holds
@@ -3256,7 +3257,7 @@ RECORDS_COMMAND = ("research run --on vy-nebius-cpu-1 --pool research --project 
 RECORD_KEPT = "record/" + LEAN_LOCK
 #: a requirer's report in a records run's files (`lean_changed.reports`: `requirer-<path, each run of other characters `_`>/`)
 REQUIRER_AUDIT = re.compile(r"(?:^|/)requirer-([^/]+)/audit\.json$")
-#: how many commits below a head `RecordsGate` follows one that only merged `main`, or only committed a record a run regenerated
+#: how many commits below a head `RecordsGate` follows one that only merged the landing branch, or only committed a record a run regenerated
 RECORDS_WALK = 8
 #: the attempts `RecordsGate` reads from the store's remote: those started in the lookback before now, whatever the head's history
 #: (a window counted from its commits dropped same-input runs of earlier the same night on a branch with many merges)
@@ -3333,7 +3334,9 @@ class LeanCheck:
 
 
 class RecordsGate:
-    """`ready`'s records gate, before the preflight and the mark: a head whose change against `main` (from their merge base)
+    """`ready`'s records gate, before the preflight and the mark: a head whose change against the landing branch (`into_at`
+    `main`: `checked` under `land_into = "checked"`, else `main`, whose locks the PRs that landed there were held to; from their
+    merge base)
     touches a Lake package's lock (`lean-audit.json`) is refused unless the store holds, for each such package, a records run of
     that exact head in which the package passed on the head's own lock (as PKG, or as a requirer PKG's run audited), or a Lean
     check of the head that audited the package and passed it on that lock (`_checked`).  A records run that printed
@@ -3342,7 +3345,7 @@ class RecordsGate:
 
     Two heads are vouched for by the commit below them, followed `RECORDS_WALK` commits at most: one that commits exactly the
     record a records run of its one parent regenerated for a package that passed there (`--update`'s `record/lean-audit.json`),
-    changing nothing but locks; and one that only merged `main` into a vouched commit, every file it changed being main's whole
+    changing nothing but locks; and one that only merged the landing branch into a vouched commit, every file it changed being its whole
     but a lock, which is main's or `tools/verity/lean/merge.py`'s merge of the two sides (the fast path reports `path: reused`
     for it: a candidate, which the train's Lean check rebuilds and regenerates where it differs).
 
@@ -3373,6 +3376,8 @@ class RecordsGate:
         #: the commits a fetch has asked the remote for: another package's search doesn't ask again for those it won't serve
         self._tried: set[str] = set()
         self.notes: list[str] = []
+        #: the landing branch the head's change is judged against (`_locks`)
+        self.into = "main"
 
     def __call__(self, pr: PR) -> str | None:
         """None when the head may be marked; else the refusal, naming the command to start for each package."""
@@ -3410,19 +3415,22 @@ class RecordsGate:
                          f"`lean-audit/{RECORD_KEPT}`, commit exactly that over {pkg}/{LEAN_LOCK} and mark that commit, which "
                          f"needs no run of its own")
         notes = f" ({'; '.join(self.notes[:3])})" if self.notes else ""
-        return (f"it changes the Lean lock of {', '.join(missing)} against `main`, and the store holds no records run of "
+        return (f"it changes the Lean lock of {', '.join(missing)} against `{self.into}`, and the store holds no records run of "
                 f"{pr.head[:12]} in which {'it' if len(missing) == 1 else 'each'} passed on the head's own lock, nor a Lean check of "
-                f"it, nor such a run below a head that only merged `main` or committed the record a run regenerated, nor at a "
+                f"it, nor such a run below a head that only merged `{self.into}` or committed the record a run regenerated, nor at a "
                 f"commit whose inputs for it are the head's{notes}:\n  - "
                 + "\n  - ".join(lines) + "\n  (`--no-preflight` doesn't skip this gate)")
 
     def _locks(self, pr: PR) -> dict[str, str]:
-        """{package: its lock's path} for each lock the head's change against `main` touches and the head still has."""
+        """{package: its lock's path} for each lock the head's change against the landing branch (`self.into`) touches and the
+        head still has."""
         _git(self.repo, *STALL, "fetch", "-q", self.remote, "+refs/heads/main:refs/queue/records/main",
              f"+refs/pull/{pr.number}/head:refs/queue/records/pr")
+        self.into = into_at(self.repo, "refs/queue/records/main")
+        _git(self.repo, *STALL, "fetch", "-q", self.remote, f"+refs/heads/{self.into}:refs/queue/records/base")
         if _git(self.repo, "cat-file", "-e", f"{pr.head}^{{commit}}", check=False).returncode:
             raise QueueError(f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)")
-        files = _out(self.repo, "diff", "--name-only", "--no-renames", f"refs/queue/records/main...{pr.head}").splitlines()
+        files = _out(self.repo, "diff", "--name-only", "--no-renames", f"refs/queue/records/base...{pr.head}").splitlines()
         return {posixpath.dirname(f) or ".": f for f in sorted(files) if posixpath.basename(f) == LEAN_LOCK
                 and _git(self.repo, "cat-file", "-e", f"{pr.head}:{f}", check=False).returncode == 0}
 
@@ -3709,10 +3717,10 @@ class RecordsGate:
         return True, None
 
     def _main_merge(self, commit: str, ours: str, theirs: str) -> bool:
-        """Whether ``commit`` only merges `main`'s ``theirs`` into ``ours``: each file it changes over ``ours`` is main's whole, a
-        lock aside, which may be `merge.py`'s merge of the two sides instead."""
+        """Whether ``commit`` only merges the landing branch's ``theirs`` into ``ours``: each file it changes over ``ours`` is
+        that branch's whole, a lock aside, which may be `merge.py`'s merge of the two sides instead."""
         if commit not in self._merges:
-            ok = _git(self.repo, "merge-base", "--is-ancestor", theirs, "refs/queue/records/main", check=False).returncode == 0
+            ok = _git(self.repo, "merge-base", "--is-ancestor", theirs, "refs/queue/records/base", check=False).returncode == 0
             base = _out(self.repo, "merge-base", ours, theirs) if ok else ""
             for f in _out(self.repo, "diff", "--name-only", "--no-renames", ours, commit).splitlines() if ok else []:
                 mine = _blob(self.repo, commit, f)
