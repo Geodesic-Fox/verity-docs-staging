@@ -652,8 +652,8 @@ def test_a_module_version_a_passing_run_built_is_restored_under_its_key_on_anoth
         if at:
             monkeypatch.setattr(LC, "ARTIFACTS", at)
             cache = at / LA.MK.STAGE / "test"
-            staged, keyed = LC.stage_build(LA.MK, pkg, ["Control"], cache)
-            assert keyed == len(mods)
+            staged, said = LC.stage_build(LA.MK, pkg, ["Control"], cache)
+            assert said == {"modules": len(staged), "keyed": len(mods)}
         pre = ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}"] if cache else []
         subprocess.run(LC.in_sandbox(pkg, [*pre, "lake", "build"]), cwd=pkg, check=True, capture_output=True,
                        env=LC.lake_env())

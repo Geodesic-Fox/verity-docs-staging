@@ -744,7 +744,7 @@ class LakeArtifacts:
 
     def _lock(self):
         self.store.mkdir(parents=True, exist_ok=True)
-        f = open(self.store / "lock", "w")
+        f = open(self.store / MK.LOCK, "w")
         fcntl.flock(f, fcntl.LOCK_EX)
         return f
 
@@ -759,7 +759,7 @@ class LakeArtifacts:
             n = 0
             for pkg in sorted(pkgs):
                 ws = MK.workspace(pkg)
-                if ws is None:
+                if isinstance(ws, str):
                     continue
                 keyed = MK.keys(pkg, MK.policy_roots(pkg))
                 with ThreadPoolExecutor(max_workers=8) as ex:
@@ -773,45 +773,47 @@ class LakeArtifacts:
         return n
 
     @staticmethod
-    def _built(mod: str, keyed: dict, pkgs: list, since: float | None) -> tuple[str, dict, dict[str, tuple[Path, str]]] | None:
+    def _built(mod: str, keyed: dict, pkgs: list, since: float | None) -> tuple[str, dict, dict[str, tuple[Path, str]]] | str:
         """(Lake's input hash, the outputs its trace names, {artifact: (its file, its sha256)}) of ``mod`` as its build
-        compiled it, or None: not compiled since ``since``, restored, or not `indexable`."""
+        compiled it, or why it isn't indexed: not compiled since ``since``, restored, or not `indexable`."""
         build = keyed[mod].package.build()
         trace = build / "lib" / "lean" / MK.path_of(mod, ".trace")
+        if not trace.is_file():
+            return "no trace"
+        st = trace.stat()
         try:
-            st = trace.stat()
             d = json.loads(trace.read_text())
-        except (OSError, ValueError):
-            return None
-        if not isinstance(d, dict) or d.get("synthetic") or (since is not None and st.st_mtime <= since):
-            return None
+        except ValueError as e:
+            return f"a trace that isn't JSON: {e}"
+        if not isinstance(d, dict) or d.get("synthetic"):
+            return "restored, or a trace of another shape"
+        if since is not None and st.st_mtime <= since:
+            return "not compiled by this run"
         out, h = d.get("outputs"), d.get("depHash")
-        if not isinstance(out, dict) or not isinstance(h, str) or not MK.HASH.fullmatch(h) or MK.indexable(mod, keyed, pkgs):
-            return None
+        if not isinstance(out, dict) or not isinstance(h, str) or not MK.HASH.fullmatch(h):
+            return "a trace without its outputs or input hash"
+        if why := MK.indexable(mod, keyed, pkgs):
+            return why
         files = {}
         for name in sorted({s for s in _strings(out) if ARTIFACT.fullmatch(s)}):
             f = MK.output(build, mod, name)
-            try:
-                if (f.parent / f"{f.name}.hash").read_text().strip() != name.split(".", 1)[0]:
-                    return None
-            except OSError:
-                return None
-            if (sha := MK.digest(f)) is None:
-                return None
-            files[name] = (f, sha)
-        return (h, out, files) if files else None
+            hashed = f.parent / f"{f.name}.hash"
+            if not f.is_file() or not hashed.is_file() or hashed.read_text().strip() != name.split(".", 1)[0]:
+                return f"{f.name} isn't in the build under {name}"
+            files[name] = (f, MK.digest(f))
+        return (h, out, files) if files else "a trace that names no artifact"
 
     def _index(self, mod: str, k, built) -> bool | None:
         """Index ``mod`` under ``k`` from ``built`` (`_built`): True for a new entry, False for one kept or replaced, None when
         it has none."""
-        path = self.store / MK.INDEX / f"{k.key}.json"
+        at = self.store / MK.INDEX / f"{k.key}.json"
         old = MK.entry(self.store, k, mod)
-        if built is None:
+        if isinstance(built, str):
             return None if old is None else False
         h, out, files = built
         shas = {n: s for n, (_, s) in files.items()}
         if old is not None and old["hash"] == h and old["sha256"] == shas:
-            os.utime(path)
+            os.utime(at)
             return False
         arts = self.store / "artifacts"
         arts.mkdir(exist_ok=True)
@@ -829,11 +831,11 @@ class LakeArtifacts:
                 shutil.copyfile(f, tmp)
             os.chmod(tmp, 0o444)
             os.replace(tmp, dst)
-        path.parent.mkdir(exist_ok=True)
-        tmp = path.parent / f".{k.key}.{os.getpid()}.tmp"
+        at.parent.mkdir(exist_ok=True)
+        tmp = at.parent / f".{k.key}.{os.getpid()}.tmp"
         tmp.write_text(json.dumps({"module": mod, "scope": k.package.name, "hash": h, "outputs": out, "sha256": shas},
                                   sort_keys=True))
-        os.replace(tmp, path)
+        os.replace(tmp, at)
         self.added.append((f"{MK.INDEX}/{k.key}.json", sorted(files)))
         return old is None
 

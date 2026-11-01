@@ -20,6 +20,7 @@ computed from a parse Lake agreed with, and the same sources give the same key w
 loaded by path (`check.sibling`)."""
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
@@ -43,6 +44,10 @@ SCOPE = re.compile(r"(?!\.\.?$)[A-Za-z0-9_.-]+")
 INDEX = "keys"
 #: where a build's own cache directory is staged, inside the store so that its artifacts are hard links
 STAGE = "stage"
+#: the store's lock: `LakeArtifacts` holds it to write the store, `stage` shared, so nothing it reads goes while it does
+LOCK = "lock"
+#: a trace's input hash, read from its text as written, whatever else it holds
+DEP_HASH = re.compile(r'"depHash"\s*:\s*"([0-9a-f]{16})"')
 
 
 def _sha(b: bytes) -> str:
@@ -172,26 +177,28 @@ class Package(NamedTuple):
         return self.dir / ".lake" / "build"
 
 
-def package(d: Path) -> Package | None:
-    """The package at ``d`` from its `lakefile.toml`; None for a `lakefile.lean`, or a library or executable with a source
-    directory or globs of its own, which this reading doesn't follow."""
+def package(d: Path) -> Package | str:
+    """The package at ``d`` from its `lakefile.toml`, or why it has no keys: a `lakefile.lean`, or a library or executable
+    with a source directory or globs of its own, which this reading doesn't follow."""
     f = d / "lakefile.toml"
+    if not f.is_file():
+        return f"{d} has no lakefile.toml"
+    raw = f.read_bytes()
     try:
-        raw = f.read_bytes()
         doc = tomllib.loads(raw.decode())
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
-        return None
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        return f"{f}: {e}"
     libs, exes = doc.get("lean_lib", []), doc.get("lean_exe", [])
     if not isinstance(doc.get("name"), str) or not isinstance(doc.get("srcDir", "."), str) or not isinstance(libs, list) \
             or not isinstance(exes, list):
-        return None
+        return f"{f}: a name, srcDir, lean_lib or lean_exe of another type"
     if any(not isinstance(t, dict) or "srcDir" in t or "globs" in t or not isinstance(t.get("name"), str)
            or not isinstance(t.get("roots", []), list) or not all(isinstance(r, str) for r in t.get("roots", []))
            or not isinstance(t.get("root", ""), str) for t in [*libs, *exes]):
-        return None
+        return f"{f}: a library or executable with a srcDir or globs of its own, or of another shape"
     targets = doc.get("defaultTargets", [])
     if not isinstance(targets, list) or not all(isinstance(t, str) for t in targets):
-        return None
+        return f"{f}: defaultTargets is not a list of names"
     roots: dict[str, list[str]] = {t["name"]: t.get("roots", [t["name"]]) for t in libs}
     roots_ = [r for rs in roots.values() for r in rs]
     exe_roots = {t["name"]: name(t.get("root", t["name"])) for t in exes}
@@ -202,20 +209,23 @@ def package(d: Path) -> Package | None:
                    tuple(roots_), tuple(exe_roots.values()), tuple(default))
 
 
-def workspace(root: Path) -> tuple[list[Package], list[list[str]], str] | None:
+def workspace(root: Path) -> tuple[list[Package], list[list[str]], str] | str:
     """(``root``'s package and each package it requires by path, the name and revision of each package it fetches, the
-    toolchain), from its `lake-manifest.json`, which lists the inherited ones too; None when a package can't be read."""
+    toolchain), from its `lake-manifest.json`, which lists the inherited ones too; or why it has no keys (`package`)."""
+    m, t = root / "lake-manifest.json", root / "lean-toolchain"
+    if not m.is_file() or not t.is_file():
+        return f"{root} has no lake-manifest.json or lean-toolchain"
     try:
-        manifest = json.loads((root / "lake-manifest.json").read_text())
-        toolchain = (root / "lean-toolchain").read_text().strip()
-    except (OSError, ValueError):
-        return None
+        manifest = json.loads(m.read_text())
+    except ValueError as e:
+        return f"{m}: {e}"
+    toolchain = t.read_text().strip()
     entries = manifest.get("packages", []) if isinstance(manifest, dict) else []
     dirs = [root, *(root / e["dir"] for e in entries if isinstance(e, dict) and e.get("type") == "path"
                     and isinstance(e.get("dir"), str))]
     pkgs = [package(d) for d in dirs]
-    if None in pkgs:
-        return None
+    if why := next((p for p in pkgs if isinstance(p, str)), None):
+        return why
     revs = sorted([e["name"], e["rev"]] for e in entries if isinstance(e, dict) and e.get("type") == "git"
                   and isinstance(e.get("name"), str) and isinstance(e.get("rev"), str))
     return pkgs, revs, toolchain
@@ -238,7 +248,7 @@ def keys(root: Path, extra: list[str] | tuple[str, ...] = ()) -> dict[str, Key]:
     without a key (a cycle included). A module no package's file holds is the toolchain's or a fetched package's, which the
     toolchain and the revisions in every key fix."""
     ws = workspace(root)
-    if ws is None:
+    if isinstance(ws, str):
         return {}
     pkgs, revs, toolchain = ws
     memo: dict[str, Key | str | None] = {}
@@ -265,12 +275,9 @@ def keys(root: Path, extra: list[str] | tuple[str, ...] = ()) -> dict[str, Key]:
                 if not isinstance(p, Package):
                     memo[m] = p
                     continue
-                try:
-                    data = p.file(m).read_bytes()
-                    got = imports(data.decode())
-                except (OSError, UnicodeDecodeError):
-                    got = None
-                if got is None:
+                # Lean refuses a source that isn't UTF-8, so no passing build indexes a key read through a replaced byte
+                data = p.file(m).read_bytes()
+                if (got := imports(data.decode(errors="replace"))) is None:
                     memo[m] = None
                     continue
                 seen[m], memo[m] = (p, data, got), pending
@@ -291,10 +298,9 @@ def keys(root: Path, extra: list[str] | tuple[str, ...] = ()) -> dict[str, Key]:
 
 def policy_roots(pkg: Path) -> list[str]:
     """The modules the audit builds besides the default targets (`lake build +ROOT`): its `lean-audit.json`'s `roots`."""
-    try:
-        roots = json.loads((pkg / "lean-audit.json").read_text()).get("roots", [])
-    except (OSError, ValueError, AttributeError):
-        return []
+    f = pkg / "lean-audit.json"
+    doc = json.loads(f.read_text()) if f.is_file() else {}
+    roots = doc.get("roots", []) if isinstance(doc, dict) else []
     return [r for r in roots if isinstance(r, str)] if isinstance(roots, list) else []
 
 
@@ -347,15 +353,12 @@ def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package]) -> str | Non
     return None
 
 
-def digest(f: Path) -> str | None:
-    """``f``'s sha256, or None when it can't be read."""
+def digest(f: Path) -> str:
+    """``f``'s sha256."""
     h = hashlib.sha256()
-    try:
-        with open(f, "rb") as r:
-            for chunk in iter(lambda: r.read(1 << 22), b""):
-                h.update(chunk)
-    except OSError:
-        return None
+    with open(f, "rb") as r:
+        for chunk in iter(lambda: r.read(1 << 22), b""):
+            h.update(chunk)
     return h.hexdigest()
 
 
@@ -379,10 +382,15 @@ def valid(e) -> bool:
 
 
 def entry(store: Path, k: Key, mod: str) -> dict | None:
-    """``mod``'s index entry under ``k`` in ``store``, when it is one for this module of this package."""
+    """``mod``'s index entry under ``k`` in ``store``, when it is one for this module of this package. Entries are replaced
+    whole, so one that isn't JSON was damaged on disk: it is removed, and the next passing build of the module writes it."""
+    f = store / INDEX / f"{k.key}.json"
+    if not f.is_file():
+        return None
     try:
-        e = json.loads((store / INDEX / f"{k.key}.json").read_text())
-    except (OSError, ValueError):
+        e = json.loads(f.read_text())
+    except ValueError:
+        f.unlink(missing_ok=True)
         return None
     return e if valid(e) and e["module"] == mod and e["scope"] == k.package.name else None
 
@@ -399,47 +407,44 @@ def stage(store: Path, root: Path, extra: list[str] | tuple[str, ...], dest: Pat
           threads: int = 8) -> tuple[dict[tuple[str, str], str], int]:
     """Fill ``dest``, a Lake cache directory (`artifacts/`, `outputs/<package>/<input hash>.json`), with each module of
     ``root``'s build whose key ``store``'s index holds and whose every artifact there has the sha256 the entry names, each
-    artifact a hard link (a copy across file systems) checked after it is made. Two entries under one input hash of one
-    package are both left out, so Lake can't restore one module from another's. Returns ({(package, input hash): module}
-    for each module staged, the number of modules with a key)."""
+    artifact a hard link (a copy across file systems) checked after it is made, under the store's lock (`LOCK`) shared, so
+    no prune removes what it reads. Two entries under one input hash of one package are both left out, so Lake can't
+    restore one module from another's. Returns ({(package, input hash): module} for each module staged, the number of
+    modules with a key)."""
     keyed = keys(root, extra)
-    found = {m: e for m, k in keyed.items() if (e := entry(store, k, m)) is not None}
-    by: dict[tuple[str, str], list[str]] = {}
-    for m, e in found.items():
-        by.setdefault((e["scope"], e["hash"]), []).append(m)
-    found = {ms[0]: found[ms[0]] for ms in by.values() if len(ms) == 1}
-    names = sorted({n for e in found.values() for n in e["sha256"]})
-    arts = dest / "artifacts"
-    arts.mkdir(parents=True, exist_ok=True)
+    store.mkdir(parents=True, exist_ok=True)
+    with open(store / LOCK, "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_SH)
+        found = {m: e for m, k in keyed.items() if (e := entry(store, k, m)) is not None}
+        by: dict[tuple[str, str], list[str]] = {}
+        for m, e in found.items():
+            by.setdefault((e["scope"], e["hash"]), []).append(m)
+        found = {ms[0]: found[ms[0]] for ms in by.values() if len(ms) == 1}
+        names = sorted({n for e in found.values() for n in e["sha256"]})
+        arts = dest / "artifacts"
+        arts.mkdir(parents=True, exist_ok=True)
 
-    def take(n: str) -> str | None:
-        src, dst = store / "artifacts" / n, arts / n
-        try:
-            os.link(src, dst)
-        except OSError:
-            try:
-                shutil.copyfile(src, dst)
-            except OSError:
+        def take(n: str) -> str | None:
+            src, dst = store / "artifacts" / n, arts / n
+            if not src.is_file():
                 return None
-        try:
-            os.utime(src)
-        except OSError:
-            pass
-        return digest(dst)
-
-    with ThreadPoolExecutor(max_workers=threads) as ex:
-        got = dict(zip(names, ex.map(take, names)))
-    staged: dict[tuple[str, str], str] = {}
-    for m, e in found.items():
-        if all(got[a] == sha for a, sha in e["sha256"].items()):
-            out = dest / "outputs" / e["scope"] / f"{e['hash']}.json"
-            out.parent.mkdir(parents=True, exist_ok=True)
-            out.write_text(json.dumps(e["outputs"]))
-            staged[(e["scope"], e["hash"])] = m
             try:
-                os.utime(store / INDEX / f"{keyed[m].key}.json")
+                os.link(src, dst)
             except OSError:
-                pass
+                shutil.copyfile(src, dst)
+            os.utime(src)
+            return digest(dst)
+
+        with ThreadPoolExecutor(max_workers=threads) as ex:
+            got = dict(zip(names, ex.map(take, names)))
+        staged: dict[tuple[str, str], str] = {}
+        for m, e in found.items():
+            if all(got[a] == sha for a, sha in e["sha256"].items()):
+                out = dest / "outputs" / e["scope"] / f"{e['hash']}.json"
+                out.parent.mkdir(parents=True, exist_ok=True)
+                out.write_text(json.dumps(e["outputs"]))
+                staged[(e["scope"], e["hash"])] = m
+                os.utime(store / INDEX / f"{keyed[m].key}.json")
     return staged, len(keyed)
 
 
@@ -453,15 +458,13 @@ def traces(p: Package):
 def misrestored(staged: dict[tuple[str, str], str], root: Path) -> list[tuple[str, Path, str]]:
     """(module, its trace, the other) for each module of ``root``'s workspace whose build has the input hash of another
     module ``staged`` (by `stage`): Lake finds a module in its cache by its package and input hash alone, so such a module
-    may hold the other's outputs."""
+    may hold the other's outputs. Each trace's input hash is read from its text (`DEP_HASH`), so a trace that isn't whole
+    JSON still counts."""
     ws = workspace(root)
     bad = []
-    for p in ws[0] if ws else []:
+    for p in [] if isinstance(ws, str) else ws[0]:
         for mod, t in traces(p):
-            try:
-                h = json.loads(t.read_text()).get("depHash")
-            except (OSError, ValueError, AttributeError):
-                continue
-            if isinstance(h, str) and (other := staged.get((p.name, h))) is not None and other != mod:
+            if other := next((o for h in DEP_HASH.findall(t.read_text(errors="replace"))
+                              if (o := staged.get((p.name, h))) is not None and o != mod), None):
                 bad.append((mod, t, other))
     return bad

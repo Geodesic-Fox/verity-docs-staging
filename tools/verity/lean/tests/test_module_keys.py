@@ -3,6 +3,7 @@ otherwise has none, and a build restores a module only from the entry under its 
 the entry names."""
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import importlib.util
 import json
@@ -94,7 +95,7 @@ def test_a_module_lake_could_read_otherwise_has_no_key(tmp_path):
     assert list(MK.keys(root)) == ["D.X"], "R.A is in two packages"
     root = _workspace(tmp_path / "d")
     (tmp_path / "d" / "d" / "lakefile.toml").rename(tmp_path / "d" / "d" / "lakefile.lean")
-    assert MK.keys(root) == {}
+    assert MK.keys(root) == {} and MK.workspace(root) == f"{root / '../d'} has no lakefile.toml"
     for i, lakefile in enumerate(('name = "d"\n\n[[lean_lib]]\nname = "D"\nsrcDir = "src"\n',
                                   'name = "d"\n\n[[lean_lib]]\nname = "D"\nglobs = ["D.+"]\n',
                                   'name = "d"\n\n[[lean_lib]]\nname = "D"\nroots = "D"\n')):
@@ -164,6 +165,30 @@ def test_a_build_stages_a_module_only_under_its_key_with_every_artifact_s_sha256
     e = json.loads((store / MK.INDEX / f"{keyed['D.X'].key}.json").read_text())
     (store / MK.INDEX / f"{keyed['D.X'].key}.json").write_text(json.dumps(e | {"module": "R.A"}))
     assert MK.stage(store, root, [], tmp_path / "cache3")[0] == {}, "an entry for another module under D.X's key"
+    (store / MK.INDEX / f"{keyed['D.X'].key}.json").write_text(json.dumps(e)[:-1])
+    assert MK.stage(store, root, [], tmp_path / "cache4")[0] == {}
+    assert not (store / MK.INDEX / f"{keyed['D.X'].key}.json").exists(), "an entry that isn't JSON is removed"
+
+
+def test_a_build_stages_under_the_store_s_lock(tmp_path, monkeypatch):
+    """`LakeArtifacts.prune` takes the lock exclusively, so it can't remove an artifact while one is checked."""
+    root = _workspace(tmp_path / "ws")
+    store = tmp_path / "store"
+    _entry(store, MK.keys(root)["D.X"], "D.X", "1" * 16, {"a" * 16 + ".olean": b"X", "b" * 16 + ".ilean": b"x"})
+    held, digest = [], MK.digest
+
+    def checked(f: Path) -> str:
+        with open(store / MK.LOCK, "a") as other:
+            try:
+                fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                held.append(False)
+            except BlockingIOError:
+                held.append(True)
+        return digest(f)
+
+    monkeypatch.setattr(MK, "digest", checked)
+    assert MK.stage(store, root, [], tmp_path / "cache")[0] == {("d", "1" * 16): "D.X"}
+    assert held == [True, True]
 
 
 def test_two_modules_under_one_input_hash_of_one_package_are_both_left_out(tmp_path):
@@ -188,6 +213,8 @@ def test_a_module_with_the_input_hash_of_another_staged_one_is_named(tmp_path):
     staged = {("r", "3" * 16): "R", ("d", "2" * 16): "D.X"}
     assert [(m, o) for m, _, o in MK.misrestored(staged, root)] == [("R.B", "R")], "R.A's hash is staged in another package"
     assert MK.misrestored({("r", "3" * 16): "R", ("r", "2" * 16): "R.A"}, root)[0][1] == lib / "R" / "B.trace"
+    (lib / "R" / "B.trace").write_text(json.dumps({"depHash": "3" * 16, "outputs": {}})[:-3])
+    assert [(m, o) for m, _, o in MK.misrestored(staged, root)] == [("R.B", "R")], "a trace that isn't whole JSON"
 
 
 def test_only_the_staged_directories_of_processes_that_are_gone_are_swept(tmp_path):

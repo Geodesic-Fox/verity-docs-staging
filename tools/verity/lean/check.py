@@ -2551,20 +2551,22 @@ def writable(pkg: Path) -> list[Path]:
     return [d / ".lake" for d in [pkg.resolve(), *path_deps(pkg)]]
 
 
-def stage_build(mk, pkg: Path, roots: list[str], dest: Path) -> tuple[dict[tuple[str, str], str], int]:
+def stage_build(mk, pkg: Path, roots: list[str], dest: Path) -> tuple[dict[tuple[str, str], str], dict]:
     """A Lake cache directory at ``dest`` for ``pkg``'s build (and its ``roots``, `lake build +R`): each module of it that
     the node's artifact cache (`ARTIFACTS`) indexes under its sha256 key, its artifacts checked (``mk``: `module_keys`,
     `stage`). Each build step reads it with `LAKE_CACHE_DIR` and `LAKE_ARTIFACT_CACHE` unset, under which Lake reads a
     package's cache and never writes it, and inside the sandbox, where `ARTIFACTS` is read-only. The staged directories of
-    processes that are gone go first. Where staging fails, ``dest`` is empty and everything is built."""
+    processes that are gone go first. Returns (the modules staged, as `stage` gives them, the report's `staged`: how many
+    of how many keyed, and the error where staging failed, which leaves ``dest`` empty and everything to be built)."""
     try:
         mk.sweep(ARTIFACTS)
         shutil.rmtree(dest, ignore_errors=True)
-        return mk.stage(ARTIFACTS, pkg, roots, dest)
-    except OSError:
+        staged, keyed = mk.stage(ARTIFACTS, pkg, roots, dest)
+        return staged, {"modules": len(staged), "keyed": keyed}
+    except OSError as e:
         shutil.rmtree(dest, ignore_errors=True)
         dest.mkdir(parents=True, exist_ok=True)
-        return {}, 0
+        return {}, {"modules": 0, "keyed": 0, "error": str(e)}
 
 
 def in_sandbox(pkg: Path, argv: list[str]) -> list[str]:
@@ -2920,9 +2922,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                 if step == "stage":
                     if cache:
                         s = time.monotonic()
-                        staged, keyed = stage_build(mk, pkg, policy["roots"], cache)
+                        staged, rep["staged"] = stage_build(mk, pkg, policy["roots"], cache)
                         rep["seconds"][step] = round(time.monotonic() - s, 1)
-                        rep["staged"] = {"modules": len(staged), "keyed": keyed}
                     continue
                 if callable(argv) and not (argv := argv()):
                     continue
@@ -2933,14 +2934,22 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                 if rc:
                     rep["failures"].append(Failure(step, None, f"{step}: exit {rc}\n{text[-3000:]}"))
                     return reported(rep)
-            if bad := mk.misrestored(staged, pkg) if staged else []:
-                for _, trace, _ in bad:
-                    trace.unlink(missing_ok=True)
-                rep["failures"].append(Failure("build", None, "build: Lake finds a module in its cache by its package and "
-                                               "input hash alone, and these modules have the input hash of another this "
-                                               "build restored, so they may hold its outputs; their traces are removed, so "
-                                               "the next build compiles them: " +
-                                               ", ".join(f"{m} ({o}'s)" for m, _, o in bad[:10])))
+            bad, unread = [], None
+            if staged:
+                # the traces it reads include a path dependency's, which another package's build may rewrite
+                with writing(pkg, log):
+                    try:
+                        bad = mk.misrestored(staged, pkg)
+                    except OSError as e:
+                        unread = (f"build: a trace of this build can't be read, so whether Lake restored a module from "
+                                  f"another's outputs is unknown: {e}")
+                    for _, trace, _ in bad:
+                        trace.unlink(missing_ok=True)
+            if bad or unread:
+                rep["failures"].append(Failure("build", None, unread or (
+                    "build: Lake finds a module in its cache by its package and input hash alone, and these modules have "
+                    "the input hash of another this build restored, so they may hold its outputs; their traces are "
+                    "removed, so the next build compiles them: " + ", ".join(f"{m} ({o}'s)" for m, _, o in bad[:10]))))
                 return reported(rep)
         finally:
             if cache:
