@@ -161,13 +161,19 @@ def _sub(path: str | None, part: str | None) -> str | None:
     return None if p.startswith(("..", "/")) else "" if p == "." else p
 
 
-def _parse(text: str, at: int) -> ast.Module | None:
+def _ast(source: str, mode: str = "exec") -> ast.Module | ast.Expression | Exception:
+    """``source`` parsed, or the error parsing it raised, for the caller's fallback: a fragment that is no code alone (a
+    statement's `else:` arm), a file Python can't import, or nesting past the parser's depth."""
+    try:
+        return ast.parse(source, mode=mode)
+    except (SyntaxError, ValueError, RecursionError) as e:
+        return e
+
+
+def _parse(text: str, at: int) -> ast.Module | Exception:
     """The logical line of ``text`` from the start of the line holding offset ``at``, parsed alone: parsing whole files to
     find the few statements that touch `sys.path` would take most of the listing's time."""
-    try:
-        return ast.parse(_statement(text, text.rfind("\n", 0, at) + 1).strip())
-    except (SyntaxError, ValueError, RecursionError):
-        return None
+    return _ast(_statement(text, text.rfind("\n", 0, at) + 1).strip())
 
 
 class _Paths:
@@ -184,7 +190,7 @@ class _Paths:
         if name not in self._defs:
             self._defs[name] = None
             m = re.search(rf"^{re.escape(name)}[ \t]*(?::[^=\n]*)?=(?!=)", self.text, re.M)
-            body = tree.body if m and (tree := _parse(self.text, m.start())) else []
+            body = tree.body if m and isinstance(tree := _parse(self.text, m.start()), ast.Module) else []
             if body and isinstance(body[0], (ast.Assign, ast.AnnAssign)):
                 self._defs[name] = body[0].value
         return self._defs[name]
@@ -230,11 +236,7 @@ class _Paths:
         """Each path the file builds by joining string parts to a path (`HERE.parent / "harness"`)."""
         out = []
         for m in _BUILT_PATH.finditer(self.text):
-            try:
-                node = ast.parse(m.group(0), mode="eval").body
-            except (SyntaxError, ValueError, RecursionError):
-                continue
-            if (p := self.where(node)) is not None:
+            if isinstance(e := _ast(m.group(0), "eval"), ast.Expression) and (p := self.where(e.body)) is not None:
                 out.append(p)
         return out
 
@@ -242,7 +244,7 @@ class _Paths:
         """The directories the file puts on `sys.path`, and whether it puts one there that it builds otherwise."""
         out, blind = [], False
         for m in _SYSPATH.finditer(self.text):
-            if (stmt := _parse(self.text, m.start())) is None:
+            if not isinstance(stmt := _parse(self.text, m.start()), ast.Module):
                 blind = True
                 continue
             for n in ast.walk(stmt):
@@ -481,10 +483,9 @@ def _requests(stmt: str) -> list[tuple[int, str, tuple[str, ...]]] | None:
 
 
 def _parsed(text: str) -> list[tuple[int, str, tuple[str, ...]]]:
-    """Every import statement of a whole file, by its syntax tree."""
-    try:
-        tree = ast.parse(text)
-    except (SyntaxError, ValueError):
+    """Every import statement of ``text`` (a file, or a statement of one), by its syntax tree: none where Python can't parse it,
+    which no import of the file could run."""
+    if not isinstance(tree := _ast(text), ast.Module):
         return []
     out = []
     for n in ast.walk(tree):
@@ -629,10 +630,7 @@ class Imports:
         for m in _STMT.finditer(text):
             r = _requests(_statement(text, m.start(1)))
             if r is None:
-                try:
-                    r = _parsed(_statement(text, m.start(1)).strip())
-                except RecursionError:
-                    r = None
+                r = _parsed(_statement(text, m.start(1)).strip())
                 if not r:
                     self.fallbacks += 1
                     reqs = _parsed(text)
@@ -812,7 +810,7 @@ def _under(path: str, d: str) -> bool:
     return d in ("", ".") or path == d or path.startswith(d + "/")
 
 
-def test_files(tree: Tree, suite: Suite, suites: list[Suite]) -> list[str]:
+def suite_tests(tree: Tree, suite: Suite, suites: list[Suite]) -> list[str]:
     """``suite``'s test files: its `test_*.py` under its test paths, outside a data directory and the suites nested in it."""
     nested = [s.dir for s in suites if s.path != suite.path and suite.path != "." and _under(s.dir, suite.dir)]
     out = []
@@ -915,5 +913,5 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
     out = []
     for s in suites:
         data = declared(tree, s, suites, fixtures)
-        out += [task(tree, imports, s, f, data) for f in test_files(tree, s, suites)]
+        out += [task(tree, imports, s, f, data) for f in suite_tests(tree, s, suites)]
     return sorted(out, key=lambda t: t["id"])

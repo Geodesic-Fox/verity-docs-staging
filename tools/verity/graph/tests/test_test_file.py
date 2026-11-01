@@ -97,7 +97,7 @@ def test_its_tasks_are_the_test_files_suites_py_runs():
     want = {s.path: suites.test_files(s, "HEAD", suites.dropped(s, suites.inputs_of(s, pkgs))) for s in suites.discover()}
     ours = family.Tree(ROOT, [p for p in graph.git(ROOT, "ls-tree", "-r", "-z", "--name-only", "HEAD").decode().split("\0") if p])
     found = family.discover(ours)
-    assert {s.path: family.test_files(ours, s, found) for s in found} == want
+    assert {s.path: family.suite_tests(ours, s, found) for s in found} == want
 
 
 def test_the_listing_is_the_same_bytes_from_any_checkout(tmp_path):
