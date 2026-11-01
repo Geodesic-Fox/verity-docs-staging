@@ -44,7 +44,8 @@ against `main`.
 The layer rules (`layers`), which two branches that each widen a layer for a guarantee both change, merge field by field: `imports`
 and `except` as lists, `why` as a list of its `; ` clauses (`layers`). Every list of names (the roots, `meaning`, `proved_in`,
 `claims.modules`, `shape.premises`...), which two branches that each add a module both change, merges as a list (`items`). For a `.lean` file (`--lean`, `lean-imports` in
-`.gitattributes`), git's own merge runs and only a conflict all of whose sides are `import` lines is merged, as a list: two branches
+`.gitattributes`), git's own merge runs and only a conflict all of whose sides are import lines (each one import in any form
+`headers.py` reads: `public import`, `meta import`, `import all`) is merged, as a list: two branches
 that each add a guarantee's module to `Guarantees.lean` merge, and any other conflict stays git's. For a `lakefile.toml`
 (`--lakefile`, `lakefile-lists`), a conflict all of whose sides are `[[require]]` blocks merges as a set of blocks, and one all
 of whose sides are a string array's items (`roots`) merges as a list, wrapped as ours wraps it: two branches that each require a
@@ -72,6 +73,7 @@ HERE = Path(__file__).resolve().parent
 _spec = importlib.util.spec_from_file_location("lean_audit_for_merge", HERE / "check.py")
 A = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(A)
+H = A.sibling("headers")
 
 #: the driver's name in `.gitattributes` and git's config
 NAME = "lean-audit"
@@ -463,12 +465,18 @@ def kept(o: set, a: set, b: set) -> set:
     return (a & b) | (a - o) | (b - o)
 
 
+def _import(line: str) -> bool:
+    """Whether ``line`` is one import and nothing else, in any form a header takes (`headers.py`: `public import`...)."""
+    h = H.header(line)
+    return h is not None and len(h.imports) == 1 and not h.module and not h.prelude and H.skip(line, h.end) == len(line)
+
+
 def _imports(lines: list[str]) -> bool:
-    return all(s.startswith("import ") or not s.strip() for s in lines)
+    return all(_import(s) or not s.strip() for s in lines)
 
 
 def _import_names(text: str) -> set[str]:
-    return {s.strip() for s in text.splitlines() if s.startswith("import ")}
+    return {s.strip() for s in text.splitlines() if _import(s)}
 
 
 def _blocks(lines: list[str]) -> list[str] | None:
@@ -681,7 +689,7 @@ def lean(base: Path, ours: Path, theirs: Path, resolvers=None) -> tuple[str, int
     out, left, lines, n, seen = [], 0, p.stdout.splitlines(keepends=True), 0, set()
 
     def emit(s: str):
-        if keep is not None and s.startswith("import "):
+        if keep is not None and _import(s):
             if s.strip() not in keep or s.strip() in seen:
                 return
             seen.add(s.strip())
