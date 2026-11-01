@@ -78,9 +78,11 @@ verified `checked` commit, below the tip, for ratchet-gate to judge the
 landings above; with drive.toml's `after_landing_shards` N, as N runs at once (`--shard K/N` each, on machines of `on` no other
 shard has while there are N: `shard_machines`), passed once every shard passed, launched once circuit-check's records step
 (`_records`: `train.sh TIP MACHINES --cc-records`) passed, each shard given its artifact (`--cc-records-from ART@SHA256`) so no
-shard builds the bindings' records, a run ci launched in place of a shard's twin counting once `/data/infra/drive.sh queue
-drive-shard-add TIP K RUN_ID` adds it to shard K (`queue.drive_shard_add`: only a run whose own record is shard K/N of TIP's
-commit; cancel the twin after);
+shard builds the bindings' records; with "auto" (or "auto:MAX"), N is the shard planner's, its plan made once beside the
+records step (`_plan`: `check.py --shard-plan`) and each shard `--shard auto:K/N --shard-plan-file PLAN`; a run ci launched in
+place of a shard's twin counting once `/data/infra/drive.sh queue drive-shard-add TIP K RUN_ID` adds it to shard K
+(`queue.drive_shard_add`: only a run whose own record is shard K/N of TIP's commit, of the run's auto plan when it has one;
+cancel the twin after);
 `--no-cache --circuit-cache` while `after_landing_no_cache` (no pass reused but circuit-check's per-target ones), and
 `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `checked`
 itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
@@ -115,6 +117,7 @@ import math
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -264,9 +267,9 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
                  deferred: str | None = None, no_cache: bool = False, no_regenerate: bool = False,
                  detached: bool = False, circuit_cache: bool = False, shard: str | None = None,
                  base: str | None = None, cc_records: bool = False,
-                 cc_records_from: str | None = None) -> tuple[list[str], str] | dict:
-    """`train.sh COMMIT MACHINE [--agreement] [--base BASE] [--shard K/N] [--cc-records[-from ART@SHA256]]` from the queue's
-    clone (``cc_records``, circuit-check's records step alone): (the run ids it printed,
+                 cc_records_from: str | None = None, shard_plan: str | None = None) -> tuple[list[str], str] | dict:
+    """`train.sh COMMIT MACHINE [--agreement] [--base BASE] [--shard [auto:]K/N [--shard-plan-file PLAN]]
+    [--cc-records[-from ART@SHA256]]` from the queue's clone (``cc_records``, circuit-check's records step alone): (the run ids it printed,
     its output's tail); ``detached``, started in the background (`detach`) from a copy of train.sh, which reads nothing by its
     own path (``$0`` only for its usage) and finds the tree from its working directory, and returned at once as the record
     `launched` reads.  Git never prompts (the queue's clone has no credential helper, so train.sh's fetch would wait on a
@@ -277,6 +280,7 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
                  *(["--deferred", deferred] if deferred else []), *(["--no-cache"] if no_cache else []),
                  *(["--circuit-cache"] if circuit_cache else []), *(["--no-regenerate"] if no_regenerate else []),
                  *(["--base", base] if base else []), *(["--shard", shard] if shard else []),
+                 *(["--shard-plan-file", shard_plan] if shard_plan else []),
                  *(["--cc-records-from", cc_records_from] if cc_records_from else [])]
     env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci"}
     if detached:
@@ -289,6 +293,9 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
 #: how long a sharded after-landing run waits for circuit-check's records step (`_records`, about 8 min cold) before its shards
 #: launch without it, each building the records itself, so a lost step never holds the run
 RECORDS_WAIT_S = 2400
+#: how long a sharded after-landing run of `after_landing_shards = "auto"` waits for its plan (`_plan`: gathering the newest
+#: checks' verdict packs to price it takes minutes on the control pod) before it is stopped and the run launches unsharded
+PLAN_WAIT_S = 2400
 
 
 def records_artifact(store, rid: str) -> str | None:
@@ -345,29 +352,80 @@ def list_tasks(repo: Path, tip: str) -> dict:
     return {**detach(repo, ["sh", "-c", LIST_JOB, "sh", out, tip], env), "out": out}
 
 
-def listed_tasks(rec: dict) -> tuple[dict | None, str | None]:
-    """(the tasks/v1 graph a `list_tasks` listing wrote, None) once it exited 0; (None, why) once it failed or its process is
-    gone with no exit; (None, None) while it runs.  An ended listing's directories are removed."""
-    d, out = Path(rec["dir"]), Path(rec["out"])
+def _job_end(rec: dict, name: str) -> tuple[str, str, str | None] | str | None:
+    """A detached job's end (`detach`): (its exit, its output's tail, its ``out`` file ``name``'s text when it exited 0), its
+    directory removed; why, once its process is gone with no exit written; None while it runs."""
+    d = Path(rec["dir"])
     if not (d / "rc").is_file():
         try:
             os.kill(int(rec["pid"]), 0)
         except ProcessLookupError:
-            return None, "its process is gone with no exit written (a restart of the pod)"
+            return "its process is gone with no exit written (a restart of the pod)"
         except (PermissionError, ValueError, TypeError, KeyError):
             pass
-        return None, None
+        return None
     try:
         rc = (d / "rc").read_text().strip()
         tail = (d / "log").read_text(errors="replace").strip()[-600:]
-        graph = json.loads((out / "graph.json").read_text()) if rc == "0" else None
-    except (OSError, ValueError) as e:
-        rc, tail, graph = "?", f"{type(e).__name__}: {e}", None
+        text = (Path(rec["out"]) / name).read_text() if rc == "0" else None
+    except OSError as e:
+        rc, tail, text = "?", f"{type(e).__name__}: {e}", None
     shutil.rmtree(d, ignore_errors=True)
-    shutil.rmtree(out, ignore_errors=True)
+    return rc, tail, text
+
+
+def listed_tasks(rec: dict) -> tuple[dict | None, str | None]:
+    """(the tasks/v1 graph a `list_tasks` listing wrote, None) once it exited 0; (None, why) once it failed or its process is
+    gone with no exit; (None, None) while it runs.  An ended listing's directories are removed."""
+    if (end := _job_end(rec, "graph.json")) is None or isinstance(end, str):
+        return None, end
+    rc, tail, text = end
+    shutil.rmtree(rec["out"], ignore_errors=True)
+    try:
+        graph = json.loads(text) if text is not None else None
+    except ValueError as e:
+        graph, tail = None, f"{type(e).__name__}: {e}"
     if isinstance(graph, dict) and graph.get("schema") == "tasks/v1":
         return graph, None
     return None, f"`verity tasks list` exited {rc}: {tail}"
+
+
+#: a sharded after-landing run's auto plan (`plan_shards`): a worktree of the tip ($2) in the queue's clone, under TRAIN_TREES
+#: as train.sh's are when set, `check.py --shard-plan` there with the rest of its arguments into `AUTO_PLAN` in the plan's
+#: directory ($1), the worktree removed after; its venv kept between plans
+PLAN_JOB = ('set -e; d=$1 r=$PWD; t="${TRAIN_TREES:-${1%/*}}/plan-${1##*/}"; mkdir -p "${t%/*}"; '
+            'export UV_PROJECT_ENVIRONMENT="${t%/*}/plan-venv"; git worktree add -q --detach "$t" "$2"; '
+            'trap \'cd "$r"; git worktree remove --force "$t"\' EXIT; cd "$t"; shift 2; '
+            'uv run -q python tools/verity/check/check.py --shard-plan --out "$d/check-shard-plan.json" "$@"')
+#: the plan's file in its directory (check.py's `AUTO_PLAN`), which each shard sends as its run's input
+AUTO_PLAN = "check-shard-plan.json"
+
+
+def plan_shards(repo: Path, tip: str, steps: str, max_shards: int | None = None) -> dict:
+    """The auto plan of ``tip``'s after-landing ``steps`` (`PLAN_JOB`: `check.py --shard-plan --deferred STEPS`, at most
+    ``max_shards`` shards), made in the background (`detach`) into a directory of its own under `LAUNCHES`: the record
+    `planned` reads."""
+    root = Path(tempfile.gettempdir()) / LAUNCHES
+    root.mkdir(parents=True, exist_ok=True)
+    out = tempfile.mkdtemp(prefix="plan-", dir=root)
+    args = ["--deferred", steps, *(["--max-shards", str(max_shards)] if max_shards else [])]
+    return {**detach(repo, ["sh", "-c", PLAN_JOB, "sh", out, tip, *args], {**os.environ, "GIT_TERMINAL_PROMPT": "0"}),
+            "out": out}
+
+
+def planned(rec: dict) -> tuple[dict | None, str | None]:
+    """(the auto plan a `plan_shards` job wrote, None) once it exited 0; (None, why) once it failed or its process is gone with
+    no exit; (None, None) while it runs.  The plan's directory (``out``) stays: its shards send the file."""
+    if (end := _job_end(rec, AUTO_PLAN)) is None or isinstance(end, str):
+        return None, end
+    rc, tail, text = end
+    try:
+        doc = json.loads(text) if text is not None else None
+    except ValueError as e:
+        doc, tail = None, f"{type(e).__name__}: {e}"
+    if isinstance(doc, dict) and doc.get("kind") == "check-shard-plan/v1" and isinstance(doc.get("n"), int) and doc["n"] >= 1:
+        return doc, None
+    return None, f"`check.py --shard-plan` exited {rc}: {tail}"
 
 
 def shard_machines(on: str, n: int) -> list[str]:
@@ -376,6 +434,17 @@ def shard_machines(on: str, n: int) -> list[str]:
     shared.  train.sh twins only when no slot is free, so shards given one list all took its one free slot, one behind another."""
     ms = on.split(",")
     return [",".join(ms[k::n]) if len(ms) >= n else ms[k % len(ms)] for k in range(n)]
+
+
+def shard_spec(run: dict, k: int) -> str:
+    """Shard ``k``'s `--shard` in a sharded after-landing run (``shards`` while launching, then ``groups``): `auto:K/N` of an
+    auto plan's (``plan``), else `K/N`."""
+    return f"{'auto:' * bool(run.get('plan'))}{k}/{len(run.get('shards') or run.get('groups') or ())}"
+
+
+def _of_plan(plan: dict | None, lead: str = "") -> str:
+    """An after-landing run's auto plan (`Driver._plan`) by its digest, for a message; "" for none."""
+    return f"{lead} of the auto plan {plan['digest'][:12]}" if plan else ""
 
 
 def _ids(rec: dict) -> str:
@@ -823,7 +892,7 @@ class Driver:
                  after_landing_no_cache: bool = False, reviews: Callable[[int, str], list] | None = None,
                  ready_by: Callable[[int, str], str | None] | None = None, max_lean_checks: int = 2,
                  stale_days: int = 0, stale_close_days: int = 0, stale_keep: tuple[int, ...] = (),
-                 after_landing_shards: int = 1, lowrisk_lane: bool = False, lowrisk_per_tick: int = 20,
+                 after_landing_shards: int | str = 1, lowrisk_lane: bool = False, lowrisk_per_tick: int = 20,
                  lowrisk_excludes: tuple[str, ...] = ()):
         self.q, self.on = q, on
         #: drive.toml's `executor`: "off", "shadow" (beside the after-landing run: `_follow_shadow`) or "on" (in its place:
@@ -833,8 +902,11 @@ class Driver:
         self.listed_tasks: Callable[[dict], tuple[dict | None, str | None]] = listed_tasks
         #: drive.toml's low-risk lane (`land_lowrisk`): on, its most landings a tick, and what keeps a change off it (`lowrisk`)
         self.lowrisk_lane, self.lowrisk_per_tick, self.lowrisk_excludes = lowrisk_lane, lowrisk_per_tick, lowrisk_excludes
-        #: the after-landing run as this many runs at once, shard K of ci.toml's plan with N shards each (`start_postland`)
+        #: the after-landing run as this many runs at once, shard K of ci.toml's plan with N shards each (`start_postland`);
+        #: "auto" or "auto:MAX", as the shard planner's N, made once a tip (`_plan`, `plan_shards` and `planned`)
         self.after_landing_shards = after_landing_shards
+        self.plan_shards: Callable[..., dict] = plan_shards
+        self.planned: Callable[[dict], tuple[dict | None, str | None]] = planned
         #: the review landing's Lean checks that may run at once, a lower one and those stacked above it (`lean_stack`)
         self.max_lean_checks = max_lean_checks
         #: drive.toml's stale rule (`research.stale`, `_stale`): ring a stale PR's owner once a day, close it at the second
@@ -853,10 +925,10 @@ class Driver:
         #: (`_started`); an injected `launch` launches it too
         self.launch_postland: Callable[..., tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False,
-                    shard=None, base=None, cc_records=False, cc_records_from=None:
+                    shard=None, base=None, cc_records=False, cc_records_from=None, shard_plan=None:
              train_launch(repo, commit, machine, agreement, auth=q.auth, deferred=steps, no_cache=no_cache,
                           no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache, shard=shard, base=base,
-                          cc_records=cc_records, cc_records_from=cc_records_from))
+                          cc_records=cc_records, cc_records_from=cc_records_from, shard_plan=shard_plan))
             if launch is train_launch else (lambda repo, commit, machine, steps, **_: self.launch(repo, commit, machine, False)))
         #: the artifact of circuit-check's records step (`records_artifact`, `_records`) a sharded after-landing run gives its shards
         self.records_artifact: Callable[[str], str | None] = lambda rid: records_artifact(q.store, rid)
@@ -1258,8 +1330,8 @@ class Driver:
             if run.get("resend"):
                 pl["resend"] = True
             self.refuse(drive, f"launch:postland:{run['tip']}", f"train.sh {run['tip'][:12]} {self.on} --deferred "
-                                                                f"{','.join(pl.get('steps') or AFTER_LANDING)} --shard {k}/{n} "
-                                                                f"registered no run: {tail}")
+                                                                f"{','.join(pl.get('steps') or AFTER_LANDING)} --shard "
+                                                                f"{shard_spec(run, k)} registered no run: {tail}")
             return False
         if any("launch" in rec for rec in shards):
             return False
@@ -1750,9 +1822,11 @@ class Driver:
         if not (pl := drive.get("postland")) or pl.get("run"):
             return
         q = self.q
-        # a records step still building is of the tip its shards then check (`_records`)
-        building = pl.get("records")
-        main = building["tip"] if building and "art" not in building else _out(self.repo, "rev-parse", q.base)
+        # a records step or an auto plan still being made is of the tip its shards then check (`_records`, `_plan`)
+        n = self.after_landing_shards
+        building = next((b for b, on in ((pl.get("records"), n != 1), (pl.get("plan"), isinstance(n, str)))
+                         if on and b and "art" not in b and "made" not in b), None)
+        main = building["tip"] if building else _out(self.repo, "rev-parse", q.base)
         pl["pending"] = [p for p in pl["pending"] if not self._ancestor(p, pl["verified"])]
         base = not self._baselined(pl)                            # the first run: `main` itself (`_unbaselined`)
         if not base and (not pl["pending"] or main == pl.get("failed") or main == pl["verified"]):
@@ -1779,22 +1853,28 @@ class Driver:
         below = (pl["verified"] if pl["verified"] != main else
                  _git(self.repo, "rev-parse", "--verify", "-q", f"{main}^1", check=False).stdout.strip()) or None
         flags = (f" --base {below[:12]}" if below else "") + "".join(f" --{k.replace('_', '-')}" for k, on in extra.items() if on)
-        n = self.after_landing_shards
-        records = n > 1 and "circuit-check" in pl["steps"]
+        auto = isinstance(n, str)
+        records = (auto or n > 1) and "circuit-check" in pl["steps"]
         if self.dry_run or q.shadow:
             q.log(f"research queue drive: would launch train.sh {main[:12]} {self.on} --deferred {steps}{flags}"
-                  + (f" as {n} shards" if n > 1 else "") + (" after circuit-check's records step" if records else ""))
+                  + (" as the shard planner's shards" if auto else f" as {n} shards" if n > 1 else "")
+                  + (" after circuit-check's records step" if records else ""))
             return
-        if records and (art := self._records(pl, main)) is None:
+        art = self._records(pl, main) if records else ""
+        plan = self._plan(drive, pl, main, steps) if auto else {}
+        if art is None or plan is None:
             return
         cc = {"cc_records_from": art} if records and art else {}
-        if n == 1:
+        if auto:
+            n = plan["n"] if plan else 1
+        shard = (lambda k: {"shard": f"auto:{k}/{n}", "shard_plan": plan["file"]}) if plan else (lambda k: {"shard": f"{k}/{n}"})
+        if n == 1 and not plan:
             rec, tail = self._started(self.launch_postland(self.repo, main, self.on, steps, base=below, **extra))
         else:
             if len(self.on.split(",")) < n:
                 q.log(f"research queue drive: {n} shards of the post-landing run of {main[:12]} on {self.on}, fewer machines than "
                       "shards: they share them")
-            got = [self._started(self.launch_postland(self.repo, main, on, steps, base=below, **extra, **cc, shard=f"{k}/{n}"))
+            got = [self._started(self.launch_postland(self.repo, main, on, steps, base=below, **extra, **cc, **shard(k)))
                    for k, on in enumerate(shard_machines(self.on, n), 1)]
             rec, tail = {"ids": [], "shards": [r for r, _ in got]}, next((t for r, t in got if r is None), "")
             if any(r is None for r, _ in got):
@@ -1803,15 +1883,57 @@ class Driver:
                 rec = None
         if rec is None:
             self.refuse(drive, f"launch:postland:{main}", f"train.sh {main[:12]} {self.on} --deferred {steps}{flags}"
-                                                          + (f" (as {n} shards)" if n > 1 else "") + f" registered no run: {tail}")
+                                                          + (f" (as {n} shards{_of_plan(plan)})" if n > 1 or plan else "")
+                                                          + f" registered no run: {tail}")
             return
         pl["run"] = {**rec, "tip": main, "at": self.now(), **({"resend": True} if pl.pop("resend", False) else {}),
                      **({"skip": skip} if skip else {}), **({"baseline": True} if base else {}),
+                     **({"plan": plan["digest"]} if plan else {}),
                      "as": {"steps": [s for s in AFTER_LANDING if s not in skip], "no_cache": extra["no_cache"]}}
         self._shadow_list(drive, main)
         q.log(f"research queue drive: post-landing run of `{self.q.into}` {main[:12]} ({steps}): {_ids(rec)}; "
               f"{len(pl['pending'])} landing(s) since {pl['verified'][:12]}"
-              + (f"; circuit-check's records {cc['cc_records_from']}" if cc else ""))
+              + (f"; circuit-check's records {cc['cc_records_from']}" if cc else "") + _of_plan(plan, "; shards"))
+
+    def _plan(self, drive: dict, pl: dict, tip: str, steps: str) -> dict | None:
+        """The auto plan of a sharded after-landing run of ``tip`` (`after_landing_shards = "auto[:MAX]"`): made once in the
+        background (`plan_shards`: `check.py --shard-plan`, as the records step runs) and followed each tick in ``pl["plan"]``.
+        {"n", "digest", "file", "predicted_s"} once made, every shard launched `--shard auto:K/N` with its file; {} once it
+        failed or ran past `PLAN_WAIT_S` (stopped), told, and the run launches unsharded; None while it is made.  The answer stays
+        the tip's, so a run of it launched again is of the same plan; a plan of another tip removes the last one's file."""
+        rec, q = pl.get("plan"), self.q
+        if rec and rec["tip"] == tip and "made" in rec:
+            return rec["made"]
+
+        def done(made: dict, why: str) -> dict:
+            pl["plan"] = {"tip": tip, "made": made, "out": rec["out"]}
+            q.log(f"research queue drive: the auto shard plan of {tip[:12]}: {why}")
+            if not made:
+                shutil.rmtree(rec["out"], ignore_errors=True)
+                self.refuse(drive, f"plan:postland:{tip}", f"the auto shard plan of {tip[:12]} {why}: its after-landing run "
+                                                           "runs unsharded")
+            return made
+
+        if not rec or rec["tip"] != tip:
+            if rec and rec.get("out"):
+                shutil.rmtree(rec["out"], ignore_errors=True)
+            cap = int(str(self.after_landing_shards).partition(":")[2] or 0) or None
+            pl["plan"] = {**self.plan_shards(self.repo, tip, steps, cap), "tip": tip, "at": self.now()}
+            q.log(f"research queue drive: the auto shard plan of {tip[:12]}: being made (`check.py --shard-plan --deferred "
+                  f"{steps}`{f' --max-shards {cap}' if cap else ''}); the shards launch once it is")
+            return None
+        doc, why = self.planned(rec)
+        if doc is not None:
+            return done({"n": doc["n"], "digest": doc["digest"], "file": str(Path(rec["out"]) / AUTO_PLAN),
+                         "predicted_s": doc.get("predicted_s")},
+                        f"N = {doc['n']}, digest {doc['digest'][:12]}, predicted wall {(doc.get('predicted_s') or 0) / 60:.0f} min")
+        if why is not None:
+            return done({}, f"failed: {why}")
+        if self.now() - rec["at"] > PLAN_WAIT_S:
+            with contextlib.suppress(ProcessLookupError, PermissionError, ValueError, TypeError):
+                os.killpg(int(rec["pid"]), signal.SIGTERM)
+            return done({}, f"was not made in {PLAN_WAIT_S // 60} min (stopped)")
+        return None
 
     def _records(self, pl: dict, tip: str) -> str | None:
         """circuit-check's records step before a sharded after-landing run of ``tip`` (`start_postland`): launched first

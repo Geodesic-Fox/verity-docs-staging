@@ -68,6 +68,7 @@ only once that commit's after-landing run, the full check, passed every step on 
     research queue drive-shard-add TIP K RUN_ID     count RUN_ID, a run replacing shard K's twin, as one of that shard's in the
                                                    after-landing run of `checked` at TIP (`drive_shard_add`), refused unless
                                                    RUN_ID's own record is a check.py run of TIP's commit with --shard K/N
+                                                   (an auto plan's: auto:K/N, with that plan among its inputs)
                                                    (on the control pod: `/data/infra/drive.sh queue drive-shard-add TIP K RUN_ID`)
     research queue lean-check COMMIT [--on MACHINES] [--by LANE] [--again]
                                                    a hand Lean check (`train.sh COMMIT MACHINES --deferred lean-audit`, MACHINES
@@ -246,6 +247,8 @@ DRIVE_FLAGS = "tools/verity/check/drive.toml"
 #: the pins tool, whose `PINS` names the generated files a merge rebuilds (`repinned`): after the repository move, and before it
 PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
 MARK_TIME_RE = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
+#: drive.toml's `after_landing_shards` for the shard planner's N: "auto", or "auto:MAX"
+AUTO_SHARDS_RE = re.compile(r"auto(:[1-9]\d*)?")
 IDENTITY = {"GIT_AUTHOR_NAME": "research queue", "GIT_AUTHOR_EMAIL": "queue@research.invalid",
             "GIT_COMMITTER_NAME": "research queue", "GIT_COMMITTER_EMAIL": "queue@research.invalid"}
 DATES = ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE")
@@ -459,8 +462,9 @@ class DriveFlags:
     #: PRs the stale rule never judges: their owners keep them open with a reason
     stale_keep: tuple[int, ...] = ()
     #: the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`drive.Driver.start_postland`):
-    #: 1, or a plan's N; it takes about its longest shard rather than every step on one slot
-    after_landing_shards: int = 1
+    #: 1, or a plan's N; it takes about its longest shard rather than every step on one slot; "auto" or "auto:MAX", the shard
+    #: planner's N (`tools/verity/check/shards.py`), at most MAX (default its MAX_SHARDS), each shard `--shard auto:K/N`
+    after_landing_shards: int | str = 1
     #: the keys drive's command line may override (`override`), of `COMMAND_LINE`; any other flag given there refuses the tick
     command_line: tuple[str, ...] = ("on", "first")
     #: each tick, after the reviewed prefix, land up to `lowrisk_per_tick` members of `next` whose change is `lowrisk` on their
@@ -509,9 +513,11 @@ class DriveFlags:
                 raise bad("on", "at least one machine (train.sh's: a machine, or `auto`)")
             got["on"] = ",".join(on)
         if "after_landing_shards" in doc:
-            if type(doc["after_landing_shards"]) is not int or doc["after_landing_shards"] < 1:
-                raise bad("after_landing_shards", "a whole number, 1 or a shard plan's N in tools/verity/check/ci.toml")
-            got["after_landing_shards"] = doc["after_landing_shards"]
+            v = doc["after_landing_shards"]
+            if not (isinstance(v, str) and AUTO_SHARDS_RE.fullmatch(v)) and (type(v) is not int or v < 1):
+                raise bad("after_landing_shards", "a whole number, 1 or a shard plan's N in tools/verity/check/ci.toml, or "
+                                                  "\"auto\" or \"auto:MAX\" (the shard planner's N, at most MAX)")
+            got["after_landing_shards"] = v
         if "max_lean_checks" in doc:
             if type(doc["max_lean_checks"]) is not int or doc["max_lean_checks"] < 1:
                 raise bad("max_lean_checks", "a whole number, 1 or more")
@@ -4049,8 +4055,10 @@ def drive_shard_add(q: Queue, tip: str, k: int, rid: str) -> int:
     run's tip with its shards' ids known, for a K outside 1..N (an unsharded run is shard 1/1), for a RUN_ID it already
     has, and unless RUN_ID's own record says it is that run's shard: a `check.py` run of TIP's commit (`merge._ran_on`: its
     attempt's clean source, else its run record's), with `--shard K/N` (none for an unsharded run) and, when it names them,
-    `--deferred` the run's steps, so a passing run of a mistyped id never verifies a commit nobody checked."""
+    `--deferred` the run's steps, and for an auto plan's shard (`--shard auto:K/N`), that plan among its inputs, so a passing
+    run of a mistyped id never verifies a commit nobody checked."""
     from . import merge
+    from .drive import AUTO_PLAN, shard_spec
 
     pl = ((state := q.load_state()).get("drive") or {}).get("postland") or {}
     run = pl.get("run")
@@ -4074,10 +4082,19 @@ def drive_shard_add(q: Queue, tip: str, k: int, rid: str) -> int:
     if not merge._ran_on(q.store, rid, run["tip"], merge.fetch_run):
         raise QueueError(f"drive-shard-add: {rid} checked {(got[1].get('tree_sha') or 'an unrecorded commit')[:12]}, not the "
                          f"after-landing run's {run['tip'][:12]}")
-    want = f"{k}/{len(groups)}" if "groups" in run else None
+    want = shard_spec(run, k) if "groups" in run else None
     if (has := cmd[cmd.index("--shard") + 1] if "--shard" in cmd[:-1] else None) != want:
         raise QueueError(f"drive-shard-add: {rid} is {f'shard {has}' if has else 'no shard'}, not "
                          f"{f'shard {want}' if want else 'unsharded'} of the after-landing run of {run['tip'][:12]}")
+    if run.get("plan"):
+        try:
+            d = merge.fetch_run(rid, [f"inputs/{AUTO_PLAN}"])[0]
+            plan = str(json.loads((d / "inputs" / AUTO_PLAN).read_text())["digest"])
+        except (TypeError, OSError, ValueError, KeyError) as e:
+            plan = f"unreadable ({type(e).__name__})"
+        if plan != run["plan"]:
+            raise QueueError(f"drive-shard-add: {rid}'s auto plan ({AUTO_PLAN} among its inputs) is {plan[:12]}, not the "
+                             f"after-landing run's {run['plan'][:12]}")
     steps = pl.get("steps") or []
     if "--deferred" in cmd[:-1] and (named := cmd[cmd.index("--deferred") + 1].split(",")) != steps:
         raise QueueError(f"drive-shard-add: {rid} ran --deferred {','.join(named)}, not the after-landing run's "
