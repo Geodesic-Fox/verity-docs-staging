@@ -2006,7 +2006,9 @@ class Queue:
             else:
                 commit, why = self._merge_through(tip, e.pr, members)
             merged = True
-            if commit not in (None, tip) and (drops := lock_drops(self.workdir, tip, commit if e.pr.move else e.pr.head, commit)):
+            # a regenerated move is `rename.py`'s output that `move_check.py` certified, lock texts included: what its map rewrites in
+            # a premise or a frozen entry's reason is no drop
+            if not e.pr.move and commit not in (None, tip) and (drops := lock_drops(self.workdir, tip, e.pr.head, commit)):
                 commit, why = None, lock_drop_refusal(drops, self.branch)
             if commit is not None and gates:
                 refused, unjudged = self._gated(main, gates, tip, commit, e.pr, before, verdicts)
