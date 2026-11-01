@@ -184,6 +184,10 @@ def test_pack_is_the_records_bytes_alone_and_unpack_puts_each_back(tmp_path):
     assert CB.unpack(tmp_path / "1.tar.gz", into) == 3
     got = {p.relative_to(into).as_posix(): p.read_text() for p in into.rglob("*") if p.is_file()}
     assert got == {**records, "v0/kept.json": "an older record"} and sorted(p.name for p in into.parent.iterdir()) == ["circuit-check"]
+    (into / "v1" / "aa" / "one.json").chmod(0o400)
+    assert CB.unpack(tmp_path / "2.tar.gz", into) == 3
+    assert {p.relative_to(into).as_posix(): p.read_text() for p in into.rglob("*") if p.is_file()} == got
+    assert (into / "v1" / "aa" / "one.json").stat().st_mode & 0o777 == 0o400, "a record already there is rewritten"
 
 
 def _binding_run(tmp_path, monkeypatch, rc, report, say="") -> tuple[dict, list]:

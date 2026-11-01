@@ -69,7 +69,8 @@ def pack(records: Path, to: Path) -> int:
 
 def unpack(tar: Path, into: Path) -> int:
     """The records of a `pack` tarball into the cache ``into``, each by rename, as check unpacks the records step's
-    (`check.py`'s `cc_records_in`): a circuit-check reading the cache meanwhile sees each whole or not at all; how many."""
+    (`check.py`'s `cc_records_in`): a circuit-check reading the cache meanwhile sees each whole or not at all.  A record
+    already there is left as it is: its file is named by its bytes' digest (`circuit_check.cache.store`).  How many."""
     into.mkdir(parents=True, exist_ok=True)
     d = Path(tempfile.mkdtemp(prefix="circuit-records-", dir=into.parent))
     try:
@@ -77,8 +78,9 @@ def unpack(tar: Path, into: Path) -> int:
             t.extractall(d, filter="data")
         n = 0
         for p in sorted((d / TOP).rglob("*.json")):
-            (to := into / p.relative_to(d / TOP)).parent.mkdir(parents=True, exist_ok=True)
-            os.replace(p, to)
+            if not (to := into / p.relative_to(d / TOP)).exists():
+                to.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(p, to)
             n += 1
         return n
     finally:
