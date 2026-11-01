@@ -161,6 +161,10 @@ RUNS = {
                               '    where = "else" + "where"\n'
                               '    assert (Path(__file__).parents[2] / where / "notes.txt").read_text() == "n\\n"\n'),
     "s/tests/test_dies.py": "import os\nimport signal\n\n\ndef test_dies():\n    os.kill(os.getpid(), signal.SIGKILL)\n",
+    ".gitignore": ".lake/\n",
+    "s/tests/test_lock.py": ('from pathlib import Path\n\n\ndef test_locks_a_build():\n'
+                             '    lock = Path(__file__).parents[2] / ".lake" / "build.lock"\n    lock.parent.mkdir(exist_ok=True)\n'
+                             '    with open(lock, "a"):\n        pass\n'),
 }
 
 
@@ -196,6 +200,9 @@ def test_a_failing_test_or_collection_is_a_fail(results):
 def test_a_read_outside_its_inputs_is_an_error(results):
     r = results["test_reads.py"]
     assert r["status"] == "error" and r["undeclared_reads"] == ["elsewhere/notes.txt"] and r["detail"]["passed"] == 1
+    r = results["test_lock.py"]
+    assert r["status"] == "pass" and not r["undeclared_reads"] and r["detail"]["ignored"] == [".lake/build.lock"], \
+        "a file git ignores (a build's lock) is none the graph lists, so no input a key could hold"
 
 
 def test_a_pytest_killed_is_an_error(results):

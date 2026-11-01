@@ -7,8 +7,9 @@ The guard runs with no inputs declared to it, so it records every file of the tr
 module as its source) and the Pythons its tests start; the runner holds them to the task's inputs. A read of none of them, of no
 file its env's spec names and, when the task reads the fixture registry, of no registered fixture is an undeclared read, which
 makes the run an error. A directory opened is no read, nor is a name that is no file of the tree, nor a file under the work
-directory. Programs that aren't Python
-read what no tracer sees: they are `detail.untraced`, a fact the check can't hold the task to.
+directory. A file git ignores that no fixture is (a build's lock or output, under `.lake`) is none the graph lists, so no
+input a key could hold: it is `detail.ignored`. Programs that aren't Python read what no tracer sees: they are
+`detail.untraced`. Both are facts the check can't hold the task to.
 
 Its status: pytest's exit 0, or 5 when the file holds no test to run, is a pass; 1 (a test failed) and 2 (collecting failed, or
 a `pytest.exit`) are a fail; death by a signal, any other exit, no guard report, a Python started that couldn't trace itself, and
@@ -124,6 +125,9 @@ def verdict(task: dict, rc: int, work: Path, tmp: Path, oom: bool) -> dict:
         detail["failed_tests"] = rep["failed"]
     if untraced:
         detail["untraced"] = sorted({p.replace(str(tmp), "$BASETEMP", 1) for p in untraced})
+    reads, ignored = undeclared(task, opened, [work, tmp])
+    if ignored:
+        detail["ignored"] = ignored
     why = (f"pytest died by {signal.Signals(-rc).name}" + (" when the kernel killed a process for memory" if oom else "")
            if rc < 0 else "the read guard wrote no report" if rep is None
            else f"a Python its tests started couldn't trace its reads: {blind[0]}" if blind
@@ -131,20 +135,25 @@ def verdict(task: dict, rc: int, work: Path, tmp: Path, oom: bool) -> dict:
     if why:
         detail["error"] = why
     status = "error" if why else "pass" if rc in PASS else "fail"
-    return {"status": status, "detail": detail, "undeclared_reads": undeclared(task, opened, [work, tmp])}
+    return {"status": status, "detail": detail, "undeclared_reads": reads}
 
 
-def undeclared(task: dict, opened: set[str], scratch: list[Path]) -> list[str]:
-    """The files of ``opened`` (paths from the root) outside the task's inputs, its env's spec files and, when it reads the
-    registry, the registered fixtures; files under ``scratch`` aside, and what is no file of the tree: a directory, or a name
-    the guard joined to the working directory that was opened relative to another (`shutil.rmtree`'s walk)."""
+def undeclared(task: dict, opened: set[str], scratch: list[Path]) -> tuple[list[str], list[str]]:
+    """(undeclared reads, ignored files): the files of ``opened`` (paths from the root) outside the task's inputs, its env's spec
+    files and, when it reads the registry, the registered fixtures, split into those the graph lists (`graph.tracked`) or the
+    registry names and the rest. Files under ``scratch`` aside, and what is no file of the tree: a directory, or a name the
+    guard joined to the working directory that was opened relative to another (`shutil.rmtree`'s walk)."""
     inputs = set(task["inputs"])
     spec = graph.spec(ROOT)["env"][task["env"]]["spec"]
-    fetched = ([v for k, v in json.loads((ROOT / REGISTRY).read_text()).items() if k.startswith("art:") and isinstance(v, str)]
-               if REGISTRY in inputs else [])
+    registered = ([v for k, v in json.loads((ROOT / REGISTRY).read_text()).items() if k.startswith("art:") and isinstance(v, str)]
+                  if (ROOT / REGISTRY).is_file() else [])
+    fetched = registered if REGISTRY in inputs else []
     away = [str(d.resolve().relative_to(ROOT)) for d in scratch if d.resolve().is_relative_to(ROOT)]
-    return sorted(p for p in opened if p not in inputs and not any(graph.matches(p, s) for s in spec)
-                  and not any(p == f or p.startswith(f + "/") for f in [*fetched, *away]) and (ROOT / p).is_file())
+    out = sorted(p for p in opened if p not in inputs and not any(graph.matches(p, s) for s in spec)
+                 and not any(p == f or p.startswith(f + "/") for f in [*fetched, *away]) and (ROOT / p).is_file())
+    listed = set(graph.tracked(ROOT)) if out else set()
+    keyed = [p for p in out if p in listed or any(p == f or p.startswith(f + "/") for f in registered)]
+    return keyed, [p for p in out if p not in keyed]
 
 
 def oom_kills() -> int | None:
