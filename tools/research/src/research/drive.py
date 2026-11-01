@@ -99,12 +99,6 @@ waits on train.sh, which takes minutes to print a Lean check's run ids.  A later
 tick reads the ids from its log (`launched`, `_resolve`); until then the launch counts as running for every rule that counts
 running checks (the hold on `next`, `max_lean_checks`, the waits), and a train.sh that exits without them registered no run.
 
-The task executor (`research.executor`, drive.toml's `executor`): "shadow" lists the task graph of each tip an after-landing run
-checks (`verity tasks list --json --kind after-landing`, detached in a worktree of the tip: `list_tasks`), enqueues it at
-priority 1, and once the run ended and every task has a verdict records how they compare (`_follow_shadow`), changing nothing
-else; "on" launches no run: the executor's verdicts alone verify the tip (`_follow_tasks`), and `main` follows once every task
-passed.  A failed task marks the tip failed and is told to `CI`; no culprit is named or reverted from it yet.
-
 State (launches, refusals told) is the queue's `state.json`, under `drive`."""
 from __future__ import annotations
 
@@ -795,12 +789,13 @@ class Driver:
                  launch: Callable[[Path, str, str, bool], tuple[list[str], str]] = train_launch,
                  states: Callable[[Path, list[str]], dict] = run_states, post: Callable[[str, tuple[str, ...]], bool] = merge_thread_post,
                  now: Callable[[], float] = time.time, cancel: Callable[[Path, list[str], str], dict[str, str] | None] = cancel_runs,
+                 executor: str = "off", tasks: Executor | None = None,
                  evidence: Callable[[Path, list[str]], list[Path]] = evidence, regenerate_locks: bool = False,
                  after_landing_no_cache: bool = False, reviews: Callable[[int, str], list] | None = None,
                  ready_by: Callable[[int, str], str | None] | None = None, max_lean_checks: int = 2,
                  stale_days: int = 0, stale_close_days: int = 0, stale_keep: tuple[int, ...] = (),
                  after_landing_shards: int | str = 1, lowrisk_lane: bool = False, lowrisk_per_tick: int = 20,
-                 lowrisk_excludes: tuple[str, ...] = (), executor: str = "off", tasks: Executor | None = None):
+                 lowrisk_excludes: tuple[str, ...] = ()):
         self.q, self.on = q, on
         #: drive.toml's `executor`: "off", "shadow" (beside the after-landing run: `_follow_shadow`) or "on" (in its place:
         #: `_follow_tasks`); ``tasks``, the executor (default: infra's queue, `QueueTransport`), and how a tip's graph is listed
@@ -1653,11 +1648,11 @@ class Driver:
         base = not self._baselined(pl)                            # the first run: `main` itself (`_unbaselined`)
         if not base and (not pl["pending"] or main == pl.get("failed") or main == pl["verified"]):
             return
+        pl["steps"] = list(AFTER_LANDING)
+        steps = ",".join(pl["steps"])
         if self.executor == "on":
             self._start_tasks(pl, main, base)
             return
-        pl["steps"] = list(AFTER_LANDING)
-        steps = ",".join(pl["steps"])
         # it sends the upstream build when the landings since the last verified `main` change what lean-agreement checks (as
         # check.py finds against that base); lean-changed has no cache to compare with under --no-cache;
         # lean-audit fails on a record difference, since nothing commits a regenerated record after landing; circuit-check
@@ -1703,9 +1698,9 @@ class Driver:
         pl["run"] = {**rec, "tip": main, "at": self.now(), **({"resend": True} if pl.pop("resend", False) else {}),
                      **({"skip": skip} if skip else {}), **({"baseline": True} if base else {}),
                      "as": {"steps": [s for s in AFTER_LANDING if s not in skip], "no_cache": extra["no_cache"]}}
+        self._shadow_list(drive, main)
         q.log(f"research queue drive: post-landing run of `{self.q.into}` {main[:12]} ({steps}): {_ids(rec)}; "
               f"{len(pl['pending'])} landing(s) since {pl['verified'][:12]}")
-        self._shadow_list(drive, main)
 
     def _owner(self, m: Member) -> str | None:
         """The owning lane of a PR the queue landed: its open PR's (`_handle`), else the one its merge's `Owner` names."""

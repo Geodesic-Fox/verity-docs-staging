@@ -12,11 +12,13 @@ its check alone (`keyed`), so it runs in every check and no verdict of it is reu
 The transport is how the rows reach the queue and the verdicts come back: `QueueTransport`, infra's queue (its `ENQUEUE`
 command, and the labels from the store's remote), or `FileTransport`, a directory, for tests.
 
-Drive's `executor` flag (drive.toml) uses it after landing (`drive.Driver`): `shadow` lists and enqueues the graph of each
-`checked` tip the after-landing run checks, at `AFTER_LANDING_PRIORITY`, and once both have finished records per tip how the
-run's verdicts and the executor's compare (`compare`, an `executor_shadow` label on `commit:<tip>`); `research queue
-shadow-report` prints the newest of them and whether `SWITCH_STREAK` tips in a row agreed fully, the gate for `on`, where the
-executor's verdicts alone decide the after-landing check."""
+Drive's `executor` flag (drive.toml) uses it after landing (`drive.Driver`): `shadow` lists the graph of each `checked` tip the
+after-landing run checks (detached, in a worktree of the tip: `drive.list_tasks`), enqueues it at `AFTER_LANDING_PRIORITY`, and
+once both have finished records per tip how the run's verdicts and the executor's compare (`compare`, an `executor_shadow` label
+on `commit:<tip>`), changing nothing else; `research queue shadow-report` prints the newest of them and whether `SWITCH_STREAK`
+tips in a row agreed fully, the gate for `on`, where no run is launched and the executor's verdicts alone verify the tip, `main`
+following once every task passed.  A failed task marks the tip failed and is told to `CI`; no culprit is named or reverted from
+it yet."""
 from __future__ import annotations
 
 import hashlib
