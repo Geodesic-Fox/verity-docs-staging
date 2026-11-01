@@ -1,7 +1,9 @@
 """lean-agreement: `check.py --lean-agreement` as check's lean-agreement step runs it, on the flock-verify the task reads (at
 its var `verify`) and the upstream build and inputs `upstream.json` pins, fetched from the evidence store as ci.py fetches what
-it pins (`research data fetch`) and held to the pin's sha256.  An error when it couldn't run: a pin that didn't fetch or isn't
-the pinned bytes, a machine check.py says can't run it, a kill; any other failing exit is a fail."""
+it pins (`research data fetch`) and held to the pin's sha256.  Those fetches and ci.py's read the store's remote this
+process's environment names: a `research run` job on a node with no store config of its own gets one with --store-read.  An
+error when it couldn't run: a pin that didn't fetch or isn't the pinned bytes, a machine check.py says can't run it, a kill; any
+other failing exit is a fail."""
 from __future__ import annotations
 
 import hashlib
@@ -34,7 +36,10 @@ def run(task: dict, work: Path) -> dict:
     for k in ("upstream", "inputs"):
         art, d = pin[k]["art"], work / "pinned" / k
         if rc := call([sys.executable, "-m", "research", "data", "fetch", art, "--to", str(d)], work, ROOT):
-            return {"status": "error", "detail": {"error": f"the pinned {k} ({art}) didn't fetch (exit {rc})"}}
+            said = (work / LOG).read_text(errors="replace").splitlines()[-1]
+            return {"status": "error", "detail": {"error": f"the pinned {k} ({art}) didn't fetch (exit {rc}: {said}); a machine without "
+                                                           f"a store config of its own needs the store's remote for this fetch and "
+                                                           f"ci.py's: `research run --store-read`"}}
         files = [p for p in d.rglob("*") if p.is_file()]
         if len(files) != 1 or _sha256(files[0]) != pin[k]["sha256"]:
             return {"status": "error", "detail": {"error": f"the pinned {k} ({art}) fetched as other bytes than {PIN} pins"}}

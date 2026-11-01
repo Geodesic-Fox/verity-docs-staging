@@ -191,6 +191,8 @@ def test_lean_agreement(tmp_path, monkeypatch, verify, fetched, status):
         if argv[1:5] != ["-m", "research", "data", "fetch"]:
             return real(argv, work, cwd, env)
         if fetched == "no fetch":
+            with open(work / graph.LOG, "a") as log:
+                log.write(f"research data fetch: {argv[5]}: no manifest locally (no remote configured)\n")
             return 1
         to = Path(argv[argv.index("--to") + 1])
         to.mkdir(parents=True)
@@ -209,3 +211,5 @@ def test_lean_agreement(tmp_path, monkeypatch, verify, fetched, status):
     assert res["status"] == status, res
     if status == "pass":
         assert res["detail"] == {"sets": 1, "sessions": 3, "agree": 3} and set(res["outputs"]) == {"sets"}
+    if fetched == "no fetch":
+        assert "(no remote configured)" in res["detail"]["error"] and "--store-read" in res["detail"]["error"], res

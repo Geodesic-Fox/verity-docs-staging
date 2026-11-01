@@ -153,7 +153,9 @@ The check's steps that build the Flock verifier and run what it built, as `tools
 `lean-build`'s outputs sit at their paths in a built tree, where the suites that run them look (the Flock suite's
 `artifacts`); `lean-agreement` reads `flock-verify` and gets its path as its var `verify`. The agreement fetches the upstream
 build and inputs `upstream.json` pins (`research data fetch`, as ci.py fetches what it pins) and holds them to the pin's
-sha256, so the store and its client are no input. Each runner reports a fail only for the tree's fault and an error for the
+sha256, so the store and its client are no input. Those fetches and ci.py's read the store's remote that the runner's
+environment names: a `research run` job on a node with no store config of its own gets one with `--store-read`, and without
+one the task is an error that says so. Each runner reports a fail only for the tree's fault and an error for the
 machine's: a toolchain that didn't set up, a pin that didn't fetch, check.py's `cannot run here`, a command a signal killed,
 and for `check_build.sh` any failing exit whose log shows no refused patch and no crate that didn't compile.
 
