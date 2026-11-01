@@ -158,7 +158,7 @@ def undeclared(task: dict, opened: set[str], scratch: list[Path]) -> tuple[list[
 
 def oom_kills() -> int | None:
     """The kernel's count of OOM kills since boot (`/proc/vmstat`), None where it isn't there (`suites.oom_kills`)."""
-    try:
-        return next((int(ln.split()[1]) for ln in Path("/proc/vmstat").read_text().splitlines() if ln.startswith("oom_kill ")), None)
-    except OSError:
+    vmstat = Path("/proc/vmstat")
+    if not vmstat.is_file():
         return None
+    return next((int(ln.split()[1]) for ln in vmstat.read_text().splitlines() if ln.startswith("oom_kill ")), None)
