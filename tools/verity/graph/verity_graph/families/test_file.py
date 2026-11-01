@@ -10,19 +10,29 @@ the commit's files alone:
 - their import closure over the repository's Python (`Imports`): each `import` and `from ... import` in a file, wherever it is
   (a function's, a `TYPE_CHECKING` block's), relative ones from the file's package, absolute ones where the workspace's packages
   put their names (`Layout`), where pytest puts them (each imported file's directory above its packages, the suite's
-  `pythonpath`), and a name neither has from the importing file's own directory; a constant name given to `import_module`,
-  `__import__`, `importorskip` or `run_module`, a conftest's `pytest_plugins`, and a `.py` file a path loader is given that the
-  call's strings name, in one string or in parts joined by `/` (from the file's directory or one above it); where it builds the
-  path from a name (`_load("gamma")`), each `.py` file of its directory a string of it names; and each module of a package that
-  imports them all (`pkgutil.iter_modules(__path__)`). Another computed name can't be followed (`Info.unfollowed`); what it
-  loads is an undeclared read when the runner meets it;
+  `pythonpath`), where a file of the closure puts them on `sys.path` (`_Paths`: a directory it builds from `__file__`, string
+  parts and its module-level names; where it builds one otherwise, the directories it builds anywhere and those above it serve
+  its own imports), and a name none has from the importing file's own directory; a constant name given to `import_module`,
+  `__import__`, `importorskip` or `run_module`, and each module of the package an f-string's constant head or a module's
+  `__name__` names (`f"verity.ml.registry.{m.name}"`); a conftest's `pytest_plugins`; a `.py` file a path loader is given
+  that the call's strings name, in one string or in parts joined by `/` (from the file's directory or one above it), and
+  where the path is a variable (a helper's parameter), each `.py` file the file's strings name; where it builds the path from
+  a name (`_load("gamma")`), each `.py` file of its directory a string of it names; each module of a package that imports them
+  all (`pkgutil.iter_modules(__path__)`); and the settings registry `verity_config.settings.of(__file__)` loads. Another
+  computed name can't be followed (`Info.unfollowed`); what it loads is an undeclared read when the runner meets it;
 - the closures of what the test file and its conftests start or load: each `.py` file a string in them names (a script a test
   runs), each module they run as `python -m NAME`, and where they load a module by a path they build, each name a string gives
   that a `.py` file has there or above;
+- the data beside the closure's modules (`Tree.beside`): each one's directory's files that aren't Python, and the files under
+  its directories that hold no Python (`tables/`); and every pyproject.toml when a module of it lists them all
+  (`suites.metadata`);
+- the files under each path the test file and its conftests name: string parts joined by `/` or one string holding one, and
+  parts joined to a path they build (`VERIFIER / "agree.py"`);
 - the suite's declared inputs (`[tool.verity.tests] inputs`, a directory as its files) less their Python, which the closure has
-  where it is imported, but for the whole tree (`.`), and less Markdown under a directory unless the suite lists a `.md`
-  (`suites.markdown`); the fixture registry when an entry of it that git doesn't hold (a fetched fixture) is under the suite's
-  directory or its inputs;
+  where it is imported, but for the whole tree (`.`), and its own directory's files but their Python and the suites nested in
+  it (`suites.inputs_of` always holds it); less Markdown under a directory unless the suite lists a `.md` (`suites.markdown`);
+  the fixture registry when an entry of it that git doesn't hold (a fetched fixture) is under the suite's directory or its
+  inputs;
 - each `pyproject.toml` from the test file's directory up to the root;
 - the read guard the runner loads into pytest (`GUARD`); the core adds the runner itself.
 
@@ -74,6 +84,20 @@ _DASH_M = re.compile(r"""["']-m["']\s*,\s*[rRuU]?["']([A-Za-z_][\w.]*)["']""")
 _BUILT = re.compile(r"""[fF][rR]?["'][^"'\n]*\{[^}]+\}\.py["']|\+\s*["']\.py["']""")
 _BARE = re.compile(r"""["']([A-Za-z_]\w*)["']""")
 _PLUGINS = re.compile(r"^pytest_plugins[ \t]*=", re.M)
+#: a module name built in an f-string (`f"verity.ml.circuits.ops.boolean.{m.name}"`, `f"{__name__}.{n}"`)
+_FSTRING = re.compile(r"""\s*[fF](['"])([^'"\n]*\{[^'"\n]*)\1""")
+#: a path joined of string parts to a name or `Path(__file__)` (`HERE.parent / "harness"`)
+_BUILT_PATH = re.compile(r"""(?:\bPath\(__file__\)|\b[A-Za-z_]\w*)(?:\.\w+|\[\d+\]|\(\))*(?:\s*/\s*["'][\w.-]+["'])+""")
+#: a call that puts a directory on `sys.path`
+_SYSPATH = re.compile(r"\bsys\.path\.(?:insert|append|extend)\(|\bsys\.path\[[^\]\n]*\]\s*=|\bsyspath_prepend\(|\baddsitedir\(")
+#: the calls and methods a path expression passes its path through, and those taking its directory
+_KEEP = frozenset({"Path", "PurePath", "PurePosixPath", "str", "fspath", "abspath", "realpath", "normpath"})
+_SAME = frozenset({"resolve", "absolute", "expanduser"})
+#: a repository path a test names: string parts joined by `/` (`ROOT / "verity" / "core"`), or one string holding a `/`
+_DATA_PARTS = re.compile(r"""(?:["'][\w.-]+["']\s*/\s*)+["'][\w.-]+["']""")
+_SLASHED = re.compile(r"""["']([\w.-]+(?:/[\w.-]+)+)/?["']""")
+#: a module that lists every pyproject.toml of the tree (`suites.metadata`)
+_METADATA = ('"*/pyproject.toml"', "'*/pyproject.toml'")
 
 
 def _parent(path: str) -> str:
@@ -89,6 +113,167 @@ def _norm(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
+def _up(path: str | None, n: int) -> str | None:
+    """``n`` directories above ``path``, None above the root."""
+    for _ in range(n):
+        if not path:
+            return None
+        path = _parent(path)
+    return path
+
+
+def _above(d: str) -> list[str]:
+    """The directories above ``d``, nearest first, the root last."""
+    out = []
+    while d:
+        d = _parent(d)
+        out.append(d)
+    return out
+
+
+def _alias(text: str, name: str) -> str | None:
+    """The module ``name`` stands for in ``text``: `import a.b as name`, `from a import b as name`, `from a import name`, or
+    `name = "a.b"`."""
+    if not re.fullmatch(_NAME, name):
+        return None
+    n = re.escape(name)
+    if m := re.search(rf"^[ \t]*import[ \t]+([\w.]+)[ \t]+as[ \t]+{n}\b", text, re.M):
+        return m.group(1)
+    if m := re.search(rf"^[ \t]*from[ \t]+([\w.]+)[ \t]+import[ \t]+(?:[^\n#]*?[ \t,(])?(\w+)[ \t]+as[ \t]+{n}\b", text, re.M):
+        return f"{m.group(1)}.{m.group(2)}"
+    if m := re.search(rf"^[ \t]*from[ \t]+([\w.]+)[ \t]+import[ \t]+(?:[^\n#]*?[ \t,(])?{n}\b(?![ \t]+as)", text, re.M):
+        return f"{m.group(1)}.{name}"
+    if m := re.search(rf"""^{n}[ \t]*(?::[^=\n]*)?=[ \t]*[rRuU]?(['"])([\w.]+)\1""", text, re.M):
+        return m.group(2)
+    return None
+
+
+def _sub(path: str | None, part: str | None) -> str | None:
+    """``part`` under ``path``, None outside the tree."""
+    if path is None or part is None:
+        return None
+    p = posixpath.normpath(_join(path, part))
+    return None if p.startswith(("..", "/")) else "" if p == "." else p
+
+
+def _parse(text: str, at: int) -> ast.Module | None:
+    """The logical line of ``text`` from the start of the line holding offset ``at``, parsed alone: parsing whole files to
+    find the few statements that touch `sys.path` would take most of the listing's time."""
+    try:
+        return ast.parse(_statement(text, text.rfind("\n", 0, at) + 1).strip())
+    except (SyntaxError, ValueError, RecursionError):
+        return None
+
+
+class _Paths:
+    """The repository paths file ``path``'s expressions build from `__file__`, string constants and its module-level names
+    (`Path(__file__).resolve().parents[1]`, `HERE.parent / "x"`, `os.path.dirname(__file__)`): `where`, None for one it builds
+    otherwise or outside the tree."""
+
+    def __init__(self, path: str, text: str):
+        self.path, self.text = path, text
+        self._defs: dict[str, ast.expr | None] = {}
+
+    def value(self, name: str) -> ast.expr | None:
+        """What module-level name ``name`` is assigned."""
+        if name not in self._defs:
+            self._defs[name] = None
+            m = re.search(rf"^{re.escape(name)}[ \t]*(?::[^=\n]*)?=(?!=)", self.text, re.M)
+            body = tree.body if m and (tree := _parse(self.text, m.start())) else []
+            if body and isinstance(body[0], (ast.Assign, ast.AnnAssign)):
+                self._defs[name] = body[0].value
+        return self._defs[name]
+
+    def string(self, node: ast.expr, seen: tuple[str, ...] = ()) -> str | None:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        if isinstance(node, ast.Name) and node.id not in seen and (v := self.value(node.id)) is not None:
+            return self.string(v, (*seen, node.id))
+        return None
+
+    def where(self, node: ast.expr, seen: tuple[str, ...] = ()) -> str | None:
+        if isinstance(node, ast.Name):
+            if node.id == "__file__":
+                return self.path
+            return self.where(v, (*seen, node.id)) if node.id not in seen and (v := self.value(node.id)) is not None else None
+        if isinstance(node, ast.Attribute) and node.attr == "parent":
+            return _up(self.where(node.value, seen), 1)
+        if (isinstance(node, ast.Subscript) and isinstance(node.value, ast.Attribute) and node.value.attr == "parents"
+                and isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, int)):
+            return _up(self.where(node.value.value, seen), node.slice.value + 1)
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+            return _sub(self.where(node.left, seen), self.string(node.right, seen))
+        if isinstance(node, ast.Call):
+            f = node.func
+            name = f.attr if isinstance(f, ast.Attribute) else f.id if isinstance(f, ast.Name) else ""
+            if name in _SAME and isinstance(f, ast.Attribute):
+                return self.where(f.value, seen)
+            if not node.args:
+                return None
+            if name == "dirname":
+                return _up(self.where(node.args[0], seen), 1)
+            if name == "join":
+                p = self.where(node.args[0], seen)
+                for a in node.args[1:]:
+                    p = _sub(p, self.string(a, seen))
+                return p
+            if name in _KEEP:
+                return self.where(node.args[0], seen)
+        return None
+
+    def built(self) -> list[str]:
+        """Each path the file builds by joining string parts to a path (`HERE.parent / "harness"`)."""
+        out = []
+        for m in _BUILT_PATH.finditer(self.text):
+            try:
+                node = ast.parse(m.group(0), mode="eval").body
+            except (SyntaxError, ValueError, RecursionError):
+                continue
+            if (p := self.where(node)) is not None:
+                out.append(p)
+        return out
+
+    def syspath(self) -> tuple[list[str], bool]:
+        """The directories the file puts on `sys.path`, and whether it puts one there that it builds otherwise."""
+        out, blind = [], False
+        for m in _SYSPATH.finditer(self.text):
+            if (stmt := _parse(self.text, m.start())) is None:
+                blind = True
+                continue
+            for n in ast.walk(stmt):
+                for e in _put(n):
+                    if (d := self.where(e)) is not None:
+                        out.append(d)
+                    else:
+                        blind = True
+        return list(dict.fromkeys(out)), blind
+
+
+def _is_syspath(node: ast.expr) -> bool:
+    return isinstance(node, ast.Attribute) and node.attr == "path" and isinstance(node.value, ast.Name) and node.value.id == "sys"
+
+
+def _items(node: ast.expr) -> list[ast.expr]:
+    return list(node.elts) if isinstance(node, (ast.List, ast.Tuple)) else [node]
+
+
+def _put(node: ast.AST) -> list[ast.expr]:
+    """What a statement puts on `sys.path`."""
+    if isinstance(node, ast.Assign):
+        return _items(node.value) if any(isinstance(t, ast.Subscript) and _is_syspath(t.value) for t in node.targets) else []
+    if not isinstance(node, ast.Call) or not node.args:
+        return []
+    f = node.func
+    name = f.attr if isinstance(f, ast.Attribute) else f.id if isinstance(f, ast.Name) else ""
+    if name in ("syspath_prepend", "addsitedir"):
+        return [node.args[0]]
+    if name not in ("insert", "append", "extend") or not isinstance(f, ast.Attribute) or not _is_syspath(f.value):
+        return []
+    if name == "insert":
+        return node.args[1:2]
+    return [node.args[0]] if name == "append" else _items(node.args[0])
+
+
 @dataclass(frozen=True)
 class Suite:
     name: str
@@ -102,6 +287,11 @@ class Suite:
     @property
     def dir(self) -> str:
         return "" if self.path == "." else self.path
+
+    @property
+    def markdown(self) -> bool:
+        """Whether its tests read Markdown, which it says by listing a `.md` (`suites.markdown`)."""
+        return any(p.endswith(".md") for p in self.inputs)
 
 
 class Tree:
@@ -123,6 +313,32 @@ class Tree:
                     break
                 d, _, name = d.rpartition("/")
         self.dirs = frozenset(self.children)
+        code: set[str] = set()                  # the directories holding Python or a pyproject.toml at any depth
+        for f in self.sorted:
+            if f.endswith(".py") or f.rpartition("/")[2] == "pyproject.toml":
+                d = _parent(f)
+                while d not in code:
+                    code.add(d)
+                    if not d:
+                        break
+                    d = _parent(d)
+        self.code = frozenset(code)
+        self.pyprojects = tuple(f for f in self.sorted if f.rpartition("/")[2] == "pyproject.toml")
+        self._beside: dict[str, list[str]] = {}
+
+    def beside(self, d: str) -> list[str]:
+        """The data beside the modules of directory ``d``: its files that aren't Python, and every file under those of its
+        directories that hold no Python and no pyproject.toml (`tables/`, `pins/`). The root's directories are no module's."""
+        if (got := self._beside.get(d)) is None:
+            got = self._beside[d] = []
+            for n in sorted(self.children.get(d, ())):
+                p = _join(d, n)
+                if p in self.files:
+                    if not n.endswith(".py"):
+                        got.append(p)
+                elif d and p not in self.code:
+                    got += self.under(p)
+        return got
 
     def text(self, path: str) -> str:
         return (self.root / path).read_bytes().decode("utf-8", "replace")
@@ -277,13 +493,16 @@ def _parsed(text: str) -> list[tuple[int, str, tuple[str, ...]]]:
 @dataclass
 class Info:
     """What one file imports: the files that resolves to wherever it is imported (`fixed`), and its absolute imports of names the
-    workspace doesn't serve (`local`: top-level name -> [(module, names)]), which the directories pytest puts on `sys.path` may;
-    and what it may start: the `.py` files its strings name (`scripts`) and the modules it runs as `python -m NAME` (`modules`)."""
+    workspace doesn't serve (`local`: top-level name -> [(module, names)]), which the directories pytest or another file puts on
+    `sys.path` may (`paths`, those this one puts there); what it may start: the `.py` files its strings name (`scripts`) and the
+    modules it runs as `python -m NAME` (`modules`); and whether it lists every pyproject.toml (`metadata`)."""
     fixed: tuple[str, ...]
     local: dict[str, list[tuple[str, tuple[str, ...]]]]
     unfollowed: int
     scripts: tuple[str, ...]
     modules: tuple[str, ...]
+    paths: tuple[str, ...]
+    metadata: bool
 
 
 class Imports:
@@ -294,6 +513,8 @@ class Imports:
         self._info: dict[str, Info] = {}
         self._serves: dict[str, bool] = {}
         self._closed: dict[str, frozenset[str]] = {}            # file -> what its `fixed` edges reach, itself included
+        self._paths: dict[str, list[str]] = {}                  # file -> the files under the paths it names (`named`)
+        self.metadata: set[str] = set()                         # the files read so far that list every pyproject.toml
         self._by_top: dict[str, set[str]] = {}                  # top-level name -> the files importing it absolutely
         self.fallbacks = 0              # files whose statements the regular expressions couldn't read, parsed whole
 
@@ -304,10 +525,11 @@ class Imports:
 
     def walk(self, base: str, module: str, names: tuple[str, ...]) -> list[str]:
         """The files importing ``module`` from ``base`` (a `sys.path` directory, or a package's for a relative import) runs: each
-        package's `__init__.py` on the way and the module's file, then each of ``names`` that is a submodule."""
+        package's `__init__.py` on the way and the module's file, then each of ``names`` that is a submodule (`("*",)`: each of
+        its modules)."""
         out, d = [], base
         parts = [p for p in module.split(".") if p]
-        for i, p in enumerate(parts):
+        for p in parts:
             d = _join(d, p)
             if d in self.tree.dirs:
                 if (init := d + "/__init__.py") in self.tree.files:
@@ -319,6 +541,8 @@ class Imports:
                 return out
             else:
                 return out
+        if names == ("*",):
+            names = tuple(sorted(self.tree.names(d) - {"__init__"}))
         for n in names:
             sub = _join(d, n)
             if sub + ".py" in self.tree.files:
@@ -327,16 +551,59 @@ class Imports:
                 out.append(init)
         return out
 
-    def _named(self, path: str, name: str) -> str | None:
-        """The repository file a `.py` string in ``path`` names: from its directory, or the nearest one above it."""
+    def _named(self, path: str, name: str, dirs: bool = False) -> str | None:
+        """The repository file (or with ``dirs`` directory) a string in ``path`` names: from its directory, or the nearest one
+        above it."""
         d = _parent(path)
         while True:
             p = posixpath.normpath(_join(d, name))
-            if not p.startswith("../") and p in self.tree.files:
+            if not p.startswith("../") and (p in self.tree.files or dirs and p in self.tree.dirs):
                 return p
             if not d:
                 return None
             d = _parent(d)
+
+    def named(self, path: str) -> list[str]:
+        """The repository files under the paths file ``path`` names: string parts joined by `/` or one string holding one
+        (`"verity" / "core"`, `"tools/verity/check"`), each from its directory or the nearest one above it, and string parts
+        joined to a path it builds (`VERIFIER / "agree.py"`, `VERIFIER = HERE.parent / "verifier"`)."""
+        if (got := self._paths.get(path)) is None:
+            text = self.tree.text(path)
+            parts = ("/".join(re.findall(r"""["']([\w.-]+)["']""", m)) for m in _DATA_PARTS.findall(text))
+            found = [p for s in [*parts, *_SLASHED.findall(text)] if (p := self._named(path, s, dirs=True)) is not None]
+            found += [p for p in _Paths(path, text).built() if p in self.tree.files or p in self.tree.dirs]
+            got = self._paths[path] = sorted({f for p in found for f in self.tree.under(p)})
+        return got
+
+    def _registry(self, path: str) -> str | None:
+        """The settings registry `verity_config.settings.of(path)` loads: the `settings.py` beside the nearest pyproject.toml
+        above ``path``, else beside ``path``."""
+        d = _parent(path)
+        while True:
+            if _join(d, "pyproject.toml") in self.tree.files:
+                return p if (p := _join(d, "settings.py")) in self.tree.files else None
+            if not d:
+                break
+            d = _parent(d)
+        return p if (p := _join(_parent(path), "settings.py")) in self.tree.files else None
+
+    def _package(self, path: str, text: str, name: str) -> tuple[int, str] | None:
+        """The package an f-string module name ``name`` in file ``path`` names a module of, as an import's (level, module), or
+        None: the constant dotted head before its first `{` (`f"verity.ml.registry.{m}"`), else the package `{__name__}` or
+        `{__package__}` is, or the module `{X.__name__}` or a constant `{X}` names, with what follows it up to the next `{`."""
+        head, _, rest = name.partition("{")
+        if head:
+            level = len(head) - len(head.lstrip("."))
+            return level, head[level:].rpartition(".")[0]
+        inner, _, after = rest.partition("}")
+        if not after.startswith("."):
+            return None
+        tail = after[1:].partition("{")[0].rpartition(".")[0]
+        if inner in ("__name__", "__package__"):
+            own = "" if inner == "__package__" or path.rpartition("/")[2] == "__init__.py" else path.rpartition("/")[2][:-3]
+            return 1, ".".join(p for p in (own, tail) if p)
+        module = _alias(text, inner.removesuffix(".__name__"))
+        return (0, ".".join(p for p in (module, tail) if p)) if module else None
 
     def info(self, path: str) -> Info:
         if (got := self._info.get(path)) is not None:
@@ -355,24 +622,32 @@ class Imports:
                     reqs = _parsed(text)
                     break
             reqs += r
-        unfollowed, by_path = 0, False
+        unfollowed, by_path, blind = 0, False, False
         fixed: list[str] = []
         for m in _CALL.finditer(text) if any(k in text for k in _CALLS) else ():
             call = _statement(text, m.end() - 1)
             if m.group(1) in _BY_NAME:
                 if c := _CONSTANT.match(text, m.end()):
                     reqs.append((0, c.group(2), ()))
+                elif (f := _FSTRING.match(text, m.end())) and (each := self._package(path, text, f.group(2))):
+                    reqs.append((*each, ("*",)))
                 else:
                     unfollowed += 1
             elif loaded := [p for s in _pyfiles(call) if (p := self._named(path, s))]:
                 fixed += loaded
             else:
-                unfollowed, by_path = unfollowed + 1, by_path or bool(_BUILT.search(call))
+                unfollowed, by_path, blind = unfollowed + 1, by_path or bool(_BUILT.search(call)), True
         for line in _PLUGINS.finditer(text) if "pytest_plugins" in text else ():
             for s in re.findall(r"""["']([\w.]+)["']""", _statement(text, line.start())):
                 reqs.append((0, s, ()))
         local: dict[str, list[tuple[str, tuple[str, ...]]]] = {}
         here = _parent(path)
+        put = "sys.path" in text or "syspath_prepend" in text or "addsitedir" in text
+        built = _Paths(path, text) if put and _SYSPATH.search(text) else None
+        dirs, lost = built.syspath() if built else ([], False)
+        dirs = [d for d in dirs if d in self.tree.dirs]
+        guesses = [d for d in built.built() if d in self.tree.dirs] if lost else []
+        search = [*dirs, here, *guesses, *(_above(here) if lost else ())]   # where it builds them otherwise: any it builds
         for level, module, names in reqs:
             if level:
                 base = here
@@ -387,18 +662,24 @@ class Imports:
             if self.serves(top):
                 for b in self.layout.bases(top):
                     fixed += self.walk(b, module, names)
-            elif self.tree.has(here, top):
-                fixed += self.walk(here, module, names)
+            elif (b := next((b for b in search if self.tree.has(b, top)), None)) is not None:
+                fixed += self.walk(b, module, names)
         if "iter_modules(__path__)" in text:            # a package that imports each of its modules
             fixed += [f for f in self.tree.under(here) if _parent(f) == here and f.endswith(".py")]
+        if "of(__file__)" in text and (registry := self._registry(path)):        # `verity_config.settings.of`
+            fixed.append(registry)
         scripts = {p for s in _pyfiles(text) if (p := self._named(path, s))} if ".py'" in text or '.py"' in text else set()
+        if blind:                       # a path loader handed a path it doesn't name (a helper's parameter): each `.py` it names
+            fixed += scripts
         if by_path:                     # a module loaded by a path it builds from a name (`_load("gamma")`): each name with a file
             bare = set(_BARE.findall(text))
             fixed += [p for s in bare if (p := _join(here, s + ".py")) in self.tree.files]
             scripts |= {p for s in bare if (p := self._named(path, s + ".py"))}
         modules = set(_DASH_M.findall(text)) if "-m" in text else set()
         got = self._info[path] = Info(tuple(sorted(set(fixed) - {path})), local, unfollowed, tuple(sorted(scripts - {path})),
-                                      tuple(sorted(modules)))
+                                      tuple(sorted(modules)), tuple(dirs), any(s in text for s in _METADATA))
+        if got.metadata:
+            self.metadata.add(path)
         for top in local:
             self._by_top.setdefault(top, set()).add(path)
         return got
@@ -455,7 +736,8 @@ class Imports:
     def closure(self, seeds: list[str], bases: list[str], starters: list[str]) -> set[str]:
         """The Python files importing ``seeds`` with ``bases`` on `sys.path` (pytest's) can run, ``seeds`` among them, and those
         the scripts and modules ``starters`` (a test file and its conftests) name can (`Info.scripts`, `Info.modules`): what their
-        `fixed` edges reach (`reached`), and what those files' absolute imports of a name one of ``bases`` serves reach from it.
+        `fixed` edges reach (`reached`), and what those files' absolute imports of a name one of ``bases`` serves reach from it,
+        or one of the directories a file of the closure puts on `sys.path` (`Info.paths`): the process's `sys.path` is one.
         What a module further in starts isn't followed: across the tree that joins most of it into one closure."""
         roots = [s for s in seeds if s.endswith(".py")]
         for s in starters:
@@ -465,21 +747,25 @@ class Imports:
                 top = m.partition(".")[0]
                 for b in dict.fromkeys([*self.layout.bases(top), *(b for b in bases if self.tree.has(b, top))]):
                     roots += self.walk(b, m, ("__main__",))
-        bases = [b for b in dict.fromkeys(bases) if b not in self.layout.paths]
-        served = {n: [b for b in bases if self.tree.has(b, n)] for b in bases for n in self.tree.names(b)}
-        out = set().union(*(self.reached(s) for s in roots))
-        while served:
+        out: set[str] = set()
+        grown = set().union(*(self.reached(s) for s in roots))
+        known: set[str] = set(self.layout.paths)
+        served: dict[str, list[str]] = {}
+        while grown:
+            out |= grown
+            for b in dict.fromkeys([*bases, *(d for f in sorted(grown) for d in self._info[f].paths)]):
+                if b not in known:
+                    known.add(b)
+                    for n in self.tree.names(b):
+                        served.setdefault(n, []).append(b)
+            bases = []
             new = set()
             for top in served.keys() & self._by_top.keys():
                 for f in self._by_top[top] & out:
                     for b in served[top]:
                         for module, names in self._info[f].local[top]:
                             new.update(self.walk(b, module, names))
-            new -= out
-            if not new:
-                break
-            for g in new:
-                out |= self.reached(g)
+            grown = set().union(*(self.reached(g) for g in new - out)) - out
         return out
 
 
@@ -522,11 +808,11 @@ def test_files(tree: Tree, suite: Suite, suites: list[Suite]) -> list[str]:
     return sorted(set(out))
 
 
-def declared(tree: Tree, suite: Suite, fixtures: list[str]) -> list[str]:
-    """The suite's declared inputs less their Python, an import list the closure replaces (and their directories' Markdown unless
-    it lists a `.md`), and the fixture registry when a fetched fixture is under the suite or one of them. The whole tree (`.`) is
-    no import list: a suite declares it whose tests read every file (the root's lints, the graph's listing)."""
-    markdown = any(p.endswith(".md") for p in suite.inputs)
+def declared(tree: Tree, suite: Suite, suites: list[Suite], fixtures: list[str]) -> list[str]:
+    """The suite's declared inputs less their Python, an import list the closure replaces, and its own directory's files but
+    their Python and the suites nested in it (`suites.inputs_of` always holds the directory); Markdown under a directory only
+    when it lists a `.md`; and the fixture registry when a fetched fixture is under the suite or one of its inputs. The whole
+    tree (`.`) is no import list: a suite declares it whose tests read every file (the root's lints, the graph's listing)."""
     out: set[str] = set()
     for p in suite.inputs:
         p = p.strip("/")
@@ -534,7 +820,11 @@ def declared(tree: Tree, suite: Suite, fixtures: list[str]) -> list[str]:
             if not p.endswith(".py"):
                 out.add(p)
             continue
-        out.update(f for f in tree.under(p) if (p in ("", ".") or not f.endswith(".py")) and (markdown or not f.endswith(".md")))
+        out.update(f for f in tree.under(p) if (p in ("", ".") or not f.endswith(".py")) and (suite.markdown or not f.endswith(".md")))
+    if suite.path != ".":
+        nested = [s.dir for s in suites if s.path != suite.path and _under(s.dir, suite.dir)]
+        out.update(f for f in tree.under(suite.dir) if not f.endswith(".py") and (suite.markdown or not f.endswith(".md"))
+                   and not any(_under(f, n) for n in nested))
     if fetches(suite, fixtures):
         out.add(REGISTRY)
     return sorted(out)
@@ -577,7 +867,12 @@ def task(tree: Tree, imports: Imports, suite: Suite, path: str, data: list[str])
         if not d:
             break
         d = _parent(d)
-    inputs = {*imports.closure(seeds, bases, [path, *conftests]), *seeds, *data, *pyprojects, *GUARD}
+    code, md = imports.closure(seeds, bases, [path, *conftests]), suite.markdown
+    beside = {f for d in {_parent(f) for f in code} for f in tree.beside(d) if md or not f.endswith(".md")}
+    if not imports.metadata.isdisjoint(code):
+        pyprojects += tree.pyprojects
+    paths = {f for s in [path, *conftests] for f in imports.named(s) if md or not f.endswith(".md")}
+    inputs = {*code, *beside, *paths, *seeds, *data, *pyprojects, *GUARD}
     out = {"id": f"{KIND}:{path}", "vars": {"suite": suite.path}, "inputs": sorted(inputs)}
     if suite.mem_gb:
         out["resources"] = {"mem_gb": suite.mem_gb}
@@ -601,6 +896,6 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
     fixtures = fetched(tree)
     out = []
     for s in suites:
-        data = declared(tree, s, fixtures)
+        data = declared(tree, s, suites, fixtures)
         out += [task(tree, imports, s, f, data) for f in test_files(tree, s, suites)]
     return sorted(out, key=lambda t: t["id"])

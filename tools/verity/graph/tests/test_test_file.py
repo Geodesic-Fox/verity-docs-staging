@@ -63,9 +63,23 @@ SUITE = {
     "s/tests/sub/local.py": "V = 3\n",
     "s/tests/sub/test_b.py": "from .local import V\n\n\ndef test_b():\n    assert V == 3\n",
     "s/tests/fixtures/test_data.py": "def test_never():\n    pass\n",
+    "s/tests/test_d.py": ('import sys\nfrom pathlib import Path\n\nHERE = Path(__file__).resolve().parent\n'
+                          'ASSETS = Path(__file__).resolve().parents[2] / "lib" / "assets"\n'
+                          'sys.path.insert(0, str(HERE.parent / "tools"))\n\nimport finder  # noqa: E402\n'
+                          'from toy_lib import plugins  # noqa: E402\n'),
+    "s/tools/finder.py": 'PATTERN = "*/pyproject.toml"\n',
+    "lib/settings.py": "REGISTRY = None\n",
+    "lib/assets/a.txt": "a\n",
+    "lib/toy_lib/plugins/__init__.py": ('import importlib\nimport pkgutil\n\n\ndef load():\n    for m in pkgutil.iter_modules(__path__):\n'
+                                        '        importlib.import_module(f"toy_lib.plugins.{m.name}")\n'),
+    "lib/toy_lib/plugins/a.py": "A = 1\n",
+    "lib/toy_lib/plugins/b.py": "from verity_config.settings import of\n\nsettings = of(__file__)\n",
+    "lib/toy_lib/plugins/table.json": "{}\n",
+    "lib/toy_lib/plugins/data/t.bin": "t\n",
 }
-#: in every toy task: the suite's declared data but its Python and its directory's Markdown, the pyprojects above, the guard
-COMMON = [*family.GUARD, "pyproject.toml", "s/data/x.json", "s/pyproject.toml", "s/table.csv"]
+#: in every toy task: the suite's declared data but its Python and its directory's Markdown, its own directory's data, the
+#: pyprojects above, the guard
+COMMON = [*family.GUARD, "pyproject.toml", "s/data/x.json", "s/notes.txt", "s/pyproject.toml", "s/table.csv"]
 LIB = ["lib/toy_lib/__init__.py", "lib/toy_lib/core.py", "lib/toy_lib/helper.py"]
 
 
@@ -92,8 +106,8 @@ def test_the_listing_is_the_same_bytes_from_any_checkout(tmp_path):
 def test_a_test_file_s_inputs(tmp_path):
     root = toy_tree(tmp_path / "tree", SPEC, SUITE)
     by = {t["id"]: t for t in family.tasks(root, graph.tracked(root))}
-    assert sorted(by) == ["test-file:s/tests/sub/test_b.py", "test-file:s/tests/test_a.py", "test-file:s/tests/test_c.py"], \
-        "a data directory's test_*.py is no test file"
+    assert sorted(by) == ["test-file:s/tests/sub/test_b.py", "test-file:s/tests/test_a.py", "test-file:s/tests/test_c.py",
+                          "test-file:s/tests/test_d.py"], "a data directory's test_*.py is no test file"
     a = by["test-file:s/tests/test_a.py"]
     assert a["inputs"] == sorted([*COMMON, *LIB, "lib/toy_lib/extra.py", "s/tests/conftest.py", "s/tests/helpers.py",
                                   "s/tests/test_a.py"]), "its conftest, the library it imports and the module named to import_module"
@@ -104,6 +118,14 @@ def test_a_test_file_s_inputs(tmp_path):
     assert by["test-file:s/tests/test_c.py"]["inputs"] == sorted(
         [*COMMON, *LIB, "lib/toy_lib/cli.py", "s/scripts/run_me.py", "s/tests/conftest.py", "s/tests/test_c.py"]), \
         "the script it runs and the module it runs with -m, with what they import"
+    beside_registry = [f for f in graph.tracked(root) if f.startswith("lib/") and f.count("/") == 1 and not f.endswith(".py")]
+    assert by["test-file:s/tests/test_d.py"]["inputs"] == sorted(
+        [*COMMON, *LIB, *beside_registry, "lib/assets/a.txt", "lib/settings.py", "lib/toy_lib/plugins/__init__.py",
+         "lib/toy_lib/plugins/a.py", "lib/toy_lib/plugins/b.py", "lib/toy_lib/plugins/data/t.bin",
+         "lib/toy_lib/plugins/table.json", "s/tests/conftest.py", "s/tests/test_d.py", "s/tools/finder.py"]), \
+        ("the module a directory it puts on sys.path serves, each module of the package an f-string names, the data beside "
+         "them, the settings registry of(__file__) loads, the directory it names, and every pyproject.toml for a module that "
+         "lists them")
     tree = family.Tree(root, graph.tracked(root))
     assert family.Imports(tree, family.Layout(tree)).info("s/tests/test_a.py").unfollowed == 1, \
         "import_module(name) is followed only for a constant name"
@@ -127,8 +149,10 @@ RUNS = {
     "s/tests/test_bad.py": "def test_good():\n    pass\n\n\ndef test_bad():\n    assert False\n",
     "s/tests/test_broken.py": "import toy_module_nowhere\n",
     "s/tests/test_none.py": "X = 1\n",
+    "elsewhere/notes.txt": "n\n",
     "s/tests/test_reads.py": ('from pathlib import Path\n\n\ndef test_reads_what_it_did_not_declare():\n'
-                              '    assert (Path(__file__).parents[1] / "notes.txt").read_text() == "n\\n"\n'),
+                              '    where = "else" + "where"\n'
+                              '    assert (Path(__file__).parents[2] / where / "notes.txt").read_text() == "n\\n"\n'),
     "s/tests/test_dies.py": "import os\nimport signal\n\n\ndef test_dies():\n    os.kill(os.getpid(), signal.SIGKILL)\n",
 }
 
@@ -164,7 +188,7 @@ def test_a_failing_test_or_collection_is_a_fail(results):
 
 def test_a_read_outside_its_inputs_is_an_error(results):
     r = results["test_reads.py"]
-    assert r["status"] == "error" and r["undeclared_reads"] == ["s/notes.txt"] and r["detail"]["passed"] == 1
+    assert r["status"] == "error" and r["undeclared_reads"] == ["elsewhere/notes.txt"] and r["detail"]["passed"] == 1
 
 
 def test_a_pytest_killed_is_an_error(results):
