@@ -144,3 +144,31 @@ def test_run_of_a_suite_task_returns_its_verdict_and_its_listed_key(tree):
 
     r = _tasks(tree, "run", "pytest:nothing")
     assert r.returncode == 2 and "no task pytest:nothing" in r.stderr
+
+
+def test_a_suite_past_the_threshold_is_listed_in_parts_by_file_and_a_part_runs_under_its_listed_key(tree):
+    for n in (2, 3):
+        (tree / "a" / "tests" / f"test_a{n}.py").write_text(f"def test_a{n}():\n    assert True\n")
+    costs = tree.parent / "costs.json"
+    costs.write_text(json.dumps({"pytest:a": 2000}))
+    doc, _ = _graph(tree, "--costs", str(costs), "--split-s", "900")
+    by = {t["id"]: t for t in doc["tasks"]}
+    ids = [f"pytest:a:{k}/3" for k in (1, 2, 3)]
+    assert set(ids) <= set(by) and "pytest:a" not in by and "pytest:b" in by, "a whole suite under the threshold stays whole"
+    split = doc["splits"]["a"]
+    assert (doc["split_s"], split["m"], sorted(f for p in split["files"] for f in p)) == \
+        (900, 3, ["a/tests/test_a.py", "a/tests/test_a2.py", "a/tests/test_a3.py"])
+    assert [round(by[i]["cost_s"], 1) for i in ids] == [666.7] * 3
+    assert len({by[i]["key"] for i in ids}) == 3
+    for k, i in enumerate(ids, 1):
+        assert f"a:{k}/3@{split['digest'][:12]}" in by[i]["argv"], "a part's argv pins the partition it was listed of"
+
+    timings = tree.parent / "timings.json"
+    timings.write_text(json.dumps({n: v["timings"] for n, v in doc["splits"].items()}))
+    out = tree.parent / "a2.json"
+    r = _tasks(tree, "run", "pytest:a:2/3", "--timings", str(timings), "--out", str(out), "--work", str(tree.parent / "work-a2"))
+    assert r.returncode == 0, r.stderr
+    res = json.loads(out.read_text())
+    assert (res["verdict"], res["key"]) == ("passed", by["pytest:a:2/3"]["key"])
+    (row,) = json.loads((tree.parent / "work-a2" / "suites.json").read_text())
+    assert row["part"]["ks"] == [2] and row["counts"]["passed"] == 1, "one of three files: the part's own"
