@@ -741,7 +741,7 @@ class H1Windows:
                 live_dump = LV.dump(run, self.prover_of(window) / "live")
             except (KeyError, ValueError, OSError) as e:
                 live_dump = {"error": f"{type(e).__name__}: {e}"[:300]}
-        roots1, gate, rc = d.get("roots1"), d.get("gate", {}), getattr(run.served, "receipts", None)
+        roots1, gate, rc = d.get("roots1"), d.get("gate", {}), getattr(run.served, "receipts", None) if self.receipts else None
         return {"entry": ENTRY, "window": window, "rows": self.rows, "steps": self.steps,
                 "steps_served": d.get("steps_served"), "roots1": roots1, "requests": d.get("requests"),
                 "static": d.get("static"), "u": d.get("u"), "refused": run.refused[:8],
