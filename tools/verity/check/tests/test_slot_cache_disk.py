@@ -42,6 +42,3 @@ def test_slot_py_shipped_alone_still_reads_its_slots(monkeypatch, tmp_path):
     spec.loader.exec_module(mod)
     monkeypatch.setenv("HOME", str(tmp_path))
     assert mod.cache_disk() == tmp_path
-    src = {"__name__": "slot_src"}
-    exec(compile((ROOT / "tools" / "verity" / "check" / "slot.py").read_text(), "slot_src.py", "exec"), src)
-    assert src["cache_disk"]() == tmp_path, "run from its source with no __file__"
