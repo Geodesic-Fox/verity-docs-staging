@@ -78,13 +78,15 @@ Lean checks that runs or passed, `next` is kept (`queue.lean_hold`, `--first` ab
 alone that is pushed or loses its mark leaves, and `next` is rebuilt from it.  ci's hand Lean check goes through drive
 (`/data/infra/drive.sh queue lean-check COMMIT`, `Driver.hand_lean`): recorded in drive's state at its launch, it holds `next`
 from its first second and counts, is followed and covers as drive's own.  Each landing awaits the after-landing run, one at a
-time of `checked`'s tip (`train.sh TIP MACHINES --deferred STEPS --base VERIFIED [--ratchet-base JUDGED]`) with every ci.toml
-job (`AFTER_LANDING`), circuit-check and ratchet-gate among them, which `_promote` doesn't wait for (`gate = false`: `_gating`),
-its base the last verified `checked` commit, below the tip.  ratchet-gate judges the landings above its own base
-(`_ratchet_base`): the tip of the newest run whose ratchet-gate ended with a verdict (`postland["ratchet_judged"]`:
-passed, or failed naming each change it fails, `_ratchet_judged`), once a revert undid each of those, so a red step elsewhere,
-which holds `verified`, doesn't make each run re-judge every landing since; while one stands, the base that run judged above;
-the last verified commit when none was judged or the judged tip left the tip's history (a revert or reset); with drive.toml's `after_landing_shards` N, as N runs at once (`--shard K/N` each, on machines of `on` no other
+time of `checked`'s tip (`train.sh TIP MACHINES --deferred STEPS --base VERIFIED`) with every ci.toml job (`AFTER_LANDING`),
+circuit-check and ratchet-gate among them, which `_promote` doesn't wait for (`gate = false`: `_gating`), its base the last
+verified `checked` commit, below the tip, for ratchet-gate to judge the
+landings above, or above ratchet-gate's own base (`--ratchet-base JUDGED`, `_ratchet_base`): the tip of the newest run whose
+ratchet-gate ended with a verdict (`postland["ratchet_judged"]`: passed, or failed naming each change it fails,
+`_ratchet_judged`), once a revert undid each of those, so a red step elsewhere, which holds `verified`, doesn't make each run
+re-judge every landing since; while one stands, the base that run judged above; the last verified commit when none was
+judged or the judged tip left the tip's history (a revert or reset); with drive.toml's `after_landing_shards` N, as N runs at
+once (`--shard K/N` each, on machines of `on` no other
 shard has while there are N: `shard_machines`), passed once every shard passed, launched once circuit-check's records step
 (`_records`: `train.sh TIP MACHINES --cc-records`) passed, each shard given its artifact (`--cc-records-from ART@SHA256`) so no
 shard builds the bindings' records; with "auto" (or "auto:MAX"), N is the shard planner's, its plan made once beside the
@@ -1632,13 +1634,32 @@ class Driver:
                         fails[f"step {step}"] = (d, st)
                 elif st.get("status") == "passed":
                     self._green(pl, f"step {step}", tip)
-        if judged:
-            self._ratchet_judged(pl, run, *judged)
         if not (self.dry_run or self.q.shadow):
             for key, (d, rec) in fails.items():
                 self._name(drive, pl, run, key, d, rec, sorted(stopped))
             self._start_bisect(pl)
+        if judged:
+            self._ratchet_judged(pl, run, *judged)
         return len(fails)
+
+    def _green(self, pl: dict, key: str, tip: str) -> None:
+        """``key`` passed at ``tip``: its newest green, and its red record at or below ``tip`` (and a bisection of it) ends."""
+        green = pl.setdefault("green", {})
+        if green.get(key) != tip and (key not in green or self._ancestor(green[key], tip)):
+            green[key] = tip
+        if (r := (pl.get("red") or {}).get(key)) and self._ancestor(r["tip"], tip):
+            del pl["red"][key]
+            if (pl.get("bisect") or {}).get("key") == key:
+                del pl["bisect"]
+            self.q.log(f"research queue drive: {key} passed on `{self.q.into}` {tip[:12]}; its red record of {r['tip'][:12]} ends")
+
+    def _base_of(self, pl: dict, key: str, step: str, tip: str) -> str | None:
+        """The newest commit at or below ``tip`` an after-landing run passed ``key`` at: its green, else the last verified
+        `main` when that run passed ``step`` (`verified_as`), else None."""
+        if (g := (pl.get("green") or {}).get(key)) and self._ancestor(g, tip):
+            return g
+        vs = pl.get("verified_as")
+        return pl["verified"] if not vs or step in (vs.get("steps") or ()) else None
 
     def _ratchet_judged(self, pl: dict, run: dict, d: Path, st: dict) -> None:
         """``run``'s ratchet-gate step ended with a verdict at its tip: passed, or failed naming each change it fails
@@ -1668,25 +1689,6 @@ class Driver:
             if c and c != tip and self._ancestor(c, tip) and (not below or self._ancestor(below, c)):
                 return c
         return below
-
-    def _green(self, pl: dict, key: str, tip: str) -> None:
-        """``key`` passed at ``tip``: its newest green, and its red record at or below ``tip`` (and a bisection of it) ends."""
-        green = pl.setdefault("green", {})
-        if green.get(key) != tip and (key not in green or self._ancestor(green[key], tip)):
-            green[key] = tip
-        if (r := (pl.get("red") or {}).get(key)) and self._ancestor(r["tip"], tip):
-            del pl["red"][key]
-            if (pl.get("bisect") or {}).get("key") == key:
-                del pl["bisect"]
-            self.q.log(f"research queue drive: {key} passed on `{self.q.into}` {tip[:12]}; its red record of {r['tip'][:12]} ends")
-
-    def _base_of(self, pl: dict, key: str, step: str, tip: str) -> str | None:
-        """The newest commit at or below ``tip`` an after-landing run passed ``key`` at: its green, else the last verified
-        `main` when that run passed ``step`` (`verified_as`), else None."""
-        if (g := (pl.get("green") or {}).get(key)) and self._ancestor(g, tip):
-            return g
-        vs = pl.get("verified_as")
-        return pl["verified"] if not vs or step in (vs.get("steps") or ()) else None
 
     def _own(self, m: Member) -> set[str]:
         """The files ``m``'s merge onto `next` changes, read once per tick."""
