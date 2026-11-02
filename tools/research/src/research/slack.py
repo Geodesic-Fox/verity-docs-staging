@@ -1261,31 +1261,44 @@ RAW_HOST = "raw.githubusercontent.com"                           # the notes are
 
 NOTES_TOKEN_URL = BROKER.rsplit("/api/", 1)[0] + "/api/agent-github/token"   # the broker's notes token, by OIDC identity
 NOTES_TOKEN_TTL_S, NOTES_TOKEN_MARGIN_S = 50 * 60, 120          # a token with no stated expiry lasts this long; renewed early
+NOTES_TOKEN_RETRY_S = 60                                        # after a refusal, the broker isn't asked again for this long
 _notes_token: dict = {}
 
 
 def notes_token(now: float | None = None) -> str | None:
-    """A token for the private notes repository: $RESEARCH_NOTES_TOKEN when set, else one the broker mints
-    (`NOTES_TOKEN_URL`, scope `notes`) for this deployment's Vercel OIDC identity ($VERCEL_OIDC_TOKEN, as the Slack events
-    service has it), kept until shortly before it expires.  None when there is neither, or the broker refuses (said on
-    stderr), so a read goes unauthenticated and a private file answers 404."""
-    if token := os.environ.get("RESEARCH_NOTES_TOKEN"):
+    """A token for the private notes repository.  Where there is a Vercel OIDC identity ($VERCEL_OIDC_TOKEN, as the Slack
+    events service has it), the one the broker mints for it (`NOTES_TOKEN_URL`, scope `notes`), kept until shortly before
+    it expires; else, or when the broker refuses (said on stderr), $RESEARCH_NOTES_TOKEN.  None when there is neither, so
+    a read goes unauthenticated and a private file answers 404.  `notes_token_source` says which one it was."""
+    if (oidc := os.environ.get("VERCEL_OIDC_TOKEN")) and (token := _broker_notes_token(oidc, time.time() if now is None else now)):
+        _notes_token["source"] = "broker"
         return token
-    if not (oidc := os.environ.get("VERCEL_OIDC_TOKEN")):
-        return None
-    now = time.time() if now is None else now
+    token = os.environ.get("RESEARCH_NOTES_TOKEN") or None
+    _notes_token["source"] = "env" if token else None
+    return token
+
+
+def notes_token_source() -> str | None:
+    """Where `notes_token` got the token it gives now: "broker", "env" (RESEARCH_NOTES_TOKEN), or None."""
+    notes_token()
+    return _notes_token.get("source")
+
+
+def _broker_notes_token(oidc: str, now: float) -> str | None:
     if _notes_token.get("oidc") == oidc and now < _notes_token.get("until", 0):
         return _notes_token["token"]
+    _notes_token.update(oidc=oidc, token=None, until=now + NOTES_TOKEN_RETRY_S)
     try:
         out = http_json("POST", NOTES_TOKEN_URL, json.dumps({"scope": "notes"}).encode(),
                         {"Authorization": f"Bearer {oidc}", "Content-Type": "application/json"}) or {}
     except (urllib.error.URLError, OSError, ValueError) as e:
-        print(f"research msg: the broker gave no notes token ({getattr(e, 'code', '') or getattr(e, 'reason', e)}): reading "
-              "the notes unauthenticated", file=sys.stderr)
+        print(f"research msg: the broker gave no notes token ({getattr(e, 'code', '') or getattr(e, 'reason', e)}): using "
+              "RESEARCH_NOTES_TOKEN if set, else reading the notes unauthenticated", file=sys.stderr)
         return None
     token, expires = out.get("token"), out.get("expires_at")
     if not token:
-        print("research msg: the broker's notes-token answer has no `token`: reading the notes unauthenticated", file=sys.stderr)
+        print("research msg: the broker's notes-token answer has no `token`: using RESEARCH_NOTES_TOKEN if set, else reading "
+              "the notes unauthenticated", file=sys.stderr)
         return None
     until = (_iso_epoch(expires) if expires else now + NOTES_TOKEN_TTL_S) - NOTES_TOKEN_MARGIN_S
     _notes_token.update(oidc=oidc, token=token, until=until)
