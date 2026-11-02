@@ -390,6 +390,8 @@ class PR:
     labels: tuple[str, ...] = ()
     base: str = "main"
     branch: str = ""
+    #: its head branch is another repository's (or one GitHub no longer has), never this one's to delete
+    fork: bool = False
     #: GitHub's `head.repo.full_name`: None when the head's repository was deleted
     head_repo: str | None = REPO
     author: str = ""
@@ -397,10 +399,11 @@ class PR:
 
     @classmethod
     def from_api(cls, d: dict) -> "PR":
+        repo = lambda side: ((d.get(side) or {}).get("repo") or {}).get("full_name")  # noqa: E731
         return cls(number=int(d["number"]), head=d["head"]["sha"], title=d.get("title") or "", body=d.get("body") or "",
                    draft=bool(d.get("draft")), labels=tuple(sorted(x["name"] for x in d.get("labels") or [])),
                    base=(d.get("base") or {}).get("ref", "main"), branch=d["head"].get("ref") or "",
-                   head_repo=(d["head"].get("repo") or {}).get("full_name"), author=(d.get("user") or {}).get("login") or "",
+                   fork=repo("head") != repo("base"), head_repo=repo("head"), author=(d.get("user") or {}).get("login") or "",
                    association=d.get("author_association") or "")
 
     def outside(self, repo: str) -> str | None:
