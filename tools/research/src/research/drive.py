@@ -1150,7 +1150,7 @@ class Driver:
         had = tip in tips
         tips[:] = [*(t for t in tips if t != tip), tip][-CHECKED_TIPS:]
         q.save_state({**q.load_state(), "drive": drive})
-        p = q._remote(self.repo, "push", "-q", "--no-verify", "origin", f"{tip}:refs/heads/{q.into}", ok=None)
+        p = q._remote(self.repo, "push", "-q", "--no-verify", "origin", f"{rev}:refs/heads/{q.into}", ok=None)
         if p.returncode and not had:
             tips.remove(tip)
         return p
