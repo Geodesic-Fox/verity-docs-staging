@@ -71,16 +71,20 @@ def pack(records: Path, to: Path) -> int:
 
 def unpack(tar: Path, into: Path) -> int:
     """The records of a `pack` tarball into the cache ``into``, each by rename, as check unpacks the records step's
-    (`check.py`'s `cc_records_in`): a circuit-check reading the cache meanwhile sees each whole or not at all.  A record
-    already there is left as it is: its file is named by its bytes' digest (`circuit_check.cache.store`).  How many."""
+    (`check.py`'s `cc_records_in`): a circuit-check reading the cache meanwhile sees each whole or not at all.  They are
+    unpacked in a directory inside the cache as its path resolves, so no rename crosses a filesystem when that path is a link
+    or mount onto another disk; circuit-check lists records only in their key's directory (`circuit_check.cache._dir`), never
+    there.  A record already there is left as it is: its file is named by its bytes' digest (`circuit_check.cache.store`).
+    How many."""
     into.mkdir(parents=True, exist_ok=True)
-    d = Path(tempfile.mkdtemp(prefix="circuit-records-", dir=into.parent))
+    root = into.resolve()
+    d = Path(tempfile.mkdtemp(prefix=".circuit-records-", dir=root))
     try:
         with tarfile.open(tar) as t:
             t.extractall(d, filter="data")
         n = 0
         for p in sorted((d / TOP).rglob("*.json")):
-            if not (to := into / p.relative_to(d / TOP)).exists():
+            if not (to := root / p.relative_to(d / TOP)).exists():
                 to.parent.mkdir(parents=True, exist_ok=True)
                 os.replace(p, to)
             n += 1

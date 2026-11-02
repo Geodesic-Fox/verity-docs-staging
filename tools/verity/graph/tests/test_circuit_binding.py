@@ -190,6 +190,30 @@ def test_pack_is_the_records_bytes_alone_and_unpack_puts_each_back(tmp_path):
     assert (into / "v1" / "aa" / "one.json").stat().st_mode & 0o777 == 0o400, "a record already there is rewritten"
 
 
+def test_unpack_renames_only_inside_the_cache_as_its_path_resolves(tmp_path, monkeypatch):
+    """A cache whose path is a link onto another directory (on a node, another disk) gets its records by renames inside that
+    directory, none from beside the link, which would cross filesystems there."""
+    real = tmp_path / "disk" / "circuit-check"
+    real.mkdir(parents=True)
+    into = tmp_path / "home" / "circuit-check"
+    into.parent.mkdir()
+    into.symlink_to(real, target_is_directory=True)
+    records = {"v1/aa/one.json": '{"a": 1}', "v2/cc/three.json": "{}"}
+    CB.pack(_records(tmp_path / "src", records), tmp_path / "r.tar.gz")
+    moves, replace = [], os.replace
+
+    def recorded(src, dst):
+        moves.append((Path(src), Path(dst)))
+        replace(src, dst)
+    monkeypatch.setattr(CB.os, "replace", recorded)
+    assert CB.unpack(tmp_path / "r.tar.gz", into) == 2
+    root = real.resolve()
+    assert len(moves) == 2 and all(s.is_relative_to(root) and d.is_relative_to(root) for s, d in moves), moves
+    assert {p.relative_to(real).as_posix(): p.read_text() for p in real.rglob("*") if p.is_file()} == records
+    assert sorted(p.name for p in real.iterdir()) == ["v1", "v2"], "the unpacking directory is left in the cache"
+    assert sorted(p.name for p in into.parent.iterdir()) == ["circuit-check"], "something was made beside the link"
+
+
 def _machine(tmp_path, monkeypatch) -> str:
     """The machine's circuit-check cache, under a home of the test's, with ``CHECK_CACHE`` set elsewhere, which doesn't move it."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
