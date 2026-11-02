@@ -734,8 +734,10 @@ def app_config(tmp_path, monkeypatch, registry):
     fake = FakeAppConfig(live)
     monkeypatch.setattr(slack, "post", fake)
     monkeypatch.setattr(slack, "_epoch", lambda: fake.now)
-    monkeypatch.setenv(slack.APP_STATE_ENV, str(tmp_path / "app" / "slack-app-token.json"))
-    monkeypatch.setenv(slack.APP_SEED_ENV, "dummy-seed")
+    state = tmp_path / "app" / "slack-app-token.json"
+    monkeypatch.setenv(slack.APP_STATE_ENV, str(state))
+    state.parent.mkdir()
+    slack._write_private(state, {"refresh_token": "dummy-seed"})                # as a person writes a new pair on the pod
     return fake
 
 
@@ -745,14 +747,13 @@ def app(capsys, *argv) -> tuple[int, str, str]:
     return rc, out, err
 
 
-def test_the_configuration_token_is_seeded_from_the_env_and_rotated_near_its_exp(app_config, capsys, monkeypatch):
+def test_the_configuration_token_is_read_from_the_pods_state_file_and_rotated_near_its_exp(app_config, capsys, monkeypatch):
     state = slack.app_state_path()
     assert app(capsys, "export")[0] == 0
     assert app_config.methods() == ["tooling.tokens.rotate", "apps.manifest.export"]
     assert app_config.calls[0][1] == {"refresh_token": "dummy-seed"}
     assert oct(state.stat().st_mode & 0o777) == "0o600"
     assert json.loads(state.read_text()) == {"token": "dummy-config-1", "refresh_token": "dummy-refresh-1", "exp": T0 + 43200, "rotated": T0}
-    monkeypatch.setenv(slack.APP_SEED_ENV, "dummy-seed-spent")                   # the file exists: the seed is never read again
     app_config.now = T0 + 43200 - slack.ROTATE_BEFORE_S - 1
     assert app(capsys, "export")[0] == 0 and app_config.methods()[2:] == ["apps.manifest.export"]
     app_config.now += 2                                                          # within 10 min of exp: rotate first
@@ -764,20 +765,26 @@ def test_the_configuration_token_is_seeded_from_the_env_and_rotated_near_its_exp
 
 def test_a_spent_refresh_token_says_how_to_get_a_new_pair(app_config, capsys, monkeypatch):
     state = slack.app_state_path()
-    state.parent.mkdir()
     slack._write_private(state, {"token": "dummy-config-old", "refresh_token": "dummy-refresh-old", "exp": T0 - 1})
     before = state.read_text()
     rc, _, err = app(capsys, "export")
     assert rc == 2 and "tooling.tokens.rotate: invalid_refresh_token" in err and "works once" in err
-    assert slack.APP_SEED_ENV in err and str(state) in err and slack.APP_TOKENS_PAGE in err
+    assert "on the control pod" in err and str(state) in err and slack.APP_TOKENS_PAGE in err
     assert "dummy-refresh-old" not in err and state.read_text() == before and app_config.methods() == ["tooling.tokens.rotate"]
     state.chmod(0o644)
     rc, _, err = app(capsys, "export")
     assert rc == 2 and f"chmod 600 {state}" in err
     state.unlink()
-    monkeypatch.delenv(slack.APP_SEED_ENV)
+    monkeypatch.setenv("SLACK_APP_CONFIG_REFRESH_TOKEN", "dummy-seed-env")      # an agent's old secret seeds nothing
     rc, _, err = app(capsys, "export")
-    assert rc == 2 and f"{slack.APP_SEED_ENV} is unset" in err
+    assert rc == 2 and f"{state} is absent" in err and "no environment variable seeds it" in err and not state.exists()
+    assert app_config.methods() == ["tooling.tokens.rotate"]
+
+
+def test_slack_app_runs_only_where_the_state_file_is_named(app_config, capsys, monkeypatch):
+    monkeypatch.delenv(slack.APP_STATE_ENV)
+    rc, _, err = app(capsys, "export")
+    assert rc == 2 and f"${slack.APP_STATE_ENV} is unset" in err and "control pod" in err and app_config.methods() == []
 
 
 def test_slack_app_needs_an_app_id(app_config, registry, capsys):
