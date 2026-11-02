@@ -577,9 +577,9 @@ class H1Windows:
         t1 = self.clock()
         self.tap = HC.tap(self.com, self.model, self.layers, range(self.steps))
         prover = self.prover_of(window)
-        served = SV.Served(unit=self.unit, weights=self.weights, tap=self.tap, window=os.urandom(64),
-                           program=self.program, program_digest=self.digest,
-                           prover=None if prover is None else str(prover))
+        served = SV.Served(unit=self.unit, weights=self.weights, tap=self.tap,
+                           window=None if self.sessions is not None else os.urandom(64), program=self.program,
+                           program_digest=self.digest, prover=None if prover is None else str(prover))
         settings = {**self.config.get("pouw", {}), "rows": self.rows, "steps": self.steps, "served": served,
                     "transcript_dir": str(self.out / "h1" / f"w{window}"), **coins}
         ctx = PO.Context(stage="serve", enabled=(ENTRY,), settings={"pouw": settings})
