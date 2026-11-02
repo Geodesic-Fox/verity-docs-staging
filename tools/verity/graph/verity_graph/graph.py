@@ -291,19 +291,53 @@ def task_graph(root: Path, task_id: str, listers: dict | None = None) -> dict:
     return _document(root, s, files, sorted(tasks.values(), key=lambda t: t["id"]), None)
 
 
+def part(doc: dict, task_id: str, by: dict | None = None) -> dict:
+    """What running ``task_id`` reads of the graph/v2 ``doc`` (``by``: its tasks by id), which an executor that listed once
+    hands the run (`verity graph run --graph`): the task, its env, the digests of its inputs and its env's spec files, and of
+    each task it reads the id and the outputs it reads.  It grows with the task's own reads, not with every task under it."""
+    by = {t["id"]: t for t in doc["tasks"]} if by is None else by
+    task = by[task_id]
+    read: dict[str, set[str]] = {}
+    for r in task["reads"]:
+        read.setdefault(r["task"], set()).add(r["output"])
+    env = doc["envs"][task["env"]]
+    producers = [{"id": i, "outputs": [o for o in by[i]["outputs"] if o["name"] in names]} for i, names in read.items()]
+    return {"schema": contract.SCHEMA_GRAPH, "commit": doc["commit"], "envs": {task["env"]: env},
+            "files": {p: doc["files"][p] for p in sorted({*task["inputs"], *env["spec"]})},
+            "tasks": sorted([task, *producers], key=lambda t: t["id"])}
+
+
 def given(root: Path, path: Path, task_id: str) -> dict:
-    """The graph/v2 at ``path`` (`verity graph run --graph`): what an executor that listed this commit once hands each task run,
-    so that none runs a lister, taken when it names this checkout's commit, which a dirty tree has none of, and holds ``task_id``
-    and every task it reads (the listing, or that part of it)."""
+    """The graph/v2 at ``path`` (`verity graph run --graph`): the listing an executor made once, or its `part` for ``task_id``,
+    so that no lister runs.  Taken when it holds the task, the outputs the task reads and its env, and each file the task's key
+    reads (its inputs and its env's spec) has the digest it names here, so that no result is keyed from another tree's bytes."""
     try:
         doc = json.loads(Path(path).read_bytes())
     except (OSError, ValueError) as e:
         raise GraphError(f"--graph {path}: {e}") from e
-    at = commit(root)
-    if not isinstance(doc, dict) or doc.get("schema") != contract.SCHEMA_GRAPH or at is None or doc.get("commit") != at:
-        raise GraphError(f"--graph {path} isn't graph/v2 of this checkout's commit ({at or 'none: the tree is dirty'}): "
-                         "`verity graph --json` lists it, or run without --graph")
-    closure(doc, {task_id})
+    try:
+        if doc["schema"] != contract.SCHEMA_GRAPH:
+            raise ValueError(f"schema {doc['schema']!r}")
+        by = {t["id"]: t for t in doc["tasks"]}
+        if (task := by.get(task_id)) is not None:
+            spec, env = doc["envs"][task["env"]]["spec"], doc["envs"][task["env"]]["digest"]
+            lacks = [f"{r['task']}'s {r['output']}" for r in task["reads"]
+                     if r["output"] not in {o["name"] for o in by.get(r["task"], {}).get("outputs", [])}]
+            need = sorted({*task["inputs"], *spec})
+            named = {p: doc["files"].get(p) for p in need}
+    except (KeyError, TypeError, AttributeError, ValueError) as e:
+        raise GraphError(f"--graph {path} isn't graph/v2 ({type(e).__name__}: {e}): `verity graph --json` lists it, or run "
+                         "without --graph") from e
+    if task is None:
+        raise GraphError(f"no task {task_id} in --graph {path}")
+    if lacks:
+        raise GraphError(f"--graph {path} lacks {', '.join(lacks[:5])}, which {task_id} reads")
+    if stale := [p for p in need if not (root / p).is_file() or contract.file_digest(root / p) != named[p]]:
+        raise GraphError(f"--graph {path} isn't this checkout's: {', '.join(stale[:5])} "
+                         f"{'differs' if len(stale) == 1 else 'differ'} here from its digests (`verity graph --json` lists "
+                         "this checkout, or run without --graph)")
+    if env != contract.env_digest(spec, named):
+        raise GraphError(f"--graph {path}: env {task['env']}'s digest isn't the one its spec files give")
     return doc
 
 
@@ -320,18 +354,3 @@ def _document(root: Path, s: dict, files: list[str], ts: list[dict], at: str | N
         if not t["reads"]:
             t["key"] = contract.key(t, digests, None, env_docs[t["env"]]["digest"])
     return {"schema": contract.SCHEMA_GRAPH, "commit": at, "envs": env_docs, "files": digests, "tasks": ts}
-
-
-def closure(doc: dict, ids: set[str]) -> list[dict]:
-    """The tasks of ``doc`` named by ``ids`` and every task they read, transitively, in `order`."""
-    by = {t["id"]: t for t in doc["tasks"]}
-    keep, todo = set(), sorted(ids)
-    while todo:
-        i = todo.pop()
-        if i in keep:
-            continue
-        if i not in by:
-            raise GraphError(f"no task {i} in the graph")
-        keep.add(i)
-        todo += [r["task"] for r in by[i]["reads"]]
-    return order([by[i] for i in sorted(keep)])
