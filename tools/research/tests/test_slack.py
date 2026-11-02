@@ -2841,6 +2841,7 @@ def test_without_a_notes_token_the_service_asks_the_broker_for_one_by_its_oidc_i
     assert seen == [(slack.NOTES_TOKEN_URL, "POST", "Bearer oidc-1", b'{"scope": "notes"}')]
     answers.append({"token": "minted-2"})                                                         # no stated expiry
     assert slack.notes_token(now + 3600) == "minted-2" and len(seen) == 2                       # renewed before 06:00Z
+    monkeypatch.setattr(slack.time, "time", lambda: now + 3600)                                 # http_get reads the clock
     assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}' and seen[-1][2] == "Bearer minted-2"
     monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "t0k")
     assert slack.notes_token() == "t0k"                                                          # the env var wins
