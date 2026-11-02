@@ -3535,7 +3535,7 @@ class Driver:
         records = {f: _out(self.repo, "ls-tree", lock, "--", f).split("\t")[0].split()
                    for f in changed(self.repo, chain[t].commit, lock)}
         top, images = lock, {}
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             index = {"GIT_INDEX_FILE": str(Path(tmp, "index"))}
             for m in chain[t + 1:]:
                 parents = _out(self.repo, "rev-list", "--parents", "-n", "1", m.commit).split()[1:]
