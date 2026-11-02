@@ -2957,7 +2957,7 @@ def test_a_records_run_vouches_for_exactly_the_packages_it_passed(world, capsys)
     world.with_store_remote()
     h = world.change({**BOTH, "lib/lean-audit.json": _lock(C="2")})
     rid = _published(world, h, files={"lean-audit/audit.json": _audit(),
-                                      "lean-audit/audit-Proofs/report.json": json.dumps(
+                                      "lean-audit/audit-pkg_Proofs/report.json": json.dumps(
                                           {"package": "/w/lean-records/build-0/pkg/Proofs", "failures": []})})
     capsys.readouterr()
     assert _mark(world, 1, h) == 1
