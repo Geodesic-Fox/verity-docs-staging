@@ -2818,15 +2818,19 @@ def test_without_a_notes_token_the_service_asks_the_broker_for_one_by_its_oidc_i
         def __exit__(self, *a):
             return None
 
+    def http_json(method, url, data, headers):
+        seen.append((url, method, headers.get("Authorization"), data))
+        assert url == slack.NOTES_TOKEN_URL
+        a = answers.pop(0)
+        if isinstance(a, Exception):
+            raise a
+        return a
+
     def urlopen(req, timeout):
         seen.append((req.full_url, req.get_method(), req.get_header("Authorization"), req.data))
-        if req.full_url == slack.NOTES_TOKEN_URL:
-            a = answers.pop(0)
-            if isinstance(a, Exception):
-                raise a
-            return Reply(json.dumps(a).encode())
         return Reply(b'{"name": "x"}')
 
+    monkeypatch.setattr(slack, "http_json", http_json)
     monkeypatch.setattr(slack.urllib.request, "urlopen", urlopen)
     monkeypatch.setattr(slack, "_notes_token", {})
     monkeypatch.delenv("RESEARCH_NOTES_TOKEN", raising=False)

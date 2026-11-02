@@ -1276,11 +1276,9 @@ def notes_token(now: float | None = None) -> str | None:
     now = time.time() if now is None else now
     if _notes_token.get("oidc") == oidc and now < _notes_token.get("until", 0):
         return _notes_token["token"]
-    req = urllib.request.Request(NOTES_TOKEN_URL, data=json.dumps({"scope": "notes"}).encode(), method="POST",
-                                 headers={"Authorization": f"Bearer {oidc}", "Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=15) as r:
-            out = json.loads(r.read() or b"{}")
+        out = http_json("POST", NOTES_TOKEN_URL, json.dumps({"scope": "notes"}).encode(),
+                        {"Authorization": f"Bearer {oidc}", "Content-Type": "application/json"}) or {}
     except (urllib.error.URLError, OSError, ValueError) as e:
         print(f"research msg: the broker gave no notes token ({getattr(e, 'code', '') or getattr(e, 'reason', e)}): reading "
               "the notes unauthenticated", file=sys.stderr)
