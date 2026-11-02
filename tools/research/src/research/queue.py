@@ -20,7 +20,10 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    (`QuickTier`); exit 3 when it never started (no slot within its wait), 79 when
                                                    --on's run is still going after 20 min (research.waitcap: `judge RUN` marks it
                                                    once it ends); or, with
-                                                   --mark, on the owner's word alone (`MarkOnly`).  First the records gate
+                                                   --mark, on the owner's word alone (`MarkOnly`).  First it refuses a PR
+                                                   whose head is on another repository or whose author isn't the
+                                                   organization's or one of `AUTHORS` (`PR.outside`), as admission does; then
+                                                   the records gate
                                                    (`RecordsGate`, which --no-preflight keeps) refuses a head that changes a Lean
                                                    lock against the landing branch unless a records run or Lean check passed
                                                    that package, of the head or of a commit whose files of the package and the
@@ -114,7 +117,10 @@ only once that commit's after-landing run, the full check, passed every step on 
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and is marked ready at its head;
-no change waits on a per-head grant.  A PR based on another branch is never admitted: `ready` marks it and says so,
+no change waits on a per-head grant.  A PR whose head is on another repository than the queue's (GitHub's `head.repo.full_name`:
+a fork's, or a deleted one's) or whose author is neither an owner or member of the organization (`author_association`; a
+collaborator's isn't enough) nor one of `AUTHORS` (the team's Apps, the repository's admin) is refused, at its mark and at
+admission, naming why and the fix: a maintainer opens it from a branch of this repository (`PR.outside`).  A PR based on another branch is never admitted: `ready` marks it and says so,
 and `status` lists it, once marked, as waiting to be retargeted to `main` (a PR containing another waits for it there).  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that
 `research queue ready PR` writes, so a new push needs a new one (a restack too: the tier ran on the old tree; not a head whose tree is a marked head's,
 as a merge of `main` that changes no file leaves it: `ready` marks that one without a tier), and only after the quick tier passes at that
@@ -323,6 +329,13 @@ SLUG_RE = re.compile(r"github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/?$")
 AUTH_FAILED_RE = re.compile(r"could not read (Username|Password)|Authentication failed|unable to get password")
 #: what decides how a check runs and what it passes: a `main` that changed any of it re-checks the queue rather than land on it
 CHECK_TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/verity/circuit_check/")
+#: the repository the queue serves, `GitHub.repo` by default: a PR whose head is on another one is never marked or admitted
+REPO = "compute-verification/verity"
+#: the `author_association`s GitHub gives the organization's own people: a collaborator's (COLLABORATOR) is not one of them
+MEMBER_ASSOCIATIONS = ("OWNER", "MEMBER")
+#: the authors marked and admitted beside those: the Apps that open and land the team's PRs, and the repository's admin, whom
+#: GitHub reports as a collaborator
+AUTHORS = ("verity-agents[bot]", "verity-drive[bot]", "danielreuter")
 
 
 class QueueError(Exception):
@@ -372,12 +385,30 @@ class PR:
     labels: tuple[str, ...] = ()
     base: str = "main"
     branch: str = ""
+    #: GitHub's `head.repo.full_name`: None when the head's repository was deleted
+    head_repo: str | None = REPO
+    author: str = ""
+    association: str = "MEMBER"
 
     @classmethod
     def from_api(cls, d: dict) -> "PR":
         return cls(number=int(d["number"]), head=d["head"]["sha"], title=d.get("title") or "", body=d.get("body") or "",
                    draft=bool(d.get("draft")), labels=tuple(sorted(x["name"] for x in d.get("labels") or [])),
-                   base=(d.get("base") or {}).get("ref", "main"), branch=d["head"].get("ref") or "")
+                   base=(d.get("base") or {}).get("ref", "main"), branch=d["head"].get("ref") or "",
+                   head_repo=(d["head"].get("repo") or {}).get("full_name"), author=(d.get("user") or {}).get("login") or "",
+                   association=d.get("author_association") or "")
+
+    def outside(self, repo: str) -> str | None:
+        """Why the PR is never marked ready (`ready`, `judge`) nor admitted (`Queue.entries`), or None: its head is on another
+        repository than ``repo`` (a fork's, or one deleted since), or its author is neither one of the organization's owners
+        and members (`MEMBER_ASSOCIATIONS`) nor one of `AUTHORS`."""
+        fix = "a maintainer opens it from a branch of this repository"
+        if self.head_repo != repo:
+            return f"its head is on {self.head_repo or 'a deleted repository'}, not {repo}: {fix}"
+        if self.association not in MEMBER_ASSOCIATIONS and self.author not in AUTHORS:
+            return (f"its author {self.author or '(none)'} is no owner or member of the organization "
+                    f"({self.association or 'no association'}) and none of {', '.join(AUTHORS)}: {fix}")
+        return None
 
     @property
     def owner(self) -> str | None:
@@ -1387,6 +1418,11 @@ class Queue:
         """`into` as fetched: the ref `next` is built on."""
         return f"refs/remotes/origin/{self.into}"
 
+    @property
+    def slug(self) -> str:
+        """OWNER/NAME of the repository the queue serves (`GitHub.repo`; `REPO` without a GitHub, as the preflight's queue has)."""
+        return getattr(self.github, "repo", None) or REPO
+
     def chain(self) -> list[Member]:
         """The members on the queue's branch above its base (`base`), oldest first; none when the branch is missing or the base
         isn't below it."""
@@ -1442,7 +1478,9 @@ class Queue:
         for p in prs:
             e = out[p.number] = Entry(p)
             ejected = state["ejected"].get(str(p.number))
-            if rules.hold_label in p.labels:
+            if why := p.outside(self.slug):
+                e.state, e.why = "refused", why
+            elif rules.hold_label in p.labels:
                 e.state, e.why = "waiting", f"held (`{rules.hold_label}` label)"
             elif p.owner is None:
                 e.state, e.why = "waiting", "no owner: add a `Lane {name}` line to the PR body"
@@ -4437,8 +4475,9 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
     """`research queue ready PR`: run the quick tier at the PR's current head (`tier`, a `RemoteQuickTier` or a `QuickTier`), and once
     it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote.  A head whose tree is that of another
     head marked ready (`same_tree_mark`) is marked without running the tier again.  A head drive or the lander ejected is refused
-    unless ``again`` (a re-mark at an ejected head would fail a second train on the same line).  Before any of it,
-    ``records`` (`RecordsGate`, which `--no-preflight` keeps) refuses a head that changes a Lean lock no records run passed, of
+    unless ``again`` (a re-mark at an ejected head would fail a second train on the same line).  Before any of it, a PR
+    `PR.outside` refuses (its head on another repository than ``github``'s, or an author the organization doesn't have) is
+    refused, then ``records`` (`RecordsGate`, which `--no-preflight` keeps) refuses a head that changes a Lean lock no records run passed, of
     it or of a commit with the same inputs for that package,
     then ``preflight`` (`Preflight`; None with `--no-preflight`) refuses a head that would break `next`, with the fix.  With ``sha``
     (`--sha`) it marks only that head: GitHub's head lags a push by seconds (`git push && research queue ready N --mark` can mark
@@ -4471,6 +4510,9 @@ def _ready(github, store, number: int | None, by: str, tier: Callable[[PR], str 
     if pr is None:
         print(f"research queue ready: {'#' + str(number) if number is not None else 'a PR number'} is not an open PR", file=sys.stderr)
         return 2, pr, prs
+    if why := pr.outside(github.repo):
+        print(f"research queue ready: #{pr.number} is not marked ready: {why}", file=sys.stderr)
+        return 1, pr, prs
     if sha and not pr.head.startswith(sha):
         print(f"research queue ready: #{pr.number} is not marked: GitHub has its head at {pr.head[:12]}, not {sha[:12]}, after "
               f"{SHA_READS} reads {SHA_WAIT_S:g} s apart. Push {sha[:12]} to the PR's branch (or pass the head GitHub shows), then "
@@ -4543,6 +4585,8 @@ def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callab
         return refuse(f"run {rid} ran the quick tier at {str(head)[:12]}, " + (
             f"the head of each of {', '.join('#' + str(p.number) for p in prs)}: mark one with `research queue ready`" if prs else
             "which is no open PR's head now, nor its tree (pushed again since, or closed?)"))
+    if why := prs[0].outside(github.repo):
+        return refuse(f"#{prs[0].number} is not marked ready: {why}")
     if records is not None and (why := records(prs[0])):
         return refuse(f"#{prs[0].number} is not marked ready at {prs[0].head[:12]}: {why}")
     return _mark(store, prs[0], by, judge_report(res, rid, machine, head, status), "judge")

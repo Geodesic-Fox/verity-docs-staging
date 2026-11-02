@@ -47,6 +47,8 @@ def _git(repo: Path, *args: str) -> str:
 
 
 class FakeGitHub:
+    repo = Q.REPO
+
     def __init__(self, origin: Path):
         self.origin, self.prs, self.ready = origin, {}, set()
 
@@ -1768,6 +1770,70 @@ def test_ready_mark_writes_the_mark_with_no_quick_tier(world, capsys):
     assert ready(world.gh, world.store, 3, "lane-3", MarkOnly()) == 0
     assert "marked on lane-3's word, with no quick tier" in capsys.readouterr().out
     assert StoreLabels(world.store, log=world.logs.append).ready(3, h) is True
+
+
+def test_pr_from_api_reads_the_head_repository_and_the_author():
+    d = {"number": 7, "head": {"sha": "a" * 40, "ref": "lane/x", "repo": {"full_name": "someone/verity"}}, "base": {"ref": "main"},
+         "user": {"login": "someone"}, "author_association": "CONTRIBUTOR"}
+    pr = PR.from_api(d)
+    assert (pr.head_repo, pr.author, pr.association) == ("someone/verity", "someone", "CONTRIBUTOR")
+    assert PR.from_api({**d, "head": {**d["head"], "repo": None}}).head_repo is None
+    assert PR.from_api({**d, "user": None, "author_association": None}).association == ""
+
+
+def _outside_prs(world: World) -> dict[int, str]:
+    """PRs 1-4 refused (a fork's head, a deleted head repository, an outside author, a collaborator), 5 and 6 not (a member's, the
+    App's), each marked ready at its head; their heads."""
+    import dataclasses
+
+    who = {1: dict(head_repo="someone/verity"), 2: dict(head_repo=None), 3: dict(author="stranger", association="CONTRIBUTOR"),
+           4: dict(author="helper", association="COLLABORATOR"), 5: dict(author="alice", association="MEMBER"),
+           6: dict(author="verity-agents[bot]", association="NONE")}
+    heads = {}
+    for n, fields in who.items():
+        world.gh.put(n, heads.setdefault(n, world.change({f"o{n}.txt": f"{n}\n"})))
+        world.gh.prs[n] = dataclasses.replace(world.gh.prs[n], **fields)
+    return heads
+
+
+def test_a_fork_or_an_outside_author_is_refused_at_mark_before_any_gate_runs_and_a_members_or_the_apps_pr_is_marked(world, capsys):
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    heads = _outside_prs(world)
+    ran: list[str] = []
+    gate = lambda name: lambda *a: ran.append(name)            # noqa: E731  (each gate records that it ran, and passes)
+    tier = lambda pr: ran.append("tier")                        # noqa: E731
+    for n in (1, 2, 3, 4):
+        assert ready(world.gh, world.store, n, f"lane-{n}", tier, records=gate("records"), preflight=gate("preflight")) == 1
+        err = capsys.readouterr().err
+        assert f"#{n} is not marked ready: " in err and "a maintainer opens it from a branch of this repository" in err, err
+        assert StoreLabels(world.store, log=world.logs.append).ready(n, heads[n]) is False
+    assert ran == []
+    ready(world.gh, world.store, 1, "lane-1", MarkOnly())
+    assert f"its head is on someone/verity, not {Q.REPO}" in capsys.readouterr().err
+    ready(world.gh, world.store, 2, "lane-2", MarkOnly())
+    assert "its head is on a deleted repository" in capsys.readouterr().err
+    ready(world.gh, world.store, 4, "lane-4", MarkOnly())
+    assert "its author helper is no owner or member of the organization (COLLABORATOR)" in capsys.readouterr().err
+    for n in (5, 6):
+        assert ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), records=gate("records"), preflight=gate("preflight")) == 0
+        assert StoreLabels(world.store, log=world.logs.append).ready(n, heads[n]) is True
+    assert ran == ["records", "preflight"] * 2
+
+
+def test_a_fork_or_an_outside_author_is_refused_at_admission_though_marked_and_a_members_or_the_apps_pr_is_admitted(world):
+    _outside_prs(world)
+    q = world.queue()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [5, 6] == world.on_next(q)
+    assert entries[1].state == "refused" and entries[1].why == (f"its head is on someone/verity, not {Q.REPO}: a maintainer opens "
+                                                                "it from a branch of this repository")
+    assert entries[2].why.startswith("its head is on a deleted repository")
+    assert entries[3].why.startswith("its author stranger is no owner or member of the organization (CONTRIBUTOR)")
+    assert all(entries[n].state == "refused" for n in (1, 2, 3, 4))
+    status = q.status()
+    assert [n for n, e in sorted(status.items()) if e.state == "queued"] == [5, 6] and status[4].state == "refused"
 
 
 def test_ready_without_sha_marks_the_branchs_tip_not_the_head_github_still_shows(world, monkeypatch):
