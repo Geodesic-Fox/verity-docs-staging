@@ -1255,7 +1255,7 @@ class Queue:
         #: the files each merge commit of `next` changed (`touched_by`)
         self._touched: dict[str, set[str]] = {}
         #: main's registry as `handle` reads it (its handles, {agent id: handle}), until the next `fetch`
-        self._registry: tuple[set, dict[str, str]] | None = None
+        self._registry: tuple[set, dict[str, str], set[str]] | None = None
         #: every open PR the last `status` listed, `main`-based or not (its entries leave out an unmarked PR on another branch)
         self.listed: list[PR] = []
         #: a sync's moves below the member it merges (`queue_log`'s, then each it regenerates), the heads it merges after it
@@ -1901,7 +1901,7 @@ class Queue:
         suffix (`cursor/<name>-4292`); None when none of them is a handle."""
         if (got := self._read_registry()) is None:
             return None
-        names, holders = got
+        names, holders, _ = got
         by = self.marked_by(pr.number, pr.head) if self.marked_by else None
         suffix = pr.branch.rpartition("-")[2] if "-" in pr.branch else ""
         tail = sorted({n for a, n in holders.items() if len(suffix) == 4 and a.endswith(suffix)})
@@ -1910,10 +1910,10 @@ class Queue:
                 return c
         return None
 
-    def _read_registry(self) -> tuple[set, dict[str, str]] | None:
-        """(the handles, {agent id: handle}) of `main`'s registry, read once per `fetch`: a review tick asks `handle` of each
-        member of `next` (`Driver._owners`), and each `git show` is ~70 ms in drive's clone on the control pod's network volume,
-        times over a hundred members.  None when it can't be parsed."""
+    def _read_registry(self) -> tuple[set, dict[str, str], set[str]] | None:
+        """(the handles, {agent id: handle}, the Linear team keys its handles own) of `main`'s registry, read once per `fetch`: a
+        review tick asks `handle` of each member of `next` (`Driver._owners`), and each `git show` is ~70 ms in drive's clone on
+        the control pod's network volume, times over a hundred members.  None when it can't be parsed."""
         if self._registry is None:
             r = _git(self.workdir, "show", f"origin/main:{REGISTRY}", check=False)
             try:
@@ -1922,18 +1922,14 @@ class Queue:
                 return None
             self._registry = ({h.get("handle") for h in reg if isinstance(h, dict)},
                               {a: h["handle"] for h in reg if isinstance(h, dict) and "handle" in h
-                               for a in AGENT_RE.findall(str(h.get("holder", "")))})
+                               for a in AGENT_RE.findall(str(h.get("holder", "")))},
+                              {h["linear"] for h in reg if isinstance(h, dict) and isinstance(h.get("linear"), str)})
         return self._registry
 
     def issue_teams(self) -> set[str]:
         """The Linear team keys `main`'s registry gives its handles (`linear`), whose bare keys `named_issue` counts; empty when
         it can't be read."""
-        r = _git(self.workdir, "show", f"origin/main:{REGISTRY}", check=False)
-        try:
-            reg = json.loads(r.stdout).get("handles", []) if r.returncode == 0 else []
-        except (ValueError, AttributeError):
-            return set()
-        return {h["linear"] for h in reg if isinstance(h, dict) and isinstance(h.get("linear"), str)}
+        return got[2] if (got := self._read_registry()) else set()
 
     def sync(self, dry_run: bool = False) -> tuple[list[Member], dict[int, Entry]]:
         """Rebuild `next` (see the module's `next`).  Off drive it refuses before anything (`_drive_only`)."""
