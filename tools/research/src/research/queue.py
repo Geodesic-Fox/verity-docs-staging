@@ -7,7 +7,10 @@ only once that commit's after-landing run, the full check, passed every step on 
 
     research queue status [--json]                 each open PR: its place in `next`, what it waits for, or why it was refused;
                                                    `stale` when it is unmarked at its head and idle drive.toml's `stale_days`
-                                                   (`research.stale`), which drive closes at `stale_close_days`
+                                                   (`research.stale`), which drive closes at `stale_close_days`; then
+                                                   every open PR whose body names no Linear issue (`named_issue`: a key
+                                                   after a Linear magic word, a bare key of a team main's Slack registry
+                                                   lists, or an `Issue: none: REASON` line); --json gives each its `issue`
     research queue sync [--dry-run]                admit and drop PRs, merge them onto `next`, push it
     research queue eject PR --reason TEXT [--by HANDLE]
                                                    keep the PR's current head out of `next`; a new push or ready mark re-admits it;
@@ -86,11 +89,19 @@ only once that commit's after-landing run, the full check, passed every step on 
     research queue judge RUN [--on MACHINE] [--by LANE]
                                                    the mark `ready --on` writes, from its quick-tier run RUN that already ended
                                                    (its caller gone), for the open PR at the head the tier ran at, or at its tree
-    research queue open --head BRANCH --title T --body-file F [--sha SHA] [--base main] [--draft]
+    research queue open --head BRANCH --title T --body-file F --issue KEY|none:REASON [--sha SHA] [--base main] [--draft]
                                                    open a PR for any pushed branch through gh (the repo's broker wrapper when the
                                                    checkout has one), for a lead whose PR tool opens PRs only from its own run
-                                                   branch; refuses when BRANCH isn't on the remote, isn't at --sha, or already
-                                                   has an open PR; prints the PR's URL (`open_pr`)
+                                                   branch, its body F with a last line naming its Linear issue: `Refs KEY`
+                                                   (Linear's non-closing magic word: the merge leaves the issue open), or
+                                                   `Issue: none: REASON` (`with_issue`); refuses a KEY that isn't one (like
+                                                   ENG-123) or that Linear has no issue for, an empty REASON, and when BRANCH
+                                                   isn't on the remote, isn't at --sha, or already has an open PR; prints the
+                                                   PR's URL (`open_pr`), then links the PR to KEY through the Linear app
+                                                   (`link_issue`: Linear's GitHub integration is off for this repository, so
+                                                   the line alone links nothing); a link that fails leaves the PR open, printing
+                                                   why and the `link` command that retries it
+    research queue link PR --issue KEY             link the open PR to Linear issue KEY through the Linear app, as `open` does
     research queue edit PR --body-file F [--dry-run]
                                                    replace the PR's body with F outright, through gh as `open` does, keeping only
                                                    the Cursor PR tool's markers and footer (`edit_pr`); refuses a body that drops or
@@ -273,7 +284,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Callable, Iterable
 
-from . import quick_tier, waitcap
+from . import linear, quick_tier, waitcap
 from .gates import git_env
 from .store import ids, vocab
 
@@ -308,6 +319,18 @@ AGENT_RE = re.compile(r"\bbc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-
 TRAILER_RE = re.compile(r"^(PR|Head|Owner): (.+)$", re.M)
 #: a move PR's declaration in its body (`PR.move`): the word map, under `tools/move/`, that `rename.py --map` runs
 MOVE_RE = re.compile(r"^[ \t>*_]*Move[:\s]+`?(tools/move/[\w.-]+\.toml)`?[ \t.]*$", re.M)
+#: a Linear issue's key, as `open --issue KEY` takes it
+ISSUE_KEY_RE = re.compile(r"[A-Z][A-Z0-9]*-\d+")
+#: the line `open --issue KEY` writes: `Refs` is one of Linear's non-closing magic words, so the PR links to the issue and its
+#: merge doesn't move the issue to done
+ISSUE_LINE = "Refs {key}"
+#: the line `open --issue none:REASON` writes, and what `named_issue` reads as a body that names no issue on purpose
+NO_ISSUE_LINE = "Issue: none: {reason}"
+NO_ISSUE_RE = re.compile(r"^[ \t>*_]*Issue:[ \t]*none:[ \t]*(\S.*?)[ \t]*$", re.M)
+#: a key after any of Linear's magic words (closing, non-closing or relation), whatever its team
+ISSUE_LINK_RE = re.compile(r"(?i)\b(?:refs?|references|part of|contributes to|towards?|relates to|related to|close[sd]?|closing|"
+                           r"fix(?:e[sd])?|fixing|resolve[sd]?|resolving|complete[sd]?|completing|implement(?:s|ed|ing)?)"
+                           r"[ \t:]+(?-i:([A-Z][A-Z0-9]*-\d+))\b")
 #: the trailer of a move drive regenerated (`Queue._regenerate`), naming its map
 MOVE_TRAILER_RE = re.compile(r"^Move: (tools/move/[\w.-]+\.toml)$", re.M)
 #: the scripts a move runs, each as the landing branch has it (`move_scripts`): the move, its certificate, and carrying a branch
@@ -1247,7 +1270,9 @@ class Queue:
         #: the files each merge commit of `next` changed (`touched_by`)
         self._touched: dict[str, set[str]] = {}
         #: main's registry as `handle` reads it (its handles, {agent id: handle}), until the next `fetch`
-        self._registry: tuple[set, dict[str, str]] | None = None
+        self._registry: tuple[set, dict[str, str], set[str]] | None = None
+        #: every open PR the last `status` listed, `main`-based or not (its entries leave out an unmarked PR on another branch)
+        self.listed: list[PR] = []
         #: a sync's moves below the member it merges (`queue_log`'s, then each it regenerates), the heads it merges after it
         #: (`_restack` batches them), and its regenerated moves and restacks by key (the state's `moves_made` and `restacks`,
         #: kept while a sync uses them: `_used`)
@@ -1901,7 +1926,7 @@ class Queue:
         suffix (`cursor/<name>-4292`); None when none of them is a handle."""
         if (got := self._read_registry()) is None:
             return None
-        names, holders = got
+        names, holders, _ = got
         by = self.marked_by(pr.number, pr.head) if self.marked_by else None
         suffix = pr.branch.rpartition("-")[2] if "-" in pr.branch else ""
         tail = sorted({n for a, n in holders.items() if len(suffix) == 4 and a.endswith(suffix)})
@@ -1910,10 +1935,10 @@ class Queue:
                 return c
         return None
 
-    def _read_registry(self) -> tuple[set, dict[str, str]] | None:
-        """(the handles, {agent id: handle}) of `main`'s registry, read once per `fetch`: a review tick asks `handle` of each
-        member of `next` (`Driver._owners`), and each `git show` is ~70 ms in drive's clone on the control pod's network volume,
-        times over a hundred members.  None when it can't be parsed."""
+    def _read_registry(self) -> tuple[set, dict[str, str], set[str]] | None:
+        """(the handles, {agent id: handle}, the Linear team keys its handles own) of `main`'s registry, read once per `fetch`: a
+        review tick asks `handle` of each member of `next` (`Driver._owners`), and each `git show` is ~70 ms in drive's clone on
+        the control pod's network volume, times over a hundred members.  None when it can't be parsed."""
         if self._registry is None:
             r = _git(self.workdir, "show", f"origin/main:{REGISTRY}", check=False)
             try:
@@ -1922,8 +1947,14 @@ class Queue:
                 return None
             self._registry = ({h.get("handle") for h in reg if isinstance(h, dict)},
                               {a: h["handle"] for h in reg if isinstance(h, dict) and "handle" in h
-                               for a in AGENT_RE.findall(str(h.get("holder", "")))})
+                               for a in AGENT_RE.findall(str(h.get("holder", "")))},
+                              {h["linear"] for h in reg if isinstance(h, dict) and isinstance(h.get("linear"), str)})
         return self._registry
+
+    def issue_teams(self) -> set[str]:
+        """The Linear team keys `main`'s registry gives its handles (`linear`), whose bare keys `named_issue` counts; empty when
+        it can't be read."""
+        return got[2] if (got := self._read_registry()) else set()
 
     def sync(self, dry_run: bool = False) -> tuple[list[Member], dict[int, Entry]]:
         """Rebuild `next` (see the module's `next`).  Off drive it refuses before anything (`_drive_only`)."""
@@ -2172,7 +2203,7 @@ class Queue:
         its cutoff and drive.toml at `main` there, so it fetches once."""
         self._clone()
         state = self.load_state()
-        open_prs = self.github.open_prs()
+        open_prs = self.listed = self.github.open_prs()
         prs, waiting = self.fetch_prs([p for p in open_prs if p.base == "main"])
         self.unlock()
         if fetched is not None:
@@ -4825,6 +4856,75 @@ def broker_gh(top: Path) -> str:
     return str(wrapper) if wrapper and wrapper.is_file() else (shutil.which("gh") or "gh")
 
 
+def issue_line(spec: str) -> str:
+    """The body line `open --issue SPEC` writes: `Refs KEY` for a Linear key (`ISSUE_KEY_RE`), `Issue: none: REASON` for
+    `none:REASON`.  Anything else, or `none:` with no reason, is refused (`QueueError`)."""
+    if spec.startswith("none:"):
+        if not (reason := spec.removeprefix("none:").strip()):
+            raise QueueError("open: --issue none:REASON needs the reason this PR has no Linear issue")
+        return NO_ISSUE_LINE.format(reason=reason)
+    if not ISSUE_KEY_RE.fullmatch(spec):
+        raise QueueError(f"open: --issue {spec!r} is neither a Linear key (like ENG-123) nor none:REASON")
+    return ISSUE_LINE.format(key=spec)
+
+
+def with_issue(body: str, spec: str) -> str:
+    """``body`` with `issue_line(spec)` as its last line, unless a line of it already is that line."""
+    line = issue_line(spec)
+    return body if line in body.splitlines() else f"{body.rstrip()}\n\n{line}\n"
+
+
+def issue_app(key: str) -> tuple[linear.Linear, str] | Exception:
+    """The Linear app and the id of issue ``key``, resolved before anything is sent; the failure instead when the app can't be
+    asked (no credentials, Linear down), which `link_issue` reports.  A key Linear has no issue for raises QueueError."""
+    try:
+        app = linear.Linear()
+        return app, app.issue_id(key)
+    except linear.NoIssue as e:
+        raise QueueError(f"--issue {key}: {e}: give the PR's issue, or none:REASON; nothing sent") from None
+    except (linear.LinearError, OSError) as e:
+        return e
+
+
+def link_issue(key: str, url: str, app: tuple[linear.Linear, str] | Exception | None = None) -> str:
+    """Link the PR at ``url`` to the Linear issue ``key`` through the Linear app (`Linear.link_pr`): its `Refs KEY` line alone
+    links nothing.  ``app`` is `issue_app(key)` when the caller resolved it already.  What it linked; a failure raises
+    QueueError naming the command that links it later (`research queue link N --issue KEY`)."""
+    got = app or issue_app(key)
+    try:
+        if isinstance(got, Exception):
+            raise got
+        return f"{url} {'linked' if got[0].link_pr(got[1], url) else 'was linked already'} to {key} through the Linear app"
+    except (linear.LinearError, OSError) as e:
+        n = (m := re.search(r"/pull/(\d+)$", url)) and m.group(1)
+        raise QueueError(f"{url} is not linked to {key} in Linear ({e}); link it with "
+                         f"`research queue link {n or 'N'} --issue {key}`") from None
+
+
+def named_issue(body: str, teams: Iterable[str] = ()) -> str | None:
+    """The Linear issue ``body`` names: a key after a Linear magic word (`Refs ENG-123`, any team's), else the first bare key
+    of one of ``teams`` (the registry's Linear team keys: `SHA-512` names no issue), else `none: REASON` from its `Issue:
+    none:` line; None when it names none."""
+    if m := ISSUE_LINK_RE.search(body):
+        return m.group(1)
+    if teams and (m := re.search(rf"\b(?:{'|'.join(map(re.escape, sorted(teams)))})-\d+\b", body)):
+        return m.group(0)
+    if m := NO_ISSUE_RE.search(body):
+        return f"none: {m.group(1)}"
+    return None
+
+
+def _unnamed(prs: Iterable[PR], teams: Iterable[str]) -> str:
+    """`status`'s section of the open PRs whose body names no Linear issue (`named_issue`), with the fix; empty when none."""
+    prs = sorted(prs, key=lambda p: p.number)
+    rows = [p for p in prs if named_issue(p.body, teams) is None]
+    if not rows:
+        return ""
+    head = (f"\n\nno Linear issue named ({len(rows)} of {len(prs)} open PRs; add a `Refs KEY` or `Issue: none: REASON` line "
+            "with `research queue edit N --body-file F`):")
+    return head + "".join(f"\n  #{p.number:<5} {(p.owner or '-')[:24]:<24} {p.title}" for p in rows)
+
+
 def open_pr(top: Path, repo: str, head: str, title: str, body: str, *, base: str = "main", sha: str | None = None,
             draft: bool = False, gh: str | None = None, run=subprocess.run) -> str:
     """Open a PR for ``head``, a branch already pushed to origin, and return its URL.  Refuses (`QueueError`) when the branch
@@ -4957,10 +5057,10 @@ def _checked_heads(a: argparse.Namespace) -> int:
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
-    ap.add_argument("command", choices=["status", "sync", "eject", "ready", "judge", "drive", "open", "edit", "stats",
+    ap.add_argument("command", choices=["status", "sync", "eject", "ready", "judge", "drive", "open", "edit", "link", "stats",
                                             "checked-heads", "review", "baseline", "lean-check", "drive-shard-add",
                                             "shadow-report"])
-    ap.add_argument("pr", nargs="?", help="eject, ready, review, edit: the PR number; judge: the quick tier's run id; baseline: the "
+    ap.add_argument("pr", nargs="?", help="eject, ready, review, edit, link: the PR number; judge: the quick tier's run id; baseline: the "
                     "commit of the landing branch (`checked`, or `main` until `checked` exists) ci knows is green; lean-check: the commit of `next` to Lean-check; "
                     "drive-shard-add: the after-landing run's tip")
     ap.add_argument("shard_run", nargs="*", metavar="K RUN_ID", help="drive-shard-add: the shard and the run to count in it")
@@ -5033,8 +5133,14 @@ def main(argv: list[str]) -> int:
                                   "eject: only while this is the PR's head, so an eject that waits for drive's tick never hits a "
                                   "head pushed meanwhile")
     ap.add_argument("--title", help="open: the PR's title")
-    ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim (its first line `Lane NAME` names the owner); "
+    ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim but for --issue's last line (its first line "
+                                                   "`Lane NAME` names the owner); "
                                                    "edit: the PR's whole new body, in place of all its text")
+    ap.add_argument("--issue", metavar="KEY|none:REASON",
+                    help="open (required): the PR's Linear issue, a key like ENG-123, written into the body as a `Refs KEY` line "
+                         "and linked to the PR through the Linear app (Linear's GitHub integration is off for this "
+                         "repository, so the line alone links nothing); or none:REASON, written as an `Issue: none: REASON` "
+                         "line, for a PR with no issue; link (required): the KEY to link the open PR to")
     ap.add_argument("--base", default="main", help="open: the base branch (default main)")
     ap.add_argument("--tip", default="origin/main", help="checked-heads: whose first-parent line (default origin/main)")
     ap.add_argument("--out", type=Path, metavar="FILE", help="checked-heads: write the checked train heads newest first "
@@ -5059,24 +5165,51 @@ def main(argv: list[str]) -> int:
         text, _ = shadow_report(shadow_records(LocalStore(a.store), log=lambda s: print(s, file=sys.stderr)), max(a.tips, 1))
         print(text)
         return 0
-    if a.command == "open":
-        if not (a.head and a.title and a.body_file):
-            ap.error("open needs --head BRANCH, --title T and --body-file F")
+    if a.issue is not None and a.command not in ("open", "link"):
+        ap.error("--issue is for open and link only")
+    if a.command == "link":
+        if not (a.pr and a.pr.isdigit() and a.issue and ISSUE_KEY_RE.fullmatch(a.issue)) or a.dry_run:
+            ap.error("link needs the PR number and --issue KEY (its Linear issue, like ENG-123), and has no --dry-run")
         try:
+            remote = a.remote or _out(Path.cwd(), "remote", "get-url", "origin")
+            repo = a.repo or ((m := SLUG_RE.search(remote)) and m.group(1))
+            if not repo:
+                raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
+            print(f"research queue link: {link_issue(a.issue, f'https://github.com/{repo}/pull/{a.pr}')}")
+            return 0
+        except (QueueError, OSError) as e:
+            print(f"research queue: {e}", file=sys.stderr)
+            return 1
+    if a.command == "open":
+        if not (a.head and a.title and a.body_file and a.issue):
+            ap.error("open needs --head BRANCH, --title T, --body-file F and --issue KEY (the PR's Linear issue, like ENG-123, "
+                     "or none:REASON)")
+        try:
+            body = with_issue(a.body_file.read_text(), a.issue)
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             remote = a.remote or _out(top, "remote", "get-url", "origin")
             repo = a.repo or ((m := SLUG_RE.search(remote)) and m.group(1))
             if not repo:
                 raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
+            app = issue_app(a.issue) if ISSUE_KEY_RE.fullmatch(a.issue) else None
             if a.dry_run:                                   # --dry-run never opens a real PR
+                link = (f"; would link it to {a.issue} through the Linear app" if isinstance(app, tuple)
+                        else f"; couldn't ask the Linear app to link {a.issue}: {app}" if app else "")
                 print(f"research queue open: would open {a.head}{'@' + a.sha[:12] if a.sha else ''} onto {a.base} in {repo}"
-                      f"{' as a draft' if a.draft else ''}: {a.title!r} ({len(a.body_file.read_text())} bytes of body; dry run)")
+                      f"{' as a draft' if a.draft else ''}: {a.title!r} ({len(body)} bytes of body, ending "
+                      f"{body.rstrip().splitlines()[-1]!r}{link}; dry run)")
                 return 0
-            print(open_pr(top, repo, a.head, a.title, a.body_file.read_text(), base=a.base, sha=a.sha, draft=a.draft))
-            return 0
+            url = open_pr(top, repo, a.head, a.title, body, base=a.base, sha=a.sha, draft=a.draft)
         except (QueueError, OSError) as e:
             print(f"research queue: {e}", file=sys.stderr)
             return 1
+        print(url)
+        if app:
+            try:
+                print(f"research queue open: {link_issue(a.issue, url, app)}")
+            except QueueError as e:                         # the PR is open: only an unknown key fails `open`
+                print(f"research queue: {e}", file=sys.stderr)
+        return 0
     if a.command == "edit":
         if not (a.pr and a.pr.isdigit() and a.body_file):
             ap.error("edit needs the PR number and --body-file F")
@@ -5193,15 +5326,17 @@ def main(argv: list[str]) -> int:
                         got.stale_close_days)
 
             entries = q.status(fetched=at_main)
+            teams = q.issue_teams()
             if a.json:
                 print(json.dumps([{"pr": e.pr.number, "head": e.pr.head, "owner": e.pr.owner, "draft": e.pr.draft, "state": e.state,
                                    "why": e.why, "position": e.position, "commit": e.commit, "after": list(e.after),
+                                   "issue": named_issue(e.pr.body, teams),
                                    "stale": e.idle_since is not None,
                                    "idle_since": None if e.idle_since is None else
                                    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(e.idle_since))}
                                   for e in sorted(entries.values(), key=lambda e: e.pr.number)], indent=1))
             else:
-                print(_render(entries))
+                print(_render(entries) + _unnamed(q.listed, teams))
             return 0
         if a.command == "review":
             return review(q, store, labels, a.pr, "land" if a.land else "hold" if a.pr else None, a.hold or a.ref, a.by,
