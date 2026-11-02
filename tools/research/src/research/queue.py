@@ -74,6 +74,9 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    follow), which otherwise first runs the after-landing run on `checked` itself,
                                                    and lands nothing until it ends
                                                    (on the control pod: `/data/infra/drive.sh queue baseline SHA --by ci`)
+    research queue accept-checked SHA --by ci       record `checked`'s tip SHA, a commit drive didn't write, as one drive takes,
+                                                   so its ticks, held on it (`Driver._unwritten`), go on from it
+                                                   (on the control pod: `/data/infra/drive.sh queue accept-checked SHA --by ci`)
     research queue drive-shard-add TIP K RUN_ID     count RUN_ID, a run replacing shard K's twin, as one of that shard's in the
                                                    after-landing run of `checked` at TIP (`drive_shard_add`), refused unless
                                                    RUN_ID's own record is a check.py run of TIP's commit with --shard K/N
@@ -166,8 +169,10 @@ order) and merges the rest on top, each by `git merge-tree` and `git commit-tree
 that conflicts costs one call).  A merge whose only conflicts are in pins (`tools/verity/check/pins.py`'s `PINS`, generated
 sha256 listings of Lean inputs) is kept, each conflicted pin regenerated from the merged tree (`repinned`): two PRs that each
 change a pinned input both change its pin.  So a new push moves its PR to the tip, a dropped PR takes the commits after it
-along (they're merged again), and a `checked` that moved outside the queue rebuilds `next` on it, unless it moved only by files a member whose Lean
-check runs doesn't change (`hold`): then every sync, drive's or a hand one, leaves `next` as it is until that check ends.  Only drive
+along (they're merged again), and a `checked` that drive moved outside the sync (a landing, a revert, a merge of `main`) rebuilds
+`next` on it; one drive didn't write holds drive's tick, which syncs nothing on it until `checked` is reset to the last tip
+drive wrote or ci accepts it (`Driver._unwritten`, `accept-checked`).  No rebuild while `checked` moved only by files a member
+whose Lean check runs doesn't change (`hold`): then every sync, drive's or a hand one, leaves `next` as it is until that check ends.  Only drive
 syncs (`Queue._drive_only`): `eject` only withdraws the mark, for drive's next tick, and a hand `sync` on the control pod
 (`Queue.hand_sync`) waits as drive's tick does for a running Lean check whose prefix holds an ejected member (`lean_waits`) and
 keeps `next` up to drive's running and passed Lean checks (`lean_hold`).  A
@@ -228,8 +233,8 @@ move on `next`.  The preflight merges no move PR's head, and notes rather than r
 Landing.  `drive` (`research.drive`) is the loop's tick that needs no agent: it lands `next`'s reviewed prefix, a Lean change
 once its Lean check passed, by a fast-forward of `checked` (no new merge commit), and checks `checked` after each landing,
 reverting on `checked` what that check fails, and fast-forwarding `main` to each commit whose check passed every step on the merge gate; it tells
-`CI` what it refuses.  A push refused because `checked` moved leaves it alone; the next sync rebuilds `next` on the new
-`checked`.  A PR landed on `checked` stays open on GitHub until `main` reaches it, and no sync admits it again.  What reaches
+`CI` what it refuses.  A push refused because `checked` moved leaves it alone; drive's next tick takes the new `checked` only
+if drive wrote it, and otherwise holds and rings `CI` and `TOP` (`Driver._unwritten`).  A PR landed on `checked` stays open on GitHub until `main` reaches it, and no sync admits it again.  What reaches
 `main` and changes what a guarantee says sends the spec-change DM of what changed (`spec_alert`).
 
 Notices.  A refusal (a conflict, an ejection) is posted in the merge thread to `CI` and the owner's handle, once per PR head:
@@ -1227,6 +1232,8 @@ class Queue:
         self.workdir, self.remote, self.github, self.ready, self.store = Path(workdir), remote, github, ready, store
         #: the branch drive lands on and `next` is built on (`into`); None: drive.toml's `land_into` at `main`
         self.land_into, self._into = land_into, None
+        #: whether the last `fetch` found `into` on origin, not `main` read in its place
+        self.into_fetched = False
         self.shadow, self.log, self._rules, self.auth, self.first = shadow, log, rules, auth, tuple(first)
         self.before_cutoff, self.marked_by, self.marked_at, self.prefetch = before_cutoff, marked_by, marked_at, prefetch
         #: how many members at the bottom of `next` a running check covers, or a passed Lean check of drive's (`lean_hold`;
@@ -1329,10 +1336,12 @@ class Queue:
                     _git(self.workdir, "update-ref", "-d", f"refs/queue/pr/{p.number}", check=False)
                     self.log(f"research queue: #{p.number}'s pull ref can't be fetched, so it waits this sync: "
                              f"{(r.stderr or r.stdout).strip()[-200:]}")
+        self.into_fetched = False
         if (into := self.into) != "main":
             # a landing branch the remote doesn't have reads as `main` here; drive's tick refuses without it (`drive_names`)
             if self._remote(self.workdir, "ls-remote", "--exit-code", "origin", f"refs/heads/{into}", ok=(0, 2)).returncode == 0:
                 self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/heads/{into}:{self.base}")
+                self.into_fetched = True
             else:
                 _git(self.workdir, "update-ref", self.base, "refs/remotes/origin/main")
         # the merge drivers (`clone.RECORD_DRIVER`) run from this checkout, so one that `main` has moved past judges merges with old
@@ -4725,6 +4734,29 @@ def baseline(q: Queue, sha: str, by: str, steps: str | None = None) -> int:
     return 0
 
 
+def accept_checked(q: Queue, sha: str, by: str) -> int:
+    """`research queue accept-checked SHA --by ci`: record the landing branch (`checked`, `Queue.into`) at SHA, the tip it is at,
+    among the tips drive takes (`drive["checked_tips"]`) though drive didn't write it, so drive's ticks, held on it
+    (`Driver._unwritten`), go on from it.  Refused but by ci, for a SHA that isn't the branch's tip, and off drive
+    (`/data/infra/drive.sh queue accept-checked SHA --by ci` on the control pod)."""
+    from .drive import CHECKED_TIPS
+
+    if _who(by) != "ci":
+        raise QueueError(f"accept-checked: only ci accepts a `{q.into}` drive didn't write (--by ci), not {by}")
+    q._clone()
+    q.fetch()
+    full = _git(q.workdir, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False).stdout.strip()
+    tip = _out(q.workdir, "rev-parse", q.base)
+    if full != tip:
+        raise QueueError(f"accept-checked: {sha} is not `{q.into}`'s tip, {tip[:12]}: only the commit it is at is accepted")
+    state = q.load_state()
+    tips = state.setdefault("drive", {}).setdefault("checked_tips", [])
+    tips[:] = [*(t for t in tips if t != tip), tip][-CHECKED_TIPS:]
+    q.save_state(state)
+    print(f"research queue: `{q.into}` {tip[:12]} accepted by {by}: drive's next tick goes on from it")
+    return 0
+
+
 def drive_shard_add(q: Queue, tip: str, k: int, rid: str) -> int:
     """`research queue drive-shard-add TIP K RUN_ID`: count RUN_ID among shard K's twins (``groups``) of the after-landing run of
     `checked` at TIP (``ids`` too, so drive reads its state), a run launched by hand in place of a twin that waits or was lost: the
@@ -4927,11 +4959,11 @@ def _checked_heads(a: argparse.Namespace) -> int:
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
     ap.add_argument("command", choices=["status", "sync", "eject", "ready", "judge", "drive", "open", "edit", "stats",
-                                            "checked-heads", "review", "baseline", "lean-check", "drive-shard-add",
+                                            "checked-heads", "review", "baseline", "accept-checked", "lean-check", "drive-shard-add",
                                             "shadow-report"])
     ap.add_argument("pr", nargs="?", help="eject, ready, review, edit: the PR number; judge: the quick tier's run id; baseline: the "
                     "commit of the landing branch (`checked`, or `main` until `checked` exists) ci knows is green; lean-check: the commit of `next` to Lean-check; "
-                    "drive-shard-add: the after-landing run's tip")
+                    "accept-checked: `checked`'s tip, which drive didn't write; drive-shard-add: the after-landing run's tip")
     ap.add_argument("shard_run", nargs="*", metavar="K RUN_ID", help="drive-shard-add: the shard and the run to count in it")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--steps", help="baseline: the after-landing steps green at SHA (default every one): a later failure of "
@@ -5088,6 +5120,8 @@ def main(argv: list[str]) -> int:
         ap.error("review N records one verdict: --land [--ref NOTE] or --hold REASON, with --by <reviewer lane> (or $RESEARCH_LANE)")
     if a.command == "baseline" and not (a.pr and a.by):
         ap.error("baseline SHA records a green `main` for the review landing: pass the commit and --by ci")
+    if a.command == "accept-checked" and not (a.pr and a.by):
+        ap.error("accept-checked SHA records `checked`'s tip as one drive takes: pass the commit and --by ci")
     if a.command == "lean-check" and not (a.pr and a.by):
         ap.error("lean-check COMMIT launches a Lean check of a commit of `next` through drive: pass the commit and --by <lane> "
                  "(or set $RESEARCH_LANE)")
@@ -5096,7 +5130,7 @@ def main(argv: list[str]) -> int:
     if a.command == "drive-shard-add" and not (a.pr and len(a.shard_run) == 2 and a.shard_run[0].isdigit()):
         ap.error("drive-shard-add TIP K RUN_ID: the after-landing run's tip, the shard's number and the run to count in it")
     a.by = a.by or "merge-queue"
-    if a.command not in ("judge", "baseline", "lean-check", "drive-shard-add") and a.pr is not None:
+    if a.command not in ("judge", "baseline", "accept-checked", "lean-check", "drive-shard-add") and a.pr is not None:
         if not a.pr.isdigit():
             ap.error(f"{a.command}: {a.pr!r} is not a PR number")
         a.pr = int(a.pr)
@@ -5182,6 +5216,11 @@ def main(argv: list[str]) -> int:
                 raise QueueError(f"baseline: drive's state is the control pod's, and this isn't drive (no {DRIVE_ENV}=1): run "
                                  f"`/data/infra/drive.sh queue baseline {a.pr} --by {a.by}` there")
             return baseline(q, a.pr, a.by, a.steps)
+        if a.command == "accept-checked":
+            if not on_drive():
+                raise QueueError(f"accept-checked: drive's state is the control pod's, and this isn't drive (no {DRIVE_ENV}=1): "
+                                 f"run `/data/infra/drive.sh queue accept-checked {a.pr} --by {a.by}` there")
+            return accept_checked(q, a.pr, a.by)
         if a.command == "drive-shard-add":
             if not on_drive():
                 raise QueueError(f"drive-shard-add: drive's state is the control pod's, and this isn't drive (no {DRIVE_ENV}=1): "
