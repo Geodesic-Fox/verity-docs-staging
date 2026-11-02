@@ -864,19 +864,19 @@
   },
   "Claims.ZKServer.LeanRelease.FillRoundEq": {
    "owner": "@proofs",
-   "digest": "76279c4ace4315e3989395044c1be97b85c92bc1652b58efa9dce8123f95352f"
+   "digest": "3e07f09e6a8cdbf252a118d6e748228e096807d37c2e000a5f8f613f7e978065"
   },
   "Claims.ZKServer.LeanRelease.FinishIs": {
    "owner": "@proofs",
-   "digest": "589aaaf527e08981262c8dd9335ad5c799a5c6901e9762e7c31b93a764cff230"
+   "digest": "3e7b53b902c830075deeff9d5e1065ac67aa9b4396ab2e0a058312360da1e1c7"
   },
   "Claims.ZKServer.LeanRelease.LinkRoundEq": {
    "owner": "@proofs",
-   "digest": "cbc989f582028877c5bc92ff1f8e6cef79e562b955aaa9fe573f2eb7381d0a89"
+   "digest": "fbc651b2b2c3754b195add98689c52662b1d82ad842d1f0eef098a0e414ad114"
   },
   "Claims.ZKServer.LeanRelease.LiveRoundEq": {
    "owner": "@proofs",
-   "digest": "f3d07b09181567f46815d6b5f15a93d0179187b2a3c668258f9abba529ff6e33"
+   "digest": "78eb54dd2d81af9b20174e5c892284a07a922be5d18eb454bd5fe0dd7519cd79"
   },
   "Claims.ZKServer.Loop.Serves": {
    "owner": "@proofs",
@@ -884,7 +884,7 @@
   },
   "Claims.ZKServer.Loop.Src": {
    "owner": "@proofs",
-   "digest": "a44b6afed93c144fd5e09880bd9f1ab8c403edf72ba5de3a4455c934208f09b3"
+   "digest": "89d017e65595177ed9767f170ee668dba629a739bb7ee6cdb6e1058fbb60b649"
   },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
@@ -920,7 +920,7 @@
   },
   "Flock.Guarantees.LoopInnerRound0": {
    "owner": "@proofs",
-   "digest": "afab8263b2bd7644e280ae5242efd1a2530b8c0246d8bafd39c188bce9abce14"
+   "digest": "8dddd7509aa092d6d2b180d7e1919f5936b7e62adf2c723b608be80600916c44"
   },
   "Flock.Guarantees.OuterSessionsZK": {
    "owner": "@proofs",
