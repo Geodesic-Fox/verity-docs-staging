@@ -4,6 +4,7 @@ PRs and writes their `refs/pull/{n}/head`."""
 from __future__ import annotations
 
 import base64
+import dataclasses
 import hashlib
 import json
 import os
@@ -1581,6 +1582,39 @@ def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypa
     assert got[2][0] == "ready" and "the next sync merges it onto `next`" in got[2][1]
     assert research_main([*argv, "--marked-after", "2026-10-01T00:00:00Z"]) == 0
     assert {e["pr"]: e["state"] for e in json.loads(capsys.readouterr().out)} == {1: "ready", 2: "ready"}
+
+
+def test_status_lists_every_open_pr_whose_body_names_no_linear_issue(world, monkeypatch, capsys):
+    """A key after a Linear magic word names an issue whatever its team, a bare key only for a team main's registry gives a
+    handle (so `SHA-512` names none), and an `Issue: none:` line names none on purpose; an unmarked PR on another branch,
+    which has no entry, is listed too."""
+    import research.queue as Qm
+
+    cfg = world.tmp / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{world.tmp / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    _git(world.dev, "checkout", "-q", "--detach", "origin/main")
+    reg = world.dev / Qm.REGISTRY
+    reg.parent.mkdir(parents=True)
+    reg.write_text(json.dumps({"handles": [{"handle": "ci", "linear": "CI"}, {"handle": "infra"}]}))
+    _git(world.dev, "add", "-A")
+    _git(world.dev, "commit", "-qm", "the registry")
+    _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
+    bodies = {1: "Lane a\n\nRefs ENG-5\n", 2: "Lane b\n\nCI-12 (the thing)\n", 3: "Lane c\n\nSHA-512 everywhere, as INF-3\n",
+              4: "Lane d\n\nIssue: none: docs only\n", 5: "Lane e\n\npart of nothing\n"}
+    for n, body in bodies.items():
+        world.gh.put(n, world.change({f"{n}.txt": "x\n"}), body=body, ready=False)
+    world.gh.prs[5] = dataclasses.replace(world.gh.prs[5], base="feature")
+    monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    argv = ["queue", "status", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/verity",
+            "--store", str(world.tmp / "queue-store"), "--marked-after", "2026-10-01T00:00:00Z"]
+    assert research_main(argv) == 0
+    section = capsys.readouterr().out.split("\n\nno Linear issue named ")[1].splitlines()
+    assert section[0].startswith("(2 of 5 open PRs; add a `Refs KEY` or `Issue: none: REASON` line")
+    assert [r.split()[0] for r in section[1:]] == ["#3", "#5"] and section[1].split()[1:] == ["c", "change", "3"]
+    assert research_main([*argv, "--json"]) == 0
+    assert {e["pr"]: e["issue"] for e in json.loads(capsys.readouterr().out)} == {1: "ENG-5", 2: "CI-12", 3: None,
+                                                                                  4: "none: docs only"}
 
 
 def test_status_and_the_review_listing_free_the_queue_lock_before_they_read_labels(world, monkeypatch, capsys):
