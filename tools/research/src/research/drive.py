@@ -78,10 +78,13 @@ Lean checks that runs or passed, `next` is kept (`queue.lean_hold`, `--first` ab
 alone that is pushed or loses its mark leaves, and `next` is rebuilt from it.  ci's hand Lean check goes through drive
 (`/data/infra/drive.sh queue lean-check COMMIT`, `Driver.hand_lean`): recorded in drive's state at its launch, it holds `next`
 from its first second and counts, is followed and covers as drive's own.  Each landing awaits the after-landing run, one at a
-time of `checked`'s tip (`train.sh TIP MACHINES --deferred STEPS --base VERIFIED`) with every ci.toml job (`AFTER_LANDING`),
-circuit-check and ratchet-gate among them, which `_promote` doesn't wait for (`gate = false`: `_gating`), its base the last
-verified `checked` commit, below the tip, for ratchet-gate to judge the
-landings above; with drive.toml's `after_landing_shards` N, as N runs at once (`--shard K/N` each, on machines of `on` no other
+time of `checked`'s tip (`train.sh TIP MACHINES --deferred STEPS --base VERIFIED [--ratchet-base JUDGED]`) with every ci.toml
+job (`AFTER_LANDING`), circuit-check and ratchet-gate among them, which `_promote` doesn't wait for (`gate = false`: `_gating`),
+its base the last verified `checked` commit, below the tip.  ratchet-gate judges the landings above its own base
+(`_ratchet_base`): the tip of the newest run whose ratchet-gate ended with a verdict (`postland["ratchet_judged"]`:
+passed, or failed naming each change it fails, `_ratchet_judged`), once a revert undid each of those, so a red step elsewhere,
+which holds `verified`, doesn't make each run re-judge every landing since; while one stands, the base that run judged above;
+the last verified commit when none was judged or the judged tip left the tip's history (a revert or reset); with drive.toml's `after_landing_shards` N, as N runs at once (`--shard K/N` each, on machines of `on` no other
 shard has while there are N: `shard_machines`), passed once every shard passed, launched once circuit-check's records step
 (`_records`: `train.sh TIP MACHINES --cc-records`) passed, each shard given its artifact (`--cc-records-from ART@SHA256`) so no
 shard builds the bindings' records; with "auto" (or "auto:MAX"), N is the shard planner's, its plan made once beside the
@@ -302,8 +305,9 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
                  deferred: str | None = None, no_cache: bool = False, no_regenerate: bool = False,
                  detached: bool = False, circuit_cache: bool = False, shard: str | None = None,
                  base: str | None = None, cc_records: bool = False,
-                 cc_records_from: str | None = None, shard_plan: str | None = None) -> tuple[list[str], str] | dict:
-    """`train.sh COMMIT MACHINE [--agreement] [--base BASE] [--shard [auto:]K/N [--shard-plan-file PLAN]]
+                 cc_records_from: str | None = None, shard_plan: str | None = None,
+                 ratchet_base: str | None = None) -> tuple[list[str], str] | dict:
+    """`train.sh COMMIT MACHINE [--agreement] [--base BASE] [--ratchet-base RBASE] [--shard [auto:]K/N [--shard-plan-file PLAN]]
     [--cc-records[-from ART@SHA256]]` from the queue's clone (``cc_records``, circuit-check's records step alone): (the run ids it printed,
     its output's tail); ``detached``, started in the background (`detach`) from a copy of train.sh, which reads nothing by its
     own path (``$0`` only for its usage) and finds the tree from its working directory, and returned at once as the record
@@ -314,7 +318,8 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
         argv += [*(["--agreement"] if agreement else []),
                  *(["--deferred", deferred] if deferred else []), *(["--no-cache"] if no_cache else []),
                  *(["--circuit-cache"] if circuit_cache else []), *(["--no-regenerate"] if no_regenerate else []),
-                 *(["--base", base] if base else []), *(["--shard", shard] if shard else []),
+                 *(["--base", base] if base else []), *(["--ratchet-base", ratchet_base] if ratchet_base else []),
+                 *(["--shard", shard] if shard else []),
                  *(["--shard-plan-file", shard_plan] if shard_plan else []),
                  *(["--cc-records-from", cc_records_from] if cc_records_from else [])]
     env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci"}
@@ -1041,10 +1046,11 @@ class Driver:
         #: (`_started`); an injected `launch` launches it too
         self.launch_postland: Callable[..., tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False,
-                    shard=None, base=None, cc_records=False, cc_records_from=None, shard_plan=None:
+                    shard=None, base=None, cc_records=False, cc_records_from=None, shard_plan=None, ratchet_base=None:
              train_launch(repo, commit, machine, agreement, auth=q.auth, deferred=steps, no_cache=no_cache,
                           no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache, shard=shard, base=base,
-                          cc_records=cc_records, cc_records_from=cc_records_from, shard_plan=shard_plan))
+                          cc_records=cc_records, cc_records_from=cc_records_from, shard_plan=shard_plan,
+                          ratchet_base=ratchet_base))
             if launch is train_launch else (lambda repo, commit, machine, steps, **_: self.launch(repo, commit, machine, False)))
         #: the artifact of circuit-check's records step (`records_artifact`, `_records`) a sharded after-landing run gives its shards
         self.records_artifact: Callable[[str], str | None] = lambda rid: records_artifact(q.store, rid)
@@ -1112,12 +1118,12 @@ class Driver:
             self._ev[v.attempt] = self.evidence(self.repo, v.attempt.split())
         return self._ev[v.attempt]
 
-    def _undone(self, c: str) -> bool:
-        """Whether a revert on the landing branch (`Queue.into`) above ``c`` undid it (and no revert of that revert redid it): a
-        hand revert, or drive's own before a restart lost its record."""
+    def _undone(self, c: str, to: str | None = None) -> bool:
+        """Whether a revert on the landing branch (`Queue.into`) above ``c``, at or below ``to`` when given, undid it (and no
+        revert of that revert redid it): a hand revert, or drive's own before a restart lost its record."""
         by = {}
         for rec in filter(None, (x.strip() for x in _out(self.repo, "log", "--format=%H%x00%B%x1e",
-                                                          f"{c}..{self.q.base}").split("\x1e"))):
+                                                          f"{c}..{to or self.q.base}").split("\x1e"))):
             h, body = rec.split("\x00", 1)
             by.update(dict.fromkeys(REVERTS_RE.findall(body), h))
         n = 0
@@ -1608,6 +1614,7 @@ class Driver:
         dirs = self._evidence(Verdict("failed", " ".join(run["ids"])))
         fails: dict[str, tuple[Path, dict]] = {}
         stopped: set[str] = set()
+        judged: tuple[Path, dict] | None = None
         for d in dirs:
             for name, s in suite_rows(d).items():
                 if s["status"] == "failed":
@@ -1616,6 +1623,8 @@ class Driver:
                     self._green(pl, f"suite {name}", tip)
             for st in step_records(d):
                 step = st.get("step") or ""
+                if step == RATCHET_STEP and not not_run(st) and st.get("status") in ("passed", "failed"):
+                    judged = (d, st)
                 if not_run(st):
                     stopped.add(step)
                 elif st.get("status") == "failed":
@@ -1623,11 +1632,42 @@ class Driver:
                         fails[f"step {step}"] = (d, st)
                 elif st.get("status") == "passed":
                     self._green(pl, f"step {step}", tip)
+        if judged:
+            self._ratchet_judged(pl, run, *judged)
         if not (self.dry_run or self.q.shadow):
             for key, (d, rec) in fails.items():
                 self._name(drive, pl, run, key, d, rec, sorted(stopped))
             self._start_bisect(pl)
         return len(fails)
+
+    def _ratchet_judged(self, pl: dict, run: dict, d: Path, st: dict) -> None:
+        """``run``'s ratchet-gate step ended with a verdict at its tip: passed, or failed naming each change it fails
+        (`ratchet_failures`, whose culprit `_name` takes).  The tip becomes `postland["ratchet_judged"]` ({"tip", "base": the
+        commit its gate judged above, "failed": the commits it failed}) unless a newer tip is: `_ratchet_base` reads it.  A
+        failure that names no change, or one this clone doesn't hold, is no verdict."""
+        failed: list[str] = []
+        if st.get("status") == "failed":
+            named = [c for _, c, _ in ratchet_failures(d, st)]
+            failed = [_git(self.repo, "rev-parse", "--verify", "-q", f"{c}^{{commit}}", check=False).stdout.strip() for c in named]
+            if not named or not all(failed):
+                return
+        tip = run["tip"]
+        if (old := pl.get("ratchet_judged")) and old["tip"] != tip and self._ancestor(tip, old["tip"]):
+            return
+        pl["ratchet_judged"] = {"tip": tip, "base": run.get("ratchet_base"), "failed": failed}
+
+    def _ratchet_base(self, pl: dict, tip: str, below: str | None) -> str | None:
+        """ratchet-gate's base in an after-landing run of ``tip`` (`train.sh --ratchet-base`): the newest tip whose run's
+        ratchet-gate gave a verdict (`ratchet_judged`) once a revert at or below ``tip`` undid each change it failed, so a
+        reverted culprit's revert lies above the base and is judged; while one stands, the base that run's gate judged above,
+        so the gate fails it again.  Either only strictly below ``tip`` and at or above ``below`` (the run's `--base`); else,
+        none judged or a revert or reset that left it off ``tip``'s history, ``below``."""
+        j = pl.get("ratchet_judged") or {}
+        undone = all(self._undone(c, tip) for c in j.get("failed") or ())
+        for c in (j.get("tip") if undone else None, j.get("base")):
+            if c and c != tip and self._ancestor(c, tip) and (not below or self._ancestor(below, c)):
+                return c
+        return below
 
     def _green(self, pl: dict, key: str, tip: str) -> None:
         """``key`` passed at ``tip``: its newest green, and its red record at or below ``tip`` (and a bisection of it) ends."""
@@ -1707,7 +1747,8 @@ class Driver:
         gate = ratchet_failures(d, rec) if step == RATCHET_STEP else []
         if gate:
             r["first"] = f"`{gate[0][0]} ({gate[0][1]}): failed: {gate[0][2][:200]}`"
-        # the gate judges every merge above the landed branch's verified tip and names the one it fails, wherever the step last passed
+        # the gate judges every merge above its base (at or above the verified tip) and names the one it fails, wherever the step
+        # last passed
         if (base := self._base_of(pl, key, step, tip) or (pl.get("verified") if gate else None)) is None:
             self._ring(drive, r, key, f"it never passed in an after-landing run since `{self.q.into}` {pl['verified'][:12]}, so no "
                                       "landing can be named. Reverted nothing")
@@ -2024,10 +2065,13 @@ class Driver:
                  "no_cache": self.after_landing_no_cache, "circuit_cache": self.after_landing_no_cache, "no_regenerate": True}
         skip = [s for s, off in (("lean-agreement", not extra["agreement"]), ("lean-changed", extra["no_cache"])) if off]
         # ratchet-gate judges the landings above the run's base and fails one at or above the tip: the baseline's tip is the
-        # verified `main` itself, so its base is the tip's first parent
+        # verified `main` itself, so its base is the tip's first parent; above it, the last tip its gate judged (`_ratchet_base`)
         below = (pl["verified"] if pl["verified"] != main else
                  _git(self.repo, "rev-parse", "--verify", "-q", f"{main}^1", check=False).stdout.strip()) or None
-        flags = (f" --base {below[:12]}" if below else "") + "".join(f" --{k.replace('_', '-')}" for k, on in extra.items() if on)
+        ratchet = self._ratchet_base(pl, main, below)
+        rb = {"ratchet_base": ratchet} if ratchet != below else {}
+        flags = ((f" --base {below[:12]}" if below else "") + (f" --ratchet-base {ratchet[:12]}" if rb else "")
+                 + "".join(f" --{k.replace('_', '-')}" for k, on in extra.items() if on))
         auto = isinstance(n, str)
         records = (auto or n > 1) and "circuit-check" in pl["steps"]
         if self.dry_run or q.shadow:
@@ -2044,12 +2088,12 @@ class Driver:
             n = plan["n"] if plan else 1
         shard = (lambda k: {"shard": f"auto:{k}/{n}", "shard_plan": plan["file"]}) if plan else (lambda k: {"shard": f"{k}/{n}"})
         if n == 1 and not plan:
-            rec, tail = self._started(self.launch_postland(self.repo, main, self.on, steps, base=below, **extra))
+            rec, tail = self._started(self.launch_postland(self.repo, main, self.on, steps, base=below, **rb, **extra))
         else:
             if len(self.on.split(",")) < n:
                 q.log(f"research queue drive: {n} shards of the post-landing run of {main[:12]} on {self.on}, fewer machines than "
                       "shards: they share them")
-            got = [self._started(self.launch_postland(self.repo, main, on, steps, base=below, **extra, **cc, **shard(k)))
+            got = [self._started(self.launch_postland(self.repo, main, on, steps, base=below, **rb, **extra, **cc, **shard(k)))
                    for k, on in enumerate(shard_machines(self.on, n), 1)]
             rec, tail = {"ids": [], "shards": [r for r, _ in got]}, next((t for r, t in got if r is None), "")
             if any(r is None for r, _ in got):
@@ -2062,11 +2106,12 @@ class Driver:
             return
         pl["run"] = {**rec, "tip": main, "at": self.now(), **({"resend": True} if pl.pop("resend", False) else {}),
                      **({"skip": skip} if skip else {}), **({"baseline": True} if base else {}),
-                     **({"plan": plan["digest"]} if plan else {}),
+                     **({"plan": plan["digest"]} if plan else {}), **({"ratchet_base": ratchet} if ratchet else {}),
                      "as": {"steps": [s for s in AFTER_LANDING if s not in skip], "no_cache": extra["no_cache"]}}
         self._shadow_list(drive, main)
         q.log(f"research queue drive: post-landing run of `{self.q.into}` {main[:12]} ({steps}): {_ids(rec)}; "
               f"{len(pl['pending'])} landing(s) since {pl['verified'][:12]}"
+              + (f"; ratchet-gate judges those above {ratchet[:12]}" if rb else "")
               + (f"; circuit-check's records {cc['cc_records_from']}" if cc else "") + _of_plan(plan, "; shards"))
 
     def _plan(self, drive: dict, pl: dict, tip: str, steps: str) -> dict | None:
@@ -2753,8 +2798,9 @@ class Driver:
     #    "passed" (with "run", the id that passed) or "failed" (with "why")}}, each dropped once its commit leaves `next`.
     #    `drive["postland"]` also keeps "verified_as" ({"steps", "no_cache"} of the run that verified `verified`, or ci's
     #    `research queue baseline`), "verified_run" (the ids of the run that verified it; none for ci's baseline), "gated" and
-    #    "gated_run" (the newest tip whose run passed every step on the merge gate, red off it or not: `_gate_passed`) and
-    #    "bisect" (a failed after-landing run's implicated landings, being bisected: `_bisect_step`)
+    #    "gated_run" (the newest tip whose run passed every step on the merge gate, red off it or not: `_gate_passed`),
+    #    "ratchet_judged" (the newest tip whose run's ratchet-gate ended with a verdict: `_ratchet_judged`) and "bisect" (a failed
+    #    after-landing run's implicated landings, being bisected: `_bisect_step`)
 
     def _review(self, state: dict, drive: dict, dry_run: bool) -> str:
         """One tick of the review landing, its low-risk lane after it (`land_lowrisk`): move `main` to a fully checked `checked`
