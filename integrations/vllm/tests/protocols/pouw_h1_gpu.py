@@ -64,11 +64,11 @@ its registration's seconds a step (``registered_s``), the part of them inside `p
 declared once before any window (`period_program`), as the period's.
 
 ``--receipts SO`` (fill, ``--served``, no ``--handoff``) registers each call's ``receipt@<c>`` too (BRIDGE2), computed on the
-serving GPU by kernels' producer (``benchmarks/pouw/served_h1/producer.py``, `receipts_producer`): h1u.cu's proof-block kernel of
-the -hbc build SO (``producer_gpu.sh``'s ``h1u_hbc.so``) over each linear's own int8 weight, its seeds taking the
-registered roots of the call's step's ``a/<K>@<s>`` and ``b/<K>``. The first layer's linears' calls at step 0 and at the
+serving GPU by `pouw_h1_receipts.Receipts` (`receipts_producer`) on kernels' units
+(``benchmarks/pouw/served_h1/producer.py``): h1u.cu's proof-block kernel of the -hbc build SO (``producer_gpu.sh``'s
+``h1u_hbc.so``) over each linear's own int8 weight, its seeds taking the registered roots of the call's step's ``a/<K>@<s>`` and ``b/<K>``. The first layer's linears' calls at step 0 and at the
 window's last step are kept, and their first proof block of each row block is held to `h1tile.reference` word for word
-(`receipts_check`: live row blocks at step 0, dead at the last step). A ``.cubin`` SO (``served_h1/noise.cu``'s) computes
+(`receipts_check`: live row blocks at step 0, dead at the last step). A ``.cubin`` SO (``pouw_cuda/noise.cu``'s) computes
 them with the producer's torch chain over noise.cu's noise instead. ``--j10r`` declares the period's window Program over
 J10-R's tile proof block (`period_unit`, `h1tile.PouwH1Tile5`), so the producer computes J10-R's receipts (one noise stream a call)
 and they are held to `h1tile.j10r_reference`; v1's proof block is the default. ``--ks K[,K...]`` is the pouw setting ``ks``:
@@ -78,8 +78,8 @@ window's calls are held to those K's (``call_ks``); with ``--j10r`` it is serve-
 
 ``--credit`` (with ``--commit`` and ``--receipts``) runs core credit's statement steps over the honest Commit window
 (`credit_check`, `pouw_h1_credit`): `credit.registered_file`, `credit._verified` on a stand-in verifier of record that
-opens each drawn proof block's pub, o0 and o1 rows against that file's roots and recomputes its receipt, `credit._proved` and
-`credit._registration`, the drawn proof blocks the first and last of each kept call; then a receipt word flipped (with and
+opens each sampled proof block's pub, o0 and o1 rows against that file's roots and recomputes its receipt, `credit._proved` and
+`credit._registration`, the sampled proof blocks the first and last of each kept call; then a receipt word flipped (with and
 without its round's root re-listed), a public table under another step's A root and an ok row 0, each to be refused.
 
 ``--commit`` (fill, ``--served``) serves the 64's window again with the Commit in the engine
@@ -95,7 +95,7 @@ window twice more with an honest Commit, H1 handed all-zero A codes or one A row
 ``arow``, and on a MoE (``--role OLMOE_INT8 --int8-exact linears``) once more with one routed expert call's codes zero
 (`EXPERT_NEGATIVE`): the Commit acquires each expert call's rows under its H1 name (`acquire.h1_commit.H1Source`). ``--declare SLOTS,CAP,T,S`` shrinks the fill workload (`declared_of`) so the pure-Python registration fits a run.
 Without ``--challenger`` its windows' coins are this process's, so every call's credit gate verdict is
-`pouw_h1.IN_PROCESS`; with ``--challenger --gate --peer`` each window draws its salt, round and draw coins from a
+`pouw_h1.IN_PROCESS`; with ``--challenger --gate --peer`` each window samples its salt, round and flip coins from a
 challenge phase of its own, and ``commit.coins`` (`coins_summary`) holds each window's coin source, challenge phase and credit gate,
 ``ok`` only when every window's coins are the challenger's and the honest Commit window's gate refuses none of its calls.
 
@@ -316,7 +316,7 @@ def fixed_length(decl: Any) -> dict[str, Any]:
 
 def period_open_argv(name: str, circuit: str, draw_k: int, decl: Any, files: dict[str, str]) -> list[str]:
     """``period-open`` of the Commit window's period `name`: cap 1 (the Commit's window alone, so a negative's refused
-    window, which ends complete, is never one of it), its circuit (the period's declared Program's digest), its draw K
+    window, which ends complete, is never one of it), its circuit (the period's declared Program's digest), its sample K
     (`pouw_h1_challenger.draw_k` over the declared layout, core's `credit.committed_k`), T, its circuit files
     (`period_files`, core's `credit.committed_files`) and the fixed length (`fixed_length`, core's
     `credit.committed_length`)."""
@@ -1287,15 +1287,16 @@ def producer() -> Any:
 
 
 def receipts_producer(so: str, served: Any, h1: Any, layers: Any, steps: int) -> Any:
-    """``--receipts SO``: `served`'s receipts (`Served.receipts`) from the producer (`producer().Receipts`) for the window
-    `h1`, h1u.cu's proof-block kernel of the -hbc build `so` over each linear's int8 weight in `layers` in place (no second copy
-    on the GPU), or with a ``.cubin`` SO (noise.cu's) receipts.py's torch chain over noise.cu's noise, keeping the first
-    layer's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`. The noise is the window Program's form,
-    v1's or J10-R's (``--j10r``)."""
-    P = producer()
-    kernel = {"cubin": P.RC.Cubin(so)} if so.endswith(".cubin") else {"units": P.Units(so)}
-    made = P.Receipts(served, h1, weight=lambda c: layers[c.layer].weight,
-                      keep=lambda c: c.layer < 4 and c.step in (0, steps - 1), **kernel)
+    """``--receipts SO``: `served`'s receipts (`Served.receipts`) from the producer (`pouw_h1_receipts.Receipts`) for the
+    window `h1`, h1u.cu's proof-block kernel of the -hbc build `so` (`producer().Units`) over each linear's int8 weight in
+    `layers` in place (no second copy on the GPU), or with a ``.cubin`` SO (noise.cu's) the torch chain over noise.cu's
+    noise, keeping the first layer's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`. The noise is the
+    window Program's form, v1's or J10-R's (``--j10r``)."""
+    from verity_vllm.protocols.pouw.h1 import receipts as RC
+
+    kernel = {"cubin": RC.Cubin(so)} if so.endswith(".cubin") else {"units": producer().Units(so)}
+    made = RC.Receipts(served, h1, weight=lambda c: layers[c.layer].weight,
+                       keep=lambda c: c.layer < 4 and c.step in (0, steps - 1), **kernel)
     served.receipts = made
     return made
 
@@ -1317,7 +1318,7 @@ def receipts_check(made: Any) -> dict[str, Any]:
 
 def credit_check(h1: Any, served: Any, made: Any) -> dict[str, Any]:
     """``--credit``: core credit's statement steps (`pouw_h1_credit.check`) over the honest Commit window with receipts
-    on, the drawn proof blocks the first and last of each kept call (`receipts_producer`'s: the first layer's linears at step 0
+    on, the sampled proof blocks the first and last of each kept call (`receipts_producer`'s: the first layer's linears at step 0
     and the last step), their operands and receipts the producer's on the serving GPU; then each prover-side negative
     (`pouw_h1_credit.NEGATIVES`) at the first of them."""
     from tests.protocols import pouw_h1_credit as PC
@@ -1556,7 +1557,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="fill with --served, without --handoff: each call's receipt@<c> from h1u.cu's units kernel of the "
                          "-hbc build SO (benchmarks/pouw/served_h1/producer_gpu.sh's h1u_hbc.so) on the serving GPU, the "
                          "first block's linears' calls at step 0 and the last step held to h1tile.reference; a .cubin SO "
-                         "(served_h1/noise.cu's) takes receipts.py's torch chain over its noise")
+                         "(pouw_cuda/noise.cu's, receipts.noise_cubin) takes receipts.py's torch chain over its noise")
     ap.add_argument("--arch", help="fill with --served: the H1 device record (h1device.DEVICES: sm_90, the H200; sm_120, "
                                    "the RTX PRO 6000) whose domain bounds each K's tile unit (default: the serving card's, "
                                    "pouw_h1_served.card_arch)")
