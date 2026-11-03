@@ -1,251 +1,100 @@
 "use client"
 
 import type { ComponentType, CSSProperties, ReactNode, SVGAttributes } from "react"
-import { Fragment, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import {
-  BookOpen,
-  BrainCircuit,
-  ChevronLeft,
-  Cpu,
-  FlaskConical,
-  Gauge,
-  Gavel,
-  LayoutGrid,
-  Plug,
-  Rocket,
-  Scale,
-  ScrollText,
-  Sigma,
-  Workflow,
-} from "lucide-react"
+import { Blocks, LayoutGrid, Plug, Tags, Workflow } from "lucide-react"
 
 import { BoundaryMark } from "@/components/boundary-mark"
-import { VllmIcon } from "@/components/shell/vllm-icon"
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarSeparator,
 } from "@/components/ui/sidebar"
-import {
-  SidebarDrill,
-  SidebarDrillChevron,
-  SidebarDrillPanel,
-} from "@/components/ui/sidebar-drill"
 import { TooltipProvider } from "@/components/ui/tooltip"
-import {
-  firstHref,
-  groupId,
-  groupsForPath,
-  isGroup,
-  panelForPath,
-  tree,
-  treePages,
-  treePanels,
-  type TreeEntry,
-  type TreeGroup,
-  type TreeIcon,
-  type TreePage,
-} from "@/lib/tree"
+import { cn } from "@/lib/utils"
+import { tree, treePages, type TreeIcon, type TreeNode } from "@/lib/tree"
 
 /*
- * The Vercel-dashboard shell: a fixed, full-height sidebar of drill panels
- * (the root panel, then a group's pages) and a top bar with breadcrumbs.
- * The panel follows the URL; a click drills eagerly and the URL confirms it
- * on navigation.
+ * The Vercel-dashboard shell: a fixed, full-height sidebar holding the whole
+ * tree, always open, and a top bar with breadcrumbs. Top-level entries carry
+ * an icon; everything below them hangs off a guide line, with folders as
+ * plain labels and pages as links. Labels wrap rather than truncate.
  */
 
 const icons: Record<TreeIcon, ComponentType<SVGAttributes<SVGSVGElement>>> = {
   overview: LayoutGrid,
   protocols: Workflow,
-  accounting: Gauge,
-  policies: Gavel,
-  "proof-systems": Sigma,
-  "getting-started": Rocket,
+  subprotocols: Blocks,
+  classification: Tags,
   integrations: Plug,
-  vllm: VllmIcon,
-  guidelines: ScrollText,
-  autoresearch: FlaskConical,
-  hardware: Cpu,
-  workloads: BrainCircuit,
-  assumptions: Scale,
-  glossary: BookOpen,
 }
+
+const rowClass =
+  "flex min-h-7 w-full items-center rounded-(--sidebar-row-radius) px-2 py-1 text-left text-sm leading-snug outline-hidden ring-sidebar-ring focus-visible:ring-2"
 
 function breadcrumbs(pathname: string): string[] {
-  const page = treePages().find((entry) => entry.page.href === pathname)?.page
-  if (!page) return ["Documentation"]
-  return [...groupsForPath(pathname).map((group) => group.label!), page.label]
+  const entry = treePages().find(({ page }) => page.href === pathname)
+  return entry ? [...entry.parents, entry.page.label] : ["Docs"]
 }
 
-function BackRow({ label, onBack }: { label: string; onBack: () => void }) {
+function Branch({ nodes, pathname, top }: { nodes: TreeNode[]; pathname: string; top?: boolean }) {
+  const visible = nodes.filter((node) => !node.hidden)
+  if (!visible.length) return null
   return (
-    <SidebarGroup>
-      <SidebarGroupContent>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              aria-label={`Back from ${label}`}
-              className="font-medium"
-              onClick={onBack}
+    <ul className={cn("flex flex-col gap-0.5 border-l border-sidebar-border py-0.5 pl-2", top ? "ml-4" : "ml-2")}>
+      {visible.map((node) => (
+        <li key={node.href ?? node.label}>
+          {node.href ? (
+            <Link
+              className={cn(
+                rowClass,
+                node.children ? "text-sidebar-foreground" : "text-sidebar-muted",
+                "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-active:bg-sidebar-active data-active:font-medium data-active:text-sidebar-accent-foreground"
+              )}
+              data-active={pathname === node.href ? "" : undefined}
+              href={node.href}
             >
-              <ChevronLeft aria-hidden />
-              <span>{label}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
-  )
-}
-
-function PageRow({ page, pathname }: { page: TreePage; pathname: string }) {
-  const Icon = page.icon ? icons[page.icon] : null
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={pathname === page.href}>
-        <Link href={page.href}>
-          {Icon ? <Icon aria-hidden /> : null}
-          <span className="truncate">{page.label}</span>
-        </Link>
-      </SidebarMenuButton>
-    </SidebarMenuItem>
-  )
-}
-
-function DrillRow({
-  href,
-  icon,
-  label,
-  onDrill,
-}: {
-  href: string
-  icon?: TreeIcon
-  label: string
-  onDrill: () => void
-}) {
-  const Icon = icon ? icons[icon] : null
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton asChild>
-        <Link href={href} onNavigate={onDrill}>
-          {Icon ? <Icon aria-hidden /> : null}
-          <span>{label}</span>
-          <SidebarDrillChevron />
-        </Link>
-      </SidebarMenuButton>
-    </SidebarMenuItem>
-  )
-}
-
-// The root panel's items, in tree order: unlabelled groups list their pages,
-// labelled groups become drill rows. A run is consecutive groups of one
-// section, with a divider between runs.
-function RootItems({
-  pathname,
-  drillTo,
-}: {
-  pathname: string
-  drillTo: (panel: string) => void
-}) {
-  const runs: { section?: string; groups: TreeGroup[] }[] = []
-  for (const group of tree) {
-    const last = runs[runs.length - 1]
-    if (last && last.section === group.section) last.groups.push(group)
-    else runs.push({ section: group.section, groups: [group] })
-  }
-  return (
-    <>
-      {runs.map((run, i) => (
-        <Fragment key={i}>
-          {i > 0 ? <SidebarSeparator /> : null}
-          <SidebarGroup>
-            {run.section ? <SidebarGroupLabel>{run.section}</SidebarGroupLabel> : null}
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {run.groups.flatMap((group) =>
-                  group.label !== null
-                    ? [
-                        <DrillRow
-                          href={firstHref(group)}
-                          icon={group.icon}
-                          key={group.label}
-                          label={group.label}
-                          onDrill={() => drillTo(groupId(group))}
-                        />,
-                      ]
-                    : group.pages.filter((entry): entry is TreePage => !isGroup(entry)).map((page) => (
-                        <PageRow key={page.href} page={page} pathname={pathname} />
-                      ))
-                )}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </Fragment>
+              {node.label}
+            </Link>
+          ) : (
+            <div className={cn(rowClass, "text-sidebar-foreground")}>{node.label}</div>
+          )}
+          {node.children ? <Branch nodes={node.children} pathname={pathname} /> : null}
+        </li>
       ))}
+    </ul>
+  )
+}
+
+function TopRow({ node, pathname }: { node: TreeNode; pathname: string }) {
+  const Icon = node.icon ? icons[node.icon] : null
+  const inner = (
+    <>
+      {Icon ? <Icon aria-hidden /> : null}
+      <span>{node.label}</span>
     </>
   )
-}
-
-// Splits a group's entries into runs at each `dividerBefore`.
-function chunks(entries: TreeEntry[]): TreeEntry[][] {
-  const runs: TreeEntry[][] = []
-  for (const entry of entries) {
-    if (entry.dividerBefore || runs.length === 0) runs.push([entry])
-    else runs[runs.length - 1]!.push(entry)
-  }
-  return runs
-}
-
-function GroupPanel({
-  group,
-  parent,
-  pathname,
-  drillTo,
-}: {
-  group: TreeGroup
-  parent: string
-  pathname: string
-  drillTo: (panel: string) => void
-}) {
   return (
-    <SidebarContent>
-      <BackRow label={group.label ?? ""} onBack={() => drillTo(parent)} />
-      {chunks(group.pages).map((run, i) => (
-        <Fragment key={i}>
-          {i > 0 ? <SidebarSeparator /> : null}
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {run.map((entry) =>
-                  isGroup(entry) ? (
-                    <DrillRow
-                      href={firstHref(entry)}
-                      icon={entry.icon}
-                      key={entry.label}
-                      label={entry.label ?? ""}
-                      onDrill={() => drillTo(groupId(entry))}
-                    />
-                  ) : (
-                    <PageRow key={entry.href} page={entry} pathname={pathname} />
-                  )
-                )}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </Fragment>
-      ))}
-    </SidebarContent>
+    <SidebarMenuItem>
+      {node.href ? (
+        <SidebarMenuButton asChild isActive={pathname === node.href}>
+          <Link href={node.href}>{inner}</Link>
+        </SidebarMenuButton>
+      ) : (
+        <SidebarMenuButton asChild className="cursor-default text-sidebar-foreground hover:bg-transparent active:bg-transparent">
+          <div>{inner}</div>
+        </SidebarMenuButton>
+      )}
+      {node.children ? <Branch nodes={node.children} pathname={pathname} top /> : null}
+    </SidebarMenuItem>
   )
 }
 
@@ -259,26 +108,12 @@ export function DocsShell({
   const pathname = usePathname()
   const crumbs = breadcrumbs(pathname)
 
-  // The sidebar drills eagerly on click; the URL only confirms it later.
-  // `fromPath` scopes the eager choice to the page it was made on, so any
-  // committed navigation clears it and the pathname takes back over.
-  const [eagerDrill, setEagerDrill] = useState<{
-    panel: string
-    fromPath: string
-  } | null>(null)
-  if (eagerDrill && eagerDrill.fromPath !== pathname) {
-    setEagerDrill(null)
-  }
-  const panel = eagerDrill?.panel ?? panelForPath(pathname)
-  const drillTo = (target: string) =>
-    setEagerDrill({ panel: target, fromPath: pathname })
-
   return (
     <TooltipProvider delayDuration={0}>
       <SidebarProvider
         style={
           {
-            "--sidebar-width": "14.58rem",
+            "--sidebar-width": "17rem",
             "--header-height": "3rem",
           } as CSSProperties
         }
@@ -294,32 +129,29 @@ export function DocsShell({
                   asChild
                   className="h-auto text-sidebar-foreground data-[slot=sidebar-menu-button]:!p-1.5"
                 >
-                  <Link aria-label="Documentation home" href="/">
+                  <Link aria-label="Docs home" href="/">
                     <BoundaryMark
                       className="!h-[22px] !w-[26px]"
                       strokeWidth={4.25}
                       variant="asymmetric"
                     />
-                    <span className="text-base font-semibold tracking-[-0.03em]">
-                      Documentation
-                    </span>
+                    <span className="text-base font-semibold tracking-[-0.03em]">Docs</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarHeader>
-          <SidebarDrill active={panel}>
-            <SidebarDrillPanel depth={0} name="root">
-              <SidebarContent>
-                <RootItems drillTo={drillTo} pathname={pathname} />
-              </SidebarContent>
-            </SidebarDrillPanel>
-            {treePanels().map(({ group, parent, depth }) => (
-              <SidebarDrillPanel depth={depth} key={groupId(group)} name={groupId(group)}>
-                <GroupPanel drillTo={drillTo} group={group} parent={parent} pathname={pathname} />
-              </SidebarDrillPanel>
-            ))}
-          </SidebarDrill>
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu className="gap-1">
+                  {tree.map((node) => (
+                    <TopRow key={node.href ?? node.label} node={node} pathname={pathname} />
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
         </Sidebar>
         <SidebarInset className="min-w-0">
           <header

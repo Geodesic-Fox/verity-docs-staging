@@ -2,7 +2,7 @@ import { Cpu, Dices, MemoryStick, Network, Server, ShieldCheck } from "lucide-re
 
 import type { Actor, FunctionEntry, Protocol } from "@/components/programs/types"
 
-const CERTIFIER = "/accounting/network/certifier"
+const CERTIFIER = "/accounting/network/certification"
 
 const ACTOR = {
   node: { id: "node", name: "Node", side: "developer", icon: Server, shade: "#f05252", colorKey: "workers" },
@@ -86,7 +86,7 @@ const CERTIFIER_FUNCTIONS: Record<string, FunctionEntry> = {
   },
 }
 
-const POUW = "/accounting/compute/pouw"
+const POUW = "/accounting/compute/useful"
 
 const POUW_FUNCTIONS: Record<string, FunctionEntry> = {
   random: {
@@ -119,7 +119,7 @@ const POUW_FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "seed",
     signature: "salt(coin, epoch, coins_root, wroot) -> bytes",
     body: [
-      "32 bytes [derived](/proof-systems/randomness) from the salt coin in the domain `verity/pouw/epoch-salt/v1`, bound to the epoch, the coin commitment and the weights' root.",
+      "32 bytes derived from the salt coin in the domain `verity/pouw/epoch-salt/v1`, bound to the epoch, the coin commitment and the weights' root.",
     ],
   },
   noise: {
@@ -324,7 +324,7 @@ export const NETWORK_CERTIFIER: Protocol = {
   functions: CERTIFIER_FUNCTIONS,
 }
 
-const POUS = "/accounting/memory/pous"
+const POUS = "/accounting/memory/useful"
 
 const POUS_FUNCTIONS: Record<string, FunctionEntry> = {
   commit: {
@@ -343,7 +343,7 @@ const POUS_FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "seed",
     signature: "derive_salt(source, w_commitment) -> bytes",
     body: [
-      "32 bytes [derived](/proof-systems/randomness) in the domain `verity/pous/p2-setup/v4`, bound to the commitment, the prime and the protocol.",
+      "32 bytes derived in the domain `verity/pous/p2-setup/v4`, bound to the commitment, the prime and the protocol.",
     ],
   },
   encode: {
@@ -474,14 +474,14 @@ export const POUS_PROTOCOL: Protocol = {
   functions: POUS_FUNCTIONS,
 }
 
-const BANDWIDTH = "/accounting/bandwidth/audit"
+const BANDWIDTH = "/accounting/memory/reads"
 
 const BANDWIDTH_FUNCTIONS: Record<string, FunctionEntry> = {
   window_key: {
     returns: "seed",
     signature: "window_key(source, vk, n) -> Key",
     body: [
-      "The window's key, [derived](/proof-systems/randomness) from the challenger's secret in the domain `verity/bandwidth/window/v1`, bound to PoUS's root and salt and the window's number. A window is never reopened.",
+      "The window's key, derived from the challenger's secret in the domain `verity/bandwidth/window/v1`, bound to PoUS's root and salt and the window's number. A window is never reopened.",
     ],
   },
   seed: {

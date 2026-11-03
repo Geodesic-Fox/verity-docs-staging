@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join, relative, sep } from "node:path"
 
-import { referencePages, treePages, type ReferenceHref } from "@/lib/tree"
+import { treePages } from "@/lib/tree"
 
 /*
  * Pages come from the tree (lib/tree.ts), in sidebar order. Bodies are
@@ -11,14 +11,13 @@ import { referencePages, treePages, type ReferenceHref } from "@/lib/tree"
  */
 
 export type DocPage = {
-  group: string | null
+  parents: string[]
   label: string
   title: string
   description: string
   slug: string[]
   href: string
-  cites: { href: ReferenceHref; label: string }[]
-  layout?: "wide"
+  hidden: boolean
   body?: string
 }
 
@@ -34,32 +33,23 @@ function walk(dir: string): string[] {
 }
 
 function load(): DocPage[] {
-  const pages: DocPage[] = treePages().map(({ page, groups }) => {
-      const rel = page.href === "/" ? "index" : page.href.slice(1)
-      const file = join(contentDir, `${rel}.md`)
-      return {
-        group: groups[groups.length - 1]?.label ?? null,
-        label: page.label,
-        title: page.title ?? page.label,
-        description: page.description,
-        slug: rel === "index" ? [] : rel.split("/"),
-        href: page.href,
-        cites: (page.cites ?? []).map((cite) => ({
-          href: cite,
-          label: referencePages[cite],
-        })),
-        layout: page.layout,
-        body: existsSync(file) ? readFileSync(file, "utf8") : undefined,
-      }
-    })
+  const pages: DocPage[] = treePages().map(({ page, parents }) => {
+    const rel = page.href === "/" ? "index" : page.href.slice(1)
+    const file = join(contentDir, `${rel}.md`)
+    return {
+      parents,
+      label: page.label,
+      title: page.title ?? page.label,
+      description: page.description ?? "",
+      slug: rel === "index" ? [] : rel.split("/"),
+      href: page.href,
+      hidden: page.hidden ?? false,
+      body: existsSync(file) ? readFileSync(file, "utf8") : undefined,
+    }
+  })
 
   const hrefs = new Set(pages.map((p) => p.href))
   if (hrefs.size !== pages.length) throw new Error("duplicate href in lib/tree.ts")
-  for (const reference of Object.keys(referencePages)) {
-    if (!hrefs.has(reference)) {
-      throw new Error(`reference page ${reference} isn't in lib/tree.ts`)
-    }
-  }
   for (const file of walk(contentDir)) {
     const rel = relative(contentDir, file).replace(/\.md$/, "").split(sep).join("/")
     if (!hrefs.has(rel === "index" ? "/" : `/${rel}`)) {
@@ -81,8 +71,10 @@ export function getPage(slug: string[] = []): DocPage | undefined {
   return getPages().find((page) => page.href === href)
 }
 
+// A hidden page sits outside the reading order, so it has no neighbors.
 export function getNeighbors(page: DocPage) {
-  const pages = getPages()
+  if (page.hidden) return { previous: undefined, next: undefined }
+  const pages = getPages().filter((p) => !p.hidden)
   const index = pages.findIndex((p) => p.href === page.href)
   return { previous: pages[index - 1], next: pages[index + 1] }
 }

@@ -1,5 +1,27 @@
 The remote protocol checks a developer's serving from afar. The auditor places no hardware at the developer's site: it runs a challenger online and a verifier offline, and everything it learns arrives through the developer's ZK server as zero-knowledge proofs. The protocol composes two subprotocols, [sampling](/proof-systems/sampling) for integrity and [compute accounting](/accounting/compute) for work, and an accept means that both accepted: few proof units of the committed computation are faulty, and the prover spent at least a stated share of the declared work after a salt it couldn't predict. With nothing at the site, it says nothing about what else the developer's machines stored or sent. The [onsite](/protocols/onsite) protocol adds the auditor's devices, and the two subprotocols that need them.
 
+## Physical architecture
+
+Both parties hold the circuit and its partition into proof units. On the developer's side are its *workers*, the servers and GPUs, behind a *ZK server* that is their only path to the auditor; on the auditor's, a *challenger* online and a *verifier* offline. One remote run goes like this:
+
+~~~text
+developer                                  auditor
+workers behind the ZK server               challenger and verifier
+----------------------------               -----------------------
+                                 <-------  commit to the salts
+commit the weights and inputs    ------->  record the commitment
+                                 <-------  open the salt
+serve, committing the trace at
+the boundary gates               ------->  log a receipt
+                                 <-------  draw proof units and tiles
+prove the draws; the ZK server
+releases outer proofs            ------->  the verifier checks them, and
+                                           the composition decides
+~~~
+
+
+The auditor never runs any part of the developer's computation. It only checks proofs, and the proofs are zero knowledge, so it learns nothing about the weights or data beyond each subprotocol's public outputs.
+
 ## Interface
 
 ### Parties
@@ -17,10 +39,10 @@ In the subprotocols' statements the prover $\mathcal{P}$ is the workers behind t
 
 | Parameter | Description |
 | --- | --- |
-| `program` | The circuit the workers serve, a [program](/accounting/circuits#programs) named by its digest. |
-| `partition` | Its [partition](/accounting/circuits#partitions) into proof units. |
+| `program` | The circuit the workers serve, a program named by its digest. |
+| `partition` | Its partition into proof units. |
 | `designs` | Each subprotocol's [sampling design](/proof-systems/sampling#sampling-designs): integrity's over the program's proof units, and compute accounting's over its tiles. |
-| `scheme` | Compute accounting's scheme, with the declared matrix multiplications, $\varepsilon_s$ and $\delta$ ([public parameters](/accounting/compute/pouw#public-parameters)). |
+| `scheme` | Compute accounting's scheme, with the declared matrix multiplications, $\varepsilon_s$ and $\delta$ ([public parameters](/accounting/compute/useful#public-parameters)). |
 | `v_pi` | The inner proofs' verifier as a circuit, $V_\Pi$, the statement of every outer proof ([zero knowledge](/proof-systems/zero-knowledge#public-parameters)). |
 | `schedule` | The slots at which the ZK server releases outer proofs. |
 
@@ -44,7 +66,7 @@ Before serving, the challenger draws every salt the run opens and commits to the
 
 ### Serving
 
-The challenger opens the salt, and the ZK server passes it on once it has checked it against the coin commitment. The workers serve: each declared matrix multiplication is computed as compute accounting's tiles, noised under the salt, and the product the workload uses comes out of them. They commit the trace at the [boundary gates](/accounting/circuits#partitions), and the challenger logs a receipt for the commitment before anything is drawn.
+The challenger opens the salt, and the ZK server passes it on once it has checked it against the coin commitment. The workers serve: each declared matrix multiplication is computed as compute accounting's tiles, noised under the salt, and the product the workload uses comes out of them. They commit the trace at the boundary gates, and the challenger logs a receipt for the commitment before anything is drawn.
 
 ![Serving](/programs/remote#serve)
 
@@ -68,7 +90,7 @@ The verifier checks every outer proof against the challenger's record, each subp
 
 ### Composition
 
-The protocol is `verity/remote/v0`, the product of its two subprotocols, compute accounting and integrity, in the order of their identifiers. Its parameters, its commitment and its decision rule are the product's ([composition](/protocols/architecture#composition)).
+The protocol is `verity/remote/v0`, the product of its two subprotocols, compute accounting and integrity, in the order of their identifiers. Its parameters, its commitment and its decision rule are the product's ([composition](/protocols/remote#physical-architecture)).
 
 ## Trusted base
 
@@ -98,7 +120,7 @@ No device of the auditor's watches the developer's site, so the protocol bounds 
 
 ### Assumptions
 
-Those of its subprotocols, [sampling](/proof-systems/sampling#assumptions) and [compute accounting](/accounting/compute/pouw#assumptions), with [zero knowledge's](/proof-systems/zero-knowledge#assumptions) for the outer proofs.
+Those of its subprotocols, [sampling](/proof-systems/sampling#assumptions) and [compute accounting](/accounting/compute/useful#assumptions), with [zero knowledge's](/proof-systems/zero-knowledge#assumptions) for the outer proofs.
 
 ### Completeness
 
@@ -106,7 +128,7 @@ An honest developer is accepted except with compute accounting's completeness er
 
 ### Integrity and work
 
-An accept is an accept of both subprotocols, so its guarantee is the conjunction of theirs. Let $E_I$ be the event that the program's faulty set lies outside the [confidence set](/proof-systems/sampling#integrity), $B^\star \notin \mathcal{M}_\delta$, and $E_W$ the event that the prover spent less than the certified work after the salt, $T < (1-\gamma)(1-\varepsilon_s)\,W$ ([compute accounting](/accounting/compute/pouw#work-bound)). For every prover,
+An accept is an accept of both subprotocols, so its guarantee is the conjunction of theirs. Let $E_I$ be the event that the program's faulty set lies outside the [confidence set](/proof-systems/sampling#integrity), $B^\star \notin \mathcal{M}_\delta$, and $E_W$ the event that the prover spent less than the certified work after the salt, $T < (1-\gamma)(1-\varepsilon_s)\,W$ ([compute accounting](/accounting/compute/useful#work-bound)). For every prover,
 
 $$
 \Pr\big[\mathsf{accept} \,\wedge\, (E_I \vee E_W)\big] \;\le\; \varepsilon_I + \varepsilon_W + \varepsilon_{\mathrm{outer}}
@@ -137,10 +159,10 @@ With an accept, the protocol makes public each subprotocol's public outputs and 
 | Subprotocol | Its public outputs | Why they are public |
 | --- | --- | --- |
 | Integrity | The verdict, and the integrity profile: what was audited, the sampling design, how many units were drawn, and the error terms | The [bound on faulty units](/proof-systems/sampling#integrity) is read from the profile, at any $\delta$. |
-| Compute accounting | `verdict`, `work`, `check`, `sampling`, `drawn` and `root_W` | Each with its reason, in [its table](/accounting/compute/pouw#public-outputs). |
+| Compute accounting | `verdict`, `work`, `check`, `sampling`, `drawn` and `root_W` | Each with its reason, in [its table](/accounting/compute/useful#public-outputs). |
 
 Every weight, activation, tile value and inner message stays hidden.
 
 ## Overhead
 
-Serving pays compute accounting's noised tiles and the commitments at the boundary gates. Proving is the inner proofs of the two samples, whose size is fixed by the sampling designs rather than by the workload, and the outer proofs over $V_\Pi$ ([recursion's benchmarks](/proof-systems/performance#recursion)).
+Serving pays compute accounting's noised tiles and the commitments at the boundary gates. Proving is the inner proofs of the two samples, whose size is fixed by the sampling designs rather than by the workload, and the outer proofs over $V_\Pi$ (recursion's benchmarks).

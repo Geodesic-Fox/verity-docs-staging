@@ -21,10 +21,6 @@ import type { DialogEntry } from "@/lib/assumption-index"
  * a dialog can be linked and Back closes it.
  */
 
-export const assumptionsHref = "/assumptions"
-const commitmentsHref = "/proof-systems/commitments"
-const templatesHref = "/workloads/inference#subcircuit-templates"
-
 const kindLabels = {
   property: "Property",
   assumption: "Assumption",
@@ -165,29 +161,15 @@ function EntryDialog({ entries, circuits }: { entries: Record<string, DialogEntr
                 {ref.label} ↗
               </a>
             ))}
-            {entry.kind === "scheme" ? (
-              <Link className="ml-auto font-medium hover:underline" href={commitmentsHref}>
-                Commitments
-              </Link>
-            ) : entry.kind === "subcircuit" || entry.kind === "template" ? (
-              <span className="ml-auto flex items-center gap-4">
-                {circuits.includes(entry.id) ? (
-                  <Link className="font-medium hover:underline" href={`${pathname}?${new URLSearchParams({ circuit: entry.id })}`} scroll={false}>
-                    View circuit
-                  </Link>
-                ) : null}
-                <Link className="font-medium hover:underline" href={templatesHref}>
-                  Subcircuit templates
-                </Link>
-              </span>
-            ) : (
+            {(entry.kind === "subcircuit" || entry.kind === "template") && circuits.includes(entry.id) ? (
               <Link
                 className="ml-auto font-medium hover:underline"
-                href={`${assumptionsHref}#${entry.id.replace(/\//g, "-")}`}
+                href={`${pathname}?${new URLSearchParams({ circuit: entry.id })}`}
+                scroll={false}
               >
-                All assumptions
+                View circuit
               </Link>
-            )}
+            ) : null}
           </div>
         </DialogContent>
       ) : null}

@@ -14,8 +14,8 @@ const siteEnv = getSiteEnv()
 
 export const metadata: Metadata = {
   title: {
-    default: `${titlePrefix[siteEnv]}Verity documentation`,
-    template: `${titlePrefix[siteEnv]}%s · Verity documentation`,
+    default: `${titlePrefix[siteEnv]}Compute Verification Docs`,
+    template: `${titlePrefix[siteEnv]}%s · Compute Verification Docs`,
   },
   description:
     "How Verity represents computations, proves claims about them, and measures what proving costs.",

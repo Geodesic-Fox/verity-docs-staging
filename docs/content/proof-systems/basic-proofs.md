@@ -24,7 +24,7 @@ $$
 x = (C, \mathit{com}), \qquad R(x) = \big\{ \tau :\ \mathrm{opens}(\mathit{com}, \tau) \;\wedge\; \tau_{\mathrm{out}} = C(\tau_{\mathrm{in}}) \big\}
 $$
 
-The trace $\tau$ is the witness, and the verifier sees `com`, never the values. In sampling, $C$ is the proof units the verifier drew and `com` binds the [boundary gates](/accounting/circuits#partitions). A commitment and a proof establish different things. A proof that a dot product was computed correctly establishes two facts:
+The trace $\tau$ is the witness, and the verifier sees `com`, never the values. In sampling, $C$ is the proof units the verifier drew and `com` binds the boundary gates. A commitment and a proof establish different things. A proof that a dot product was computed correctly establishes two facts:
 
 ~~~text
 x, w and y are the previously committed values
@@ -67,12 +67,8 @@ Verity asks three more things of every construction. Zero knowledge holds agains
 
 | Method | C-Flock |
 | --- | --- |
-| `commit` | SHA-512 Merkle trees over [hiding leaves](/proof-systems/commitments), `frame-v3-sha512/hm96-sha512` |
+| `commit` | SHA-512 Merkle trees over hiding leaves, `frame-v3-sha512/hm96-sha512` |
 | `prove`, `verify` | Flock: block R1CS with a Ligerito polynomial commitment over $\mathrm{GF}(2^{128})$, on the challenger's live coins, with a [zero-knowledge mode](/proof-systems/c-flock#zero-knowledge-mode) for the outer proofs |
 | `verify` as a circuit | Its verifier as public Boolean circuits, proved by the outer sessions ([the verifier as a circuit](/proof-systems/c-flock#the-verifier-as-a-circuit)) |
 
 Its verifier is written in Lean, with upstream Flock's Rust verifier as a cross-check ([verification phase](/proof-systems/c-flock#verification-phase)). C-Flock's page bounds $\varepsilon_{\mathrm{ks}}$ and $\varepsilon_{\mathrm{bind}}$ by the success of SHA-512 collision finders built from the prover ([integrity](/proof-systems/c-flock#integrity)), and says how far Lean proves each property.
-
-## Benchmarks
-
-Every construction is benchmarked on the same statements, so their costs compare directly. [Performance](/proof-systems/performance) has the tables, with A-GKR, B-Ligero and D-SP1 beside C-Flock, and says what each statement proves and how overhead, interaction and soundness bounds are counted.

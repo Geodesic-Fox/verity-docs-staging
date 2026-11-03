@@ -1,8 +1,8 @@
-Below we discuss C-Flock, a proof system capable of proving the correct evaluation of arbitrary Boolean [circuits](/accounting/circuits#the-circuit-model). It is based on Flock ([Bünz, Rothblum and Wang](https://eprint.iacr.org/2026/1329)), making the following modifications:
+Below we discuss C-Flock, a proof system capable of proving the correct evaluation of arbitrary Boolean circuits. It is based on Flock ([Bünz, Rothblum and Wang](https://eprint.iacr.org/2026/1329)), making the following modifications:
 
 1. **Interactivity:** The verifier's challenges are sampled live by a challenger, instead of derived by the Fiat–Shamir transformation. Proofs are therefore not transferable: a proof convinces only the verifier whose challenger sampled its challenges.
 2. **Increased soundness via repetition:** Flock runs twice against one committed witness, with independent challenges, which roughly squares the soundness error, from about $2^{-97.8}$ to about $2^{-195.5}$.
-3. **Hiding commitment scheme:** The Merkle trees use SHA-512 with [hiding leaves](/proof-systems/commitments#hiding-leaves), instead of SHA-256 or BLAKE3 with plain leaves.
+3. **Hiding commitment scheme:** The Merkle trees use SHA-512 with hiding leaves, instead of SHA-256 or BLAKE3 with plain leaves.
 4. **Including commitments in the statement:** The statement includes the SHA-512 computations that produce the commitments to the circuit's inputs and hidden outputs, so a proof is about the committed values and C-Flock is a commit-and-prove argument. Values known to the verifier are checked as additional evaluation claims on the witness, batched into Flock's opening.
 5. **Optional zero-knowledge variant:** In the [zero-knowledge mode](#zero-knowledge-mode), every prover message is masked, following VEIL, and the challenger commits to its challenges in advance.
 
@@ -19,7 +19,7 @@ This page covers:
 - [The verifier as a circuit](#the-verifier-as-a-circuit): `verify` as Boolean circuits, which the outer proofs of [zero knowledge](/proof-systems/zero-knowledge) check, and the assumption under which this recursion is sound.
 - [Parameters](#parameters): the field, the profile, the witness sizes and the commitment schemes.
 
-Measured costs are on [Performance](/proof-systems/performance).
+Measured costs are on Performance.
 
 ## Interface
 
@@ -34,8 +34,8 @@ Measured costs are on [Performance](/proof-systems/performance).
 
 | Parameter | Description |
 | --- | --- |
-| `circuit` | The Boolean [circuit](/accounting/circuits#the-circuit-model). In an audit, it consists of the drawn proof units. |
-| `com` | The commitment to the values the circuit reads and writes: the commit string of each row of values (a [hiding leaf](/proof-systems/commitments#hiding-leaves)), and the SHA-512 Merkle roots over the commit strings. |
+| `circuit` | The Boolean circuit. In an audit, it consists of the drawn proof units. |
+| `com` | The commitment to the values the circuit reads and writes: the commit string of each row of values (a hiding leaf), and the SHA-512 Merkle roots over the commit strings. |
 
 ### Private input
 
@@ -64,7 +64,7 @@ $$
 
 The witness $z$ consists of $2^{n}$ blocks of $2^{k}$ bits, all constrained by the same matrices $A_0$ and $B_0$: each bit of $z$ is the product of two linear forms in the bits of its block. With one column fixed to 1, an AND gate is $z_i = a \cdot b$, an XOR gate is $z_i = (a + b) \cdot 1$, and a NOT gate is $z_i = (a + 1) \cdot 1$. Each block is divided into slots, and each slot holds one copy of a subcircuit: the gates of a proof unit, or one SHA-512 compression.
 
-The commitment is part of the relation. For each committed row that the circuit reads or writes, the relation also computes, from the row and its salt, the row's SHA-512 digest and its commit string ([what a proof proves](/proof-systems/commitments#what-a-proof-system-proves)). The commit strings are public, and the verifier recomputes the Merkle roots from them. Each output of the circuit is either public or a hidden row, committed in the same way as an input.
+The commitment is part of the relation. For each committed row that the circuit reads or writes, the relation also computes, from the row and its salt, the row's SHA-512 digest and its commit string (what a proof proves). The commit strings are public, and the verifier recomputes the Merkle roots from them. Each output of the circuit is either public or a hidden row, committed in the same way as an input.
 
 The bits whose values the verifier knows (the commit strings, the public outputs and the constant column) form the *public regions*. The verifier checks each public region as an evaluation claim on the multilinear extension of $z$ at two random points, the *link points*, which the challenger samples after the prover commits.
 
@@ -174,7 +174,7 @@ In the zero-knowledge mode every value the prover sends is masked, so the verifi
 
 ![C-Flock, zero-knowledge mode](/programs/c-flock-zk)
 
-- The challenger commits to its challenges in advance. The prover first sends a fresh nonce, and the challenger samples every challenge of the session and commits to all of them in a [coin tree](/proof-systems/randomness#the-coin-tree), keyed to the session by the nonce. Each response opens only the challenges its round uses, and the prover checks each opening before using it. Since the tree is binding, the challenger cannot choose a challenge after seeing a message, as zero knowledge against a malicious verifier requires.
+- The challenger commits to its challenges in advance. The prover first sends a fresh nonce, and the challenger samples every challenge of the session and commits to all of them in a coin tree, keyed to the session by the nonce. Each response opens only the challenges its round uses, and the prover checks each opening before using it. Since the tree is binding, the challenger cannot choose a challenge after seeing a message, as zero knowledge against a malicious verifier requires.
 - The prover commits to its pads together with the witness, before it sends any value that depends on the witness, and sends each algebraic value $v$ masked as $v + h$ for a pad $h$.
 - Ligerito's first codeword is padded with random coefficients, twice as many as the positions opened at that level, and each repetition folds its own pair of extra lanes with its own challenges, so the openings of the two repetitions are jointly uniform.
 - The final rounds of each repetition prove that the masked values pass Flock's checks, so the verifier can check them without seeing the values. A mask slot in the witness hides the values those checks concern.

@@ -228,7 +228,7 @@ export const C_FLOCK_ZK: Protocol = {
       returns: "commitment",
       signature: "commit_coins(all_coins, nonce) -> Root",
       body: [
-        "Commits to every challenge of the session in a [coin tree](/proof-systems/randomness#the-coin-tree): one hiding leaf per round of each repetition, under a fresh key, with every hash prefixed by the prover's nonce.",
+        "Commits to every challenge of the session in a coin tree: one hiding leaf per round of each repetition, under a fresh key, with every hash prefixed by the prover's nonce.",
       ],
     },
     open: {

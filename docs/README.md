@@ -4,8 +4,9 @@ The documentation site: a static Next.js app whose pages are the Markdown under 
 website repository's `apps/docs` (its `/` routes) and runs from the `docs` branch until it lands on `main`.
 
 - `content/`: one Markdown file per page, at `content/<href>.md`.
-- `lib/tree.ts`: which pages exist, the sidebar, breadcrumbs and previous/next order. A new page needs an entry here;
-  an entry without a Markdown file renders as a placeholder from its `description`.
+- `lib/tree.ts`: which pages exist, the sidebar (always open), breadcrumbs and previous/next order. A new page needs an
+  entry here; an entry without a Markdown file renders as a blank placeholder, and a hidden entry is routed but left out
+  of the sidebar.
 - `data/`: snapshots the pages draw from (Programs, serving runs, Boolean lowerings, the assumption index). They were
   copied from Verity's own output and will be read from this tree directly.
 - `app/(docs)/`: the page route, the assumptions page and the census data routes the graphs fetch, all at the root.

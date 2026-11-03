@@ -243,7 +243,7 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "commitment",
     signature: "commit(x) -> Commitment",
     body: [
-      "A hiding, binding commitment to `x`. The workers commit values under the hiding leaves of SHA-512 Merkle trees ([commitments](/proof-systems/commitments)). The ZK server commits each message under a salt it draws for that message alone. The challenger and the memory challenger commit their coins in coin trees.",
+      "A hiding, binding commitment to `x`. The workers commit values under the hiding leaves of SHA-512 Merkle trees (commitments). The ZK server commits each message under a salt it draws for that message alone. The challenger and the memory challenger commit their coins in coin trees.",
     ],
   },
   open: {
@@ -256,14 +256,14 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
   check_coin: {
     signature: "check_coin(coin, coin_com) -> None",
     body: [
-      `The ZK server checks the opening against \`coin_com\` before it passes the salt on, so the challenger can't choose a salt after seeing a commitment ([randomness](/proof-systems/randomness#what-each-protocol-draws)). A salt that fails stops the session.`,
+      `The ZK server checks the opening against \`coin_com\` before it passes the salt on, so the challenger can't choose a salt after seeing a commitment (randomness). A salt that fails stops the session.`,
     ],
   },
   serve: {
     returns: "data",
     signature: "serve(program, requests, salt) -> Trace",
     body: [
-      `Runs the program on the requests. Each declared matrix multiplication is computed as [compute accounting](${COMPUTE}/pouw#compute)'s tiles, noised under \`salt\`, and the product the workload uses comes out of them. What stays behind is the [trace](/accounting/circuits#traces).`,
+      `Runs the program on the requests. Each declared matrix multiplication is computed as [compute accounting](${COMPUTE}/useful#compute)'s tiles, noised under \`salt\`, and the product the workload uses comes out of them. What stays behind is the trace.`,
     ],
   },
   boundary_gates: {
@@ -284,7 +284,7 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "coin",
     signature: "draw(designs, seed) -> Sample",
     body: [
-      `One sample per subprotocol, each from its own sampling design, with \`seed\` as its only randomness: proof units of the program for [integrity](${SAMPLING}#challenge-phase), and tiles in proportion to their work for [compute accounting](${COMPUTE}/pouw#compute).`,
+      `One sample per subprotocol, each from its own sampling design, with \`seed\` as its only randomness: proof units of the program for [integrity](${SAMPLING}#challenge-phase), and tiles in proportion to their work for [compute accounting](${COMPUTE}/useful#compute).`,
     ],
   },
   rounds: {
@@ -335,14 +335,14 @@ const ONSITE_FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "data",
     signature: "encode(weights, encoding_salt) -> C",
     body: [
-      `[Memory accounting](${MEMORY}/pous#the-encoding)'s encoding of the weights, which the workers serve from, decoding each tensor on every use.`,
+      `[Memory accounting](${MEMORY}/useful#the-encoding)'s encoding of the weights, which the workers serve from, decoding each tensor on every use.`,
     ],
   },
   certify: {
     returns: "signature",
     signature: "certify(frames, grid) -> Certificate",
     body: [
-      `The [network certifier](${NETWORK}/certifier#release) releases each link's frames at a constant rate on the grid, and signs the link-window's record. Certificates go back to the workers as witness and never reach the auditor in the clear.`,
+      `The [network certifier](${NETWORK}/certification#release) releases each link's frames at a constant rate on the grid, and signs the link-window's record. Certificates go back to the workers as witness and never reach the auditor in the clear.`,
     ],
   },
   challenge: {

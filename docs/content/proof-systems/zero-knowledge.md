@@ -26,7 +26,7 @@ Throughout, $P^*$ is any prover and $V^*$ any verifier, however it behaves.
 | `x` | $x$ | The statement $\Pi$ proves. |
 | `V_pi` | $V_\Pi$ | $\Pi$'s verifier as a circuit: $V_\Pi(x, m, c) = (b, o)$, its verdict $b$ and its public outputs $o$ on the statement, the messages $m$ and the coins $c$. |
 | `Com` | $\mathsf{Com}$ | A commitment scheme: $\mathsf{Com}(m; s)$ commits to a message $m$ under a salt $s$. |
-| `Arg` | $\mathsf{Arg} = (P_{\mathsf{Arg}}, V_{\mathsf{Arg}})$ | A [commit-and-prove argument](/proof-systems#methods) for the outer relation $R_{\mathrm{out}}$ below. |
+| `Arg` | $\mathsf{Arg} = (P_{\mathsf{Arg}}, V_{\mathsf{Arg}})$ | A [commit-and-prove argument](/proof-systems/basic-proofs#methods) for the outer relation $R_{\mathrm{out}}$ below. |
 
 $\Pi = (P_\Pi, V_\Pi)$ must be public-coin: each of its verifier's messages is fresh uniform coins, so its verifier is the function $V_\Pi$. Its number of rounds $r$ and the length of each message must be fixed by $x$.
 
@@ -123,7 +123,7 @@ Lean proves this for C-Flock's commitments when the verifier's coins are fixed b
 
 The verifier learns $x$ and $o$, by design. A public output is still a fact about the private values: a verdict is one bit, many verdicts over inputs a verifier chooses would make it an oracle for the model, and $V^*$ sees $o$ at coins of its own choosing. So each protocol that runs this one lists its public outputs with a reason for each, and anything not on its list stays hidden.
 
-For a public circuit, $x = (C, U, \mathcal{D})$: the [circuit](/accounting/circuits#the-circuit-model), its [partition](/accounting/circuits#partitions) into proof units and the [sampling design](/proof-systems/sampling). The trace stays hidden, every inner message and opening and so every unit's inputs and outputs, but which units were proved doesn't: the verifier draws them with its own coins. The [remote](/protocols/remote) and [onsite](/protocols/onsite) protocols run in this setting.
+For a public circuit, $x = (C, U, \mathcal{D})$: the circuit, its partition into proof units and the [sampling design](/proof-systems/sampling). The trace stays hidden, every inner message and opening and so every unit's inputs and outputs, but which units were proved doesn't: the verifier draws them with its own coins. The [remote](/protocols/remote) and [onsite](/protocols/onsite) protocols run in this setting.
 
 ## Private circuit
 
@@ -131,7 +131,7 @@ To hide the circuit as well, the prover commits to $x$ and moves it into the out
 
 ![Zero knowledge, private circuit](/programs/recursion-private)
 
-- **Registration.** Before the inner phase the prover sends $h_x = \mathsf{Com}(\mathrm{pad}(x, \mathit{cls}); s_x)$. The class $\mathit{cls}$ is public: bounds that every admissible statement meets, such as its number of proof units and the [width rule](/accounting/circuits#partitions) $X$ on their outputs. $x$ is padded to the class's full size, so the commitment's length says nothing about it.
+- **Registration.** Before the inner phase the prover sends $h_x = \mathsf{Com}(\mathrm{pad}(x, \mathit{cls}); s_x)$. The class $\mathit{cls}$ is public: bounds that every admissible statement meets, such as its number of proof units and the width rule $X$ on their outputs. $x$ is padded to the class's full size, so the commitment's length says nothing about it.
 - **$x$ moves into the witness.** The outer relation adds two clauses: $x$ opens $h_x$, and $x \in \mathit{cls}$.
 - **Shapes read only the class.** $\Pi$'s rounds, its message lengths and the sampling design are functions of $\mathit{cls}$, so neither the commitments nor the draw depend on $x$, and $V_\Pi$ is one circuit for the whole class that reads $x$ as data.
 
@@ -214,7 +214,7 @@ def release(msg):                       # one outer message from the workers
 - **Two leaks appear**, and the schedule removes a third, timing:
   - **Stops.** The workers can make a session stop, depending on a secret. Over $n$ sessions with a budget of $b$ stops before the ZK server stops for good, and $R$ points in a session at which a stop can show, the pattern of stops is one of at most $\sum_{i=0}^{b} \binom{n}{i} R^{\,i}$, so stops carry at most its $\log_2$. When a stop shows only at a session's release, $R = 1$.
   - **Output freedom.** Where $V_\Pi$ can output more than one value of an output on accepting transcripts, the workers choose which. Output $j$ carries at most $\log_2 q_j$ bits per session for $q_j$ such values, and none when $x$ and the coins fix it. A protocol keeps $q_j$ small by rounding an output the prover can influence, such as credited work, to a public grid.
-- **Cost.** The ZK server's checks take about 176 CPU seconds a session in the prototype ([benchmarks](/proof-systems/performance#recursion)).
+- **Cost.** The ZK server's checks take about 176 CPU seconds a session in the prototype (benchmarks).
 
 ### Zero knowledge, deployed
 

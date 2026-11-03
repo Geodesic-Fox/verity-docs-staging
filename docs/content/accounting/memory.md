@@ -1,4 +1,4 @@
-Memory accounting bounds how much of a device's memory could hold something other than the committed weights. It has two layers. The cryptographic one, [proof of useful space](/accounting/memory/pous), secures a lower bound: a server that keeps at most $S_{\mathrm{cert}} = \lfloor \tfrac{18}{19}\lvert C\rvert \rfloor$ bits throughout setup and the session fails, where $C$ is an encoding of the weights it serves from. The physical one, this page, takes an upper bound on the memory the device has, and the headroom is the difference. Memory accounting is used by the [onsite](/protocols/onsite) protocol, whose memory challengers sit at the developer's site.
+Memory accounting bounds how much of a device's memory could hold something other than the committed weights. It has two layers. The cryptographic one, [proof of useful space](/accounting/memory/useful), secures a lower bound: a server that keeps at most $S_{\mathrm{cert}} = \lfloor \tfrac{18}{19}\lvert C\rvert \rfloor$ bits throughout setup and the session fails, where $C$ is an encoding of the weights it serves from. The physical one, this page, takes an upper bound on the memory the device has, and the headroom is the difference. Memory accounting is used by the [onsite](/protocols/onsite) protocol, whose memory challengers sit at the developer's site.
 
 ## Headroom
 
@@ -13,7 +13,7 @@ left for anything else at some point of the session, except with probability $\d
 - **Uncommitted memory**, $M - \lvert C\rvert$: what the store doesn't cover. Today the store is fixed at $2^{19}$ blocks, 1.078 GB, so on a 102 GB card nearly all of it is here. A larger store would close it, at the cost of setup: more roots to compute.
 - **Soundness slack**, $(1 - \rho)\lvert C\rvert$: what the bound concedes, $1/19$ of the store.
 
-The bound is on the server's whole state, host memory included. It doesn't say where $C$ sits: placing it in device memory is [memory bandwidth accounting](/accounting/bandwidth)'s job.
+The bound is on the server's whole state, host memory included. It doesn't say where $C$ sits: placing it in device memory is memory bandwidth accounting's job.
 
 ## Physical assumptions
 

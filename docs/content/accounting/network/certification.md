@@ -104,7 +104,7 @@ $$
 $W$ is the number of windows the audit checks and $m$ the number the horizon reaches. The bound has no error term, and holds under W2 and J (`NetTiming.Guarantees.EncardDecodableLeConstantRate`). At $16 \times 8$ sync values and $D = 1$ it is $A_c$ plus 7 bits per window. Two forms refine it:
 
 - **Per window.** Over the run's first $m$ whole windows: $A_c$ once, then $\log_2 \lvert\Sigma_{\mathrm{sync}}\rvert + T \log_2 D$ bits per window, counted from the run's first window.
-- **Ingress.** What arrival times can deliver into the unit: $T \log_2(r_{\mathrm{in}} + 1)$ bits per link-window, plus $T \log_2 D$ of jitter, on runs whose statuses are all complete. This is the unit of [NCI](/policies/nci)'s charge.
+- **Ingress.** What arrival times can deliver into the unit: $T \log_2(r_{\mathrm{in}} + 1)$ bits per link-window, plus $T \log_2 D$ of jitter, on runs whose statuses are all complete. This is the unit of NCI's charge.
 
 A rejected window carries no bound: it may already have carried the link's whole capacity, about $8TrB$ bits.
 

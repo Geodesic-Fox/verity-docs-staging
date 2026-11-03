@@ -1,13 +1,4 @@
-This page describes inference workloads as the [vLLM integration](/integrations/vllm) serves them:
-
-- [Model graphs](#model-graphs): the Program of each served configuration on record, and each Definition it calls, drawn down to its gates.
-- [Models](#what-a-model-entry-will-hold): what a model entry will hold, each model's weights of record, and the checkpoints the integration pins.
-- [Subcircuit templates](#subcircuit-templates): the computations a backend proves, each with its parameters bound.
-- [Served configurations](#served-configurations): every configuration the integration has served and checked, with one run in detail.
-
-## Model graphs
-
-A model graph is the [Program](/accounting/circuits) the vLLM integration builds for a served config's requests, rendered from its Calls. 13 [served configs](#served-configurations) have a Program on record: nine models, on L40S and H100, in BF16 and FP8, with one or two tensor-parallel ranks. The table names each by vLLM's own arguments: the model and its quantization, the GPU, `tensor_parallel_size`, the number of requests, their prompt and output lengths and mix, and `SamplingParams`. Every config runs with `dtype="bfloat16"`, `enforce_eager=True` and vLLM's batch-invariant kernels, so these aren't columns. Select a row to open its graph.
+A model graph is the Program the vLLM integration builds for a served config's requests, rendered from its Calls. 13 [served configs](#served-configurations) have a Program on record: nine models, on L40S and H100, in BF16 and FP8, with one or two tensor-parallel ranks. The table names each by vLLM's own arguments: the model and its quantization, the GPU, `tensor_parallel_size`, the number of requests, their prompt and output lengths and mix, and `SamplingParams`. Every config runs with `dtype="bfloat16"`, `enforce_eager=True` and vLLM's batch-invariant kernels, so these aren't columns. Select a row to open its graph.
 
 ![Served Programs](/graphs/programs)
 
@@ -42,69 +33,3 @@ The main operation gaps are vLLM's online FP8, Gemma-2's and the MoE expert GEMM
 The graph's names, descriptions and formats come from annotations in verity's `verity/annotations/v0` format (`verity.primitives.circuits.annotations`). Each is keyed by an id the Program already has: `def:SiluMul_v1` names a Definition in every specialization, and `port:SiluMul_v1/in/gu` names one of its parameters. Annotations sit outside every digest, so naming something never changes a Program. Verity validates each key against the structure of the Program it annotates. The site adds names of its own that aren't in verity yet.
 
 For the headline config, Llama-3.2-1B on an L40S with one request, Serving lays the whole run out the way vLLM runs it. The run is drawn by engine step, then the request in each step, then that request's model runner: the model's modules and the sampler. It comes from the record Build of that config. The prefill step is drawn once, and so are the 31 decode steps, which share one structure. The next token runs back from each step's sampler into the next step's embedding. The KV cache runs back from each layer's Q, K, V projection and RoPE into later steps' attention. Every Call is in exactly one step, so the sizes add up to the Program's. For OLMoE with two tensor-parallel ranks, Serving shows an example of the rank level. It covers two of the config's eight requests, each module's Calls on both ranks, and the values each rank's collectives read from the other's. Its Build has no step chronology, so the steps are each request's own.
-
-## What a model entry will hold
-
-**Planned.** The Census has no model entries yet: `catalog/census/` on the verity repo's main branch has no models file. Its README plans for it to grow into a knowledge base of hardware, ML models and workloads, but no model schema exists yet. Today, the models the vLLM integration can serve are the ones its checkpoint manifest pins, together with each model's weights of record. Like every Census entry, a model entry will carry a stable id and a non-empty list of sources. It's planned to record:
-
-- the model's architecture
-- its weights of record
-
-## Weights of record
-
-A model's weights of record are the checkpoint files its served weights are checked against: the safetensors shards whose sha256 digests are pinned. They matter because hashing the served weights alone proves only self-consistency. A served model that differs from its checkpoint in a single element still replays bit for bit against itself.
-
-The [vLLM integration](/integrations/vllm) checks served weights against the weights of record:
-
-1. It derives one digest per weight field from the pinned shard bytes, on CPU and without an engine.
-2. It compares each digest with the weights the serving side registered when it committed them.
-3. Any difference, or a field missing from the served model, fails the check by name.
-
-## Checkpoints the vLLM integration pins
-
-The vLLM integration serves a model only if `integrations/vllm/manifests/checkpoints.json` pins it, by Hugging Face repo and full commit revision. `verity_vllm.LLM` refuses an unpinned model, and a pinned model at any other revision. Each pin records the sha256 of every safetensors shard of the checkpoint. The manifest pins these 22 checkpoints:
-
-| Hugging Face repo | Revision (first 10 characters) | Shards pinned |
-| --- | --- | --- |
-| `allenai/OLMoE-1B-7B-0924` | `6d84c48581` | 3 |
-| `EleutherAI/pythia-160m` | `50f5173d93` | 1 |
-| `HuggingFaceTB/SmolLM2-135M` | `93efa2f097` | 1 |
-| `HuggingFaceTB/SmolLM2-360M` | `f8027fd0ea` | 1 |
-| `microsoft/phi-2`[^resolve-only] | `810d367871` | 2 |
-| `microsoft/Phi-3-mini-4k-instruct` | `f39ac1d28e` | 2 |
-| `Qwen/Qwen1.5-MoE-A2.7B-Chat` | `ec052fda17` | 8 |
-| `Qwen/Qwen2.5-0.5B` | `060db6499f` | 1 |
-| `Qwen/Qwen2.5-1.5B` | `8faed761d4` | 1 |
-| `Qwen/Qwen2.5-1.5B-Instruct` | `989aa7980e` | 1 |
-| `Qwen/Qwen2.5-1.5B-Instruct-AWQ`[^awq] | `3ecffa0ceb` | 1 |
-| `Qwen/Qwen2.5-7B` | `d149729398` | 4 |
-| `Qwen/Qwen2.5-7B-Instruct` | `a09a35458c` | 4 |
-| `Qwen/Qwen2.5-14B-Instruct` | `cf98f3b3bb` | 8 |
-| `Qwen/Qwen2.5-32B-Instruct` | `5ede1c97bb` | 17 |
-| `Qwen/Qwen3-4B-Instruct-2507` | `cdbee75f17` | 3 |
-| `Qwen/Qwen3-4B-Instruct-2507-FP8` | `8591804019` | 1 |
-| `Qwen/Qwen3-30B-A3B` | `ad44e777bc` | 16 |
-| `TinyLlama/TinyLlama-1.1B-Chat-v1.0` | `fe8a4ea1ff` | 1 |
-| `unsloth/gemma-2-2b` | `25319945f7` | 1 |
-| `unsloth/Llama-3.2-1B` | `9535bd9b1d` | 1 |
-| `unsloth/mistral-7b-v0.3` | `9ea1b83f5c` | 3 |
-
-Pass the full revision from the manifest when you construct an engine: a prefix isn't accepted.
-
-A pin isn't a Census entry. It records a checkpoint's files and their digests, not a summary of its architecture, and it doesn't say which of the model's computations have subcircuits. [Subcircuit templates](#subcircuit-templates) lists the subcircuits, and the [contributing guidelines](/contributing) cover how entries are sourced and cited.
-
-## Subcircuit templates
-
-Every computation a backend proves is a subcircuit: a subcircuit template with each of its parameters bound. Select a template or subcircuit for its definition.
-
-![Subcircuit templates](/tables/subcircuit-templates)
-
-## Served configurations
-
-The first table lists every configuration the [vLLM integration](/integrations/vllm) has served and checked, with the mix of subcircuit templates its serving run decomposes into. The second shows one run in detail: its subcircuits, how many inputs each holds, and samples with their exact outputs.
-
-![Served configurations](/tables/served-configs)
-
-[^resolve-only]: The manifest records this checkpoint's revision and shard digests, but no downloaded snapshot.
-
-[^awq]: Pinned, but outside the coverage matrix: the integration has no Definition for vLLM's AWQ int4 GEMM, so it can't be represented.

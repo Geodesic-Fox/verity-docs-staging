@@ -8,9 +8,7 @@ import { getNeighbors, getPage, getPages, type DocPage } from "@/lib/docs"
 export const dynamicParams = false
 
 export function generateStaticParams() {
-  return getPages()
-    .filter((page) => page.layout !== "wide")
-    .map((page) => ({ slug: page.slug }))
+  return getPages().map((page) => ({ slug: page.slug }))
 }
 
 type Props = { params: Promise<{ slug?: string[] }> }
@@ -68,26 +66,13 @@ export default async function DocPageRoute({ params }: Props) {
       header={
         <header className="mb-10 flex flex-col gap-3">
           <h1 className="font-sans text-[2rem] leading-[1.16] font-[450] tracking-[-0.04em] text-balance text-foreground sm:text-[2.5rem]">
-            {page.label}
+            {page.title}
           </h1>
           {page.body === undefined ? (
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 font-sans text-xs text-muted-foreground">
+            <div className="mt-2 font-sans text-xs text-muted-foreground">
               <span className="rounded-md border border-dashed px-2.5 py-1">
                 Placeholder
               </span>
-              {page.cites.length ? (
-                <span>
-                  Draws on{" "}
-                  {page.cites.map((cite, i) => (
-                    <span key={cite.href}>
-                      {i > 0 ? ", " : null}
-                      <Link className="underline underline-offset-2 hover:text-foreground" href={cite.href}>
-                        {cite.label}
-                      </Link>
-                    </span>
-                  ))}
-                </span>
-              ) : null}
             </div>
           ) : null}
         </header>

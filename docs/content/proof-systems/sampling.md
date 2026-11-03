@@ -13,8 +13,8 @@ Sampling lets a verifier check a large computation by proving only a random samp
 
 | Parameter | Symbol | Description |
 | --- | --- | --- |
-| `circuit` | $C$ | A [circuit](/accounting/circuits#the-circuit-model) representing the prover's computation. |
-| `partition` | $U$ | A [partition](/accounting/circuits#partitions) of `circuit` into proof units: the population the verifier samples. |
+| `circuit` | $C$ | A circuit representing the prover's computation. |
+| `partition` | $U$ | A partition of `circuit` into proof units: the population the verifier samples. |
 | `design` | $\mathcal{D}$ | A sampling design: a probability distribution over subsets of $U$, from which the verifier draws its sample. |
 
 ### Private input
@@ -38,7 +38,7 @@ Each line is run by the party beside it, and an arrow sends a value to the other
 
 The prover runs the circuit and commits to what it computed, before it knows which units will be sampled. Committing first is what turns the sample into a test: whatever the prover does afterwards, each sampled unit is checked against values that were fixed in advance.
 
-What the prover computes is a [trace](/accounting/circuits#traces) $\tau$, and the honest trace is `evaluate(circuit, inputs)`. The prover commits only the trace's values at the [boundary gates](/accounting/circuits#partitions) $\partial U$, which are everything a unit's check reads, every input gate included.
+What the prover computes is a trace $\tau$, and the honest trace is `evaluate(circuit, inputs)`. The prover commits only the trace's values at the boundary gates $\partial U$, which are everything a unit's check reads, every input gate included.
 
 ![Commitment phase](/programs/sampled-proofs#commit)
 
@@ -50,7 +50,7 @@ Once `com` has arrived, the verifier draws a sample $S \subseteq U$ from the sam
 
 ### Verification phase
 
-The prover proves that no sampled unit is [faulty](/accounting/circuits#partitions) in the committed values, its outputs some other function of its inputs than its gates compute, and the verifier checks the proof. Both parties build the statement from their own copies, so the prover can't choose what is proved, and the verifier sends fresh coins in each round of the proof.
+The prover proves that no sampled unit is faulty in the committed values, its outputs some other function of its inputs than its gates compute, and the verifier checks the proof. Both parties build the statement from their own copies, so the prover can't choose what is proved, and the verifier sends fresh coins in each round of the proof.
 
 ![Verification phase](/programs/sampled-proofs#prove,verify)
 
@@ -146,7 +146,7 @@ A design's cost is the number of units it proves. Against a set of faulty units 
 
 ## Two-stage sampling
 
-A prover that doesn't keep its trace rebuilds a proof unit's values by replaying the part of the computation around it, a *replay unit*. The replay units are a partition $U_I$ of `circuit` that $U$ [refines](/accounting/circuits#proof-units), and replay unit $i$ holds $N_i$ proof units, $U_i$. Cochran's cost model prices a run at $c_1$ per replay unit replayed and $c_2$ per proof unit proved, so a sample spread over many replay units pays $c_1$ many times over. The verifier therefore samples in two stages: it draws replay units $S_I$ from a first-stage sampling design $\mathcal{D}_I$, then proof units inside each drawn replay unit $i$, each $u \in U_i$ with probability $\pi_{u|i}$, independently across replay units. That two-stage sampling design is a sampling design on $U$ like any other, and everything above holds for it unchanged.
+A prover that doesn't keep its trace rebuilds a proof unit's values by replaying the part of the computation around it, a *replay unit*. The replay units are a partition $U_I$ of `circuit` that $U$ refines, and replay unit $i$ holds $N_i$ proof units, $U_i$. Cochran's cost model prices a run at $c_1$ per replay unit replayed and $c_2$ per proof unit proved, so a sample spread over many replay units pays $c_1$ many times over. The verifier therefore samples in two stages: it draws replay units $S_I$ from a first-stage sampling design $\mathcal{D}_I$, then proof units inside each drawn replay unit $i$, each $u \in U_i$ with probability $\pi_{u|i}$, independently across replay units. That two-stage sampling design is a sampling design on $U$ like any other, and everything above holds for it unchanged.
 
 ### Lazy commitments
 

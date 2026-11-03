@@ -147,7 +147,7 @@
  * Sidebar row grammar, measured from the Vercel dashboard (both themes):
  * 36px rows with a 6px radius, medium labels with tight tracking, muted
  * text snapping to foreground on a solid hover fill, the selected row on a
- * darker fill. Only the drill chevron chip fades.
+ * darker fill.
  */
 :root {
   --sidebar: hsla(0, 0%, 98%, 1);
@@ -169,15 +169,6 @@
   --sidebar-chip-radius: 0.25rem;
   --sidebar-chip-duration: 150ms;
   --sidebar-ease: cubic-bezier(0.4, 0, 0.2, 1);
-
-  /* Drill-in panel swap: 8px translate, fade and 2px blur over 200ms. */
-  --sidebar-drill-duration: 200ms;
-  --sidebar-drill-ease: ease;
-  --sidebar-drill-offset: 8px;
-  --sidebar-drill-parallax: 1;
-  --sidebar-drill-blur: 2px;
-  --sidebar-drill-scale: 1;
-  --sidebar-drill-fade: 1;
 }
 
 .dark {
@@ -223,51 +214,6 @@
   --g-gray-900: hsl(0 0% 63%);
   --g-gray-1000: hsl(0 0% 93%);
   --g-alpha-200: #ffffff17;
-}
-
-[data-slot="sidebar-drill-panel"][data-motion] {
-  animation-duration: var(--sidebar-drill-duration);
-  animation-timing-function: var(--sidebar-drill-ease);
-  animation-fill-mode: both;
-  will-change: transform, opacity, filter;
-}
-[data-slot="sidebar-drill-panel"][data-motion="enter-forward"] { animation-name: sidebar-drill-enter-forward; }
-[data-slot="sidebar-drill-panel"][data-motion="exit-forward"] { animation-name: sidebar-drill-exit-forward; }
-[data-slot="sidebar-drill-panel"][data-motion="enter-back"] { animation-name: sidebar-drill-enter-back; }
-[data-slot="sidebar-drill-panel"][data-motion="exit-back"] { animation-name: sidebar-drill-exit-back; }
-
-@keyframes sidebar-drill-enter-forward {
-  from {
-    opacity: calc(1 - var(--sidebar-drill-fade));
-    transform: translateX(var(--sidebar-drill-offset));
-    filter: blur(var(--sidebar-drill-blur));
-  }
-}
-@keyframes sidebar-drill-exit-forward {
-  to {
-    opacity: calc(1 - var(--sidebar-drill-fade));
-    transform: translateX(calc(var(--sidebar-drill-offset) * var(--sidebar-drill-parallax) * -1))
-      scale(var(--sidebar-drill-scale));
-    filter: blur(var(--sidebar-drill-blur));
-  }
-}
-@keyframes sidebar-drill-enter-back {
-  from {
-    opacity: calc(1 - var(--sidebar-drill-fade));
-    transform: translateX(calc(var(--sidebar-drill-offset) * var(--sidebar-drill-parallax) * -1))
-      scale(var(--sidebar-drill-scale));
-    filter: blur(var(--sidebar-drill-blur));
-  }
-}
-@keyframes sidebar-drill-exit-back {
-  to {
-    opacity: calc(1 - var(--sidebar-drill-fade));
-    transform: translateX(var(--sidebar-drill-offset));
-    filter: blur(var(--sidebar-drill-blur));
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  [data-slot="sidebar-drill-panel"][data-motion] { animation-duration: 0.01ms; }
 }
 
 /* Benchmark tables: shared by docs embeds and the backend comparison. */

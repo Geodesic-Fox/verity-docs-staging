@@ -1,4 +1,4 @@
-The vLLM integration makes an LLM serving run auditable. It hooks a pinned vLLM engine so that, for each served workload, it builds the workload's circuit with an embedded Torch-to-circuit frontend, supplies the circuit's silicon-specific bindings, acquires and commits runtime values while serving, and runs proving through the ZK server, as the [remote](/protocols/remote) and [onsite](/protocols/onsite) protocols run it. It composes the components and owns none of their semantics. The program format belongs to [circuits](/accounting/circuits), the exact arithmetic to [silicon](/hardware/accelerators#silicon), the leaves and trees to [commitments](/proof-systems/commitments), the draw and the guarantee to [sampled proofs](/proof-systems/sampling), and each accounting check to its own [protocol](/accounting). [Served configs](/workloads/inference#served-configurations) lists the configurations it serves.
+The vLLM integration makes an LLM serving run auditable. It hooks a pinned vLLM engine so that, for each served workload, it builds the workload's circuit with an embedded Torch-to-circuit frontend, supplies the circuit's silicon-specific bindings, acquires and commits runtime values while serving, and runs proving through the ZK server, as the [remote](/protocols/remote) and [onsite](/protocols/onsite) protocols run it. It composes the components and owns none of their semantics. The program format belongs to circuits, the exact arithmetic to silicon, the leaves and trees to commitments, the draw and the guarantee to [sampled proofs](/proof-systems/sampling), and each accounting check to its own [protocol](/accounting).
 
 ## Parts
 
@@ -30,11 +30,11 @@ Each request becomes a program that covers its prefill and each of its decode st
 | Run inputs | Each request's prompt token ids, and its sampling parameters: temperature, top-p and the positions of its sampler's random stream | While serving |
 | Structure | The Calls, their dataflow and every shape | Never: it is the program itself, and public |
 
-The partition is `Q_word` v1 with $X = 16$ and $W = 32$. It cuts each Call's circuit into proof units whose committed outputs total at most 16 bits, or are one value of at most 32 bits. A value read across units is committed once, and no unit recomputes a value another unit computes. The [model graphs](/workloads/inference#model-graphs) draw the cut on the served configurations, with their Proof units toggle.
+The partition is `Q_word` v1 with $X = 16$ and $W = 32$. It cuts each Call's circuit into proof units whose committed outputs total at most 16 bits, or are one value of at most 32 bits. A value read across units is committed once, and no unit recomputes a value another unit computes. The [circuit browser](/integrations/vllm/circuits) draws the cut on the served configurations, with its Proof units toggle.
 
 ## What is committed, and when
 
-What is committed is the partition's [boundary gates](/accounting/circuits#partitions), fixed by the program and its partition before serving starts:
+What is committed is the partition's boundary gates, fixed by the program and its partition before serving starts:
 
 - every value read across a proof-unit boundary, which includes every value one Call passes to another;
 - the prescribed inputs: the weights and each request's prompt token ids;
