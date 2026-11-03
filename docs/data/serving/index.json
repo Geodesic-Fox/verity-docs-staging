@@ -1,0 +1,21 @@
+{
+ "schema": "verity-docs/serving-index/v1",
+ "rows": [
+  {
+   "key": "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager",
+   "kind": "record",
+   "record": true,
+   "steps": 32,
+   "requests": 1,
+   "ranks": 1
+  },
+  {
+   "key": "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager",
+   "kind": "tp-exercise",
+   "record": false,
+   "steps": 31,
+   "requests": 2,
+   "ranks": 2
+  }
+ ]
+}

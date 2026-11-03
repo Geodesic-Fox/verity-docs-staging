@@ -1,0 +1,159 @@
+Proof of useful work (PoUW) bounds from below the work a prover spent on the matrix multiplications it declared. After a salt it couldn't predict, the prover computes every tile of every product under noise derived from the salt and its committed operands, and commits the tiles; the verifier draws tiles in proportion to their work and checks them. The declared products still come out of the tiles for the workload to use, which is what makes the work useful. An accept certifies that the prover spent at least $(1-\gamma)(1-\varepsilon_s)W$ after the salt. This page states the protocol and that bound; what it leaves of a device's capacity is [compute accounting](/docs/accounting/compute)'s.
+
+## Interface
+
+### Parties
+
+| Party | Symbol | Description |
+| --- | --- | --- |
+| Prover | $\mathcal{P}$ | The developer's workers. It commits rows, computes the tiles and answers for the drawn ones. |
+| Challenger | $\mathcal{H}$ | The auditor's coin service. Before each epoch it commits to one coin per label, `salt` and `draw`, and opens each once, live. |
+| Verifier | $\mathcal{V}$ | The auditor's side. It records each commitment before asking for the next coin, draws the tiles and checks them. |
+
+### Public parameters
+
+| Parameter | Symbol | Description |
+| --- | --- | --- |
+| `scheme` | | How a tile is noised, computed and checked, with each tile's reference cost $W_{\mathrm{ref}}$, its assumption, its cap $\rho$ and its $\gamma$ ([Schemes](#schemes)). |
+| `workload` | $U$ | The declared matrix multiplications, each an index, a shape $(m, k, n)$ and the weight it reads. Rows run along $k$, and the product is $AB^\top$. |
+| `sampling` | $\varepsilon_s, \delta, K$ | The share of the work the audit may leave unchecked, the probability it leaves more, and the number of draws they fix. |
+| Cost model | | How the prover's work after the salt is priced ([Assumptions](#assumptions)). |
+
+### Private input
+
+| Input | Description |
+| --- | --- |
+| `weights`, `activations` | The prover's operands $B$ and $A$. Honest activations are fixed independently of the salt. |
+
+### Outputs
+
+| Value | Description |
+| --- | --- |
+| `accept` | Every drawn tile passed the check. |
+| `reject` | Otherwise. |
+| `work` | With an accept, the credited work $W$, rounded down to a grid level. |
+| `certified` | The work the audit certifies the prover spent after the salt, $(1-\gamma)(1-\varepsilon_s)W$. |
+
+## Protocol
+
+Each line is run by the party beside it, and an arrow sends a value to another party. Click a function to see what it computes. A scheme fixes `noise`, `tile` and `check`; everything else is the same for every scheme.
+
+### Commitment
+
+The challenger commits to the epoch's coins, and the prover commits to its weights, before either knows the salt.
+
+![Commit](/programs/pouw#commit)
+
+#### The coins
+
+The salt and the draw are the challenger's epoch coins, never a public beacon and never Fiat–Shamir over the prover's roots:
+
+~~~text
+x_l      = SHA-512("verity/pouw/epoch-coin/v1" || 0x00 || coin_l)
+value_l  = the hm96-sha512 leaf of x_l under 192 fresh salt bytes
+root     = a frame-v3-sha512 tree over (value_salt, value_draw), bound to ("verity/pouw/epoch-coins/v1", e)
+~~~
+
+An unopened coin is statistically hidden, and the commitment binds under SHA-512's collision resistance. Each coin is opened once, after the verifier has recorded what it keys: the salt after the weights' root, the draw after the transcript's root. A second request for an opened coin is refused, so a retry never redraws. The coins convince the auditor, who trusts its own challenger, and no third party.
+
+### Salt
+
+![Salt](/programs/pouw#salt)
+
+The salt is 32 bytes [derived](/docs/proof-systems/randomness) from the salt coin, the epoch, the coin root and the weights' root, in the domain `verity/pouw/epoch-salt/v1`. The work the bound counts is the work after this point.
+
+### Compute
+
+![Compute](/programs/pouw#compute)
+
+Each matmul's noise is the scheme's own derivation from the salt, the matmul and the prover's roots: Fiat–Shamir inside the scheme, whose grinding the scheme's assumption accounts for. A tile is rows of $A$ times rows of $B$ at full $k$; it yields the values the check reads, their digest (the tile's leaf), and its part of the useful product, which goes to the workload.
+
+The prover then sends the transcript's root to the challenger. It must arrive within a registration deadline of the salt coin's release, on the challenger's clock: a root received later, or before the salt, is refused as late registration, the window earns no credit and the epoch ends. This is the verifier's rule in `Security/Definitions/Pouw/Game/Deadline.lean`, which `WorkBetweenSaltAndDeadline` reads; the deployment's deadline isn't set yet.
+
+### Draw
+
+![Draw](/programs/pouw#draw)
+
+#### The draw
+
+Each of $K$ independent draws picks a tile with probability $W_{\mathrm{ref}}(\text{tile})/W$, keyed by the draw coin, the transcript's root and the salt in the scheme's draw domain (`verity/pouw/pearl-c-draw/v1` for Pearl-C). Tiles holding a share $\varepsilon_s$ of the work are all missed with probability at most $(1-\varepsilon_s)^K$, so $K$ is the least integer with $(1-\varepsilon_s)^K \le \delta$. When every tile does the same work, the verifier may instead draw a uniform subset of $K'$ tiles, where $K'$ is the least $K$ with $\big(1 - \varepsilon_s W / (N w_{\max})\big)^{K} \le \delta$.
+
+### Proof and verification
+
+![Prove](/programs/pouw#prove,verify)
+
+A drawn tile passes when its rows open the committed roots, they pass the scheme's rules, and recomputing the tile through the scheme gives its leaf. The draw and the proofs are [sampling](/docs/proof-systems/sampling) with tiles as proof units. The protocol's target proves each drawn tile in zero knowledge, bound to the scheme, salt and workload by an identifier the verifier computes itself:
+
+~~~text
+identifier  {"format": "verity/pouw/identifier/v1", "scheme": name, "salt": hex(salt),
+             "workload": hex(SHA-512(canonical(workload)))}
+~~~
+
+Served windows prove drawn tiles with C-Flock in zero knowledge, on a stand-in unit that doesn't yet read the tile's committed leaf (TileRead). Until it does, acceptance is checked by a replay that opens rows in the clear, a development shortcut.
+
+## Security
+
+### Assumptions
+
+- **Tight noised transcript (TT) at $\gamma_0$.** A prover that spends $T$ after the salt gets the checked values right on tiles holding at most $T/(1-\gamma_0)$ of the matrix-multiplication work, except with probability $\eta(q, N)$. Each scheme names its own instance; Pearl-C's is TT_OUT rev1 at $\gamma_0 = 1/400$, a named conjecture.
+- **The cost model.** A tensor-core instruction costs its whole fragment's multiply-accumulates, and any other instruction its class's price at the cheapest bit-exact implementation. Priced per word instead, TT would be a different assumption, and known sets of skipped words falsify that one.
+- **Counted queries.** The scheme's hashes are reached only through at most $q \le 2^{64}$ counted queries: the [random oracle](/assumptions/random-oracle).
+- **Fresh coins.** The challenger's coins are uniform and unknown to the prover until it has committed what each one keys.
+- **Binding commitments.** The row, transcript and coin commitments bind: [CR · SHA-512](/assumptions/cr/sha-512).
+
+### Completeness
+
+An honest prover on served activations is rejected only when a drawn tile fails the scheme's cap: with probability at most $K\varepsilon_{\mathrm{cap}}$, where $\varepsilon_{\mathrm{cap}}$ bounds the rate at which an honest tile fails it (`CompleteSampled`, proved at Llama-3.1-8B and Qwen3-8B from the empirical assumption `HonestTileCapRate`). The measurement that fixes $\varepsilon_{\mathrm{cap}}$ isn't recorded yet.
+
+### Work bound
+
+Take any workload in the scheme's domain and any prover whose preprocessing is unbounded but never reads the salt, that spends $T$ after the salt, priced by the cost model, with at most $q$ queries. Then
+
+$$
+\Pr\big[\mathsf{accept} \,\wedge\, T < (1-\gamma)(1-\varepsilon_s)\,W\big] \;\le\; (1-\varepsilon_s)^K + \eta(q, N), \qquad \gamma = 1 - \frac{1-\gamma_0}{\Omega^*}
+$$
+
+$W$ is the declared work, $\gamma_0$ the share the assumption lets a prover save, and $\Omega^*$ bounds each unit's $W_{\mathrm{ref}}$ as a multiple of the work the assumption credits (`Pouw.Guarantees.EndToEnd`).
+
+~~~proof
+Sampling bounds the work in tiles whose checked values are wrong: on an accept, they hold less than $\varepsilon_s W$ except with probability $(1-\varepsilon_s)^K$. TT turns the rest into work: tiles holding at least $(1-\varepsilon_s)W$ correct can't be had for less than $(1-\gamma_0)/\Omega^*$ of it after the salt, except with probability $\eta(q, N)$. A union bound gives the sum.
+~~~
+
+For Pearl-C the bound is per credited cell: $T < (1-\gamma)(W_{\mathrm{claimed}} - \varepsilon_s W)$, with $W_{\mathrm{claimed}}$ the reference cost of the rows the transcript credits and $\eta(q, N) = (q + N)/2^{128}$ (`GγSampled`). At $K = 27{,}713$ and $\varepsilon_s = 0.1\%$, the sampling term is $2^{-40}$.
+
+The game takes the drawn tiles' checks as ideal. With tiles proved in zero knowledge, the proof system's knowledge-soundness and binding errors add to the bound; that composition is stated for C-Flock at $8192^3$ and awaits the proof that a tile's proof reads its committed rows.
+
+## Schemes
+
+A scheme is named and versioned. It fixes the tiling, the noise, the checked values and their digest, each tile's reference cost, and the assumption with its $\gamma_0$ and $\Omega^*$. Hardware uses the ids of [Accelerators](/docs/hardware/accelerators). Each $\gamma$ is proved from its scheme's assumption.
+
+| Scheme | Hardware | Assumption | $\gamma$ |
+| --- | --- | --- | --- |
+| `pearl-c-sm120-v1-h3` (served default) | `rtx-pro-6000-server/e4m3` | TT_OUT rev1 at $\gamma_0 = 1/400$, cap $\rho = 1/1{,}000$ | 0.36949% at $8192^3$; Llama-3.1-8B served, 0.38912% |
+| `pearl-c-h100-v1` | `h100-sxm5-80gb/e4m3` | TT on Pearl-C's checked outputs, cap 1/400 | 0.53751% at $8192^3$, 0.51862% at $16384^3$ |
+| `pearl-c-nvfp4-v0` (Pearl-C4) | `rtx-pro-6000-server/e2m1` | TT for NVFP4 on sm_120, cap 1/400 | 0.71732% at $8192^3$, 0.61102% at $16384^3$ |
+| `ncp-v1`, `ncp-v2` | RTX 4090 | TT for noise-cancelling polarization at $\gamma_0 = 0.5\%$ | 0.995% on shapes with $n \ge 1{,}600$ |
+| `pearl-fp8-v4` | H100, B200, RTX 4090 | Pearl's own hardness conjecture | None: the conjecture names no $\gamma_0$ |
+
+Pearl-C takes Pearl's FP8 product and adds its noisy clean-up, checked bit for bit, so that the useful output is itself a checked value. A drawn tile is rejected when its replayed debit exceeds $\rho$ times its credited cells' credit, and an accepted tile earns $1-\rho$ of it. On `pearl-c-sm120-v1-h3` the served Llama-3.1-8B linears have these $\gamma$; a mixed layout takes the largest, since a prover picks which units it is right on:
+
+| Linear | Shape $(n, k)$ | $\gamma$ |
+| --- | --- | --- |
+| qkv | $6144, 4096$ | 0.37565% |
+| o | $4096, 4096$ | 0.38839% |
+| gate_up | $28672, 4096$ | 0.35535% |
+| down | $4096, 14336$ | 0.38912% |
+| $16384^3$, for reference | | 0.35973% |
+
+## Public outputs
+
+PoUW makes public the verdict, the work level, the check (the tile template, its work and the commitment scheme), the sampling parameters, the draw, the weights' salted root and the weights' size. The work is one grid level: the positive integers with at most 4 significant bits, so consecutive levels differ by at most $9/8$, and a declared range of $q$ levels carries at most $\log_2 q$ bits. Rounding down leaves at most a ninth of an honest prover's tiles uncredited.
+
+## Parameters
+
+| $\varepsilon_s$, $\delta$ | Work-weighted $K$ | Uniform $K'$, at most |
+| --- | --- | --- |
+| 0.1%, $2^{-40}$ | 27,713 | 31,178 |
+| 1%, $2^{-128}$ | 8,828 | 9,937 |
+
+The number of draws is fixed by $\varepsilon_s$ and $\delta$, not by the workload's size, so proving's share of an audit's cost falls as the workload grows.

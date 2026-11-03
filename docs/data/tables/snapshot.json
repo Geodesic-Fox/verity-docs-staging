@@ -1,0 +1,1232 @@
+{
+  "schema": "verity-docs/tables-snapshot/v0",
+  "renderedAt": "Fri Sep 25, 12:55 PM PT",
+  "verityCommit": "7da00370",
+  "source": "markdown render of the proof-optimization tables",
+  "tables": [
+    {
+      "id": "table-1",
+      "standard": "published",
+      "title": "Table 1 — Candidate proof systems (frozen 2026-09-22)",
+      "caption": "",
+      "rowHeader": "Candidate",
+      "columns": [
+        "Description",
+        "ZK",
+        "Verifier model",
+        "Soundness",
+        "Setup",
+        "Interaction",
+        "Security assumptions"
+      ],
+      "rows": [
+        {
+          "label": "A-GKR",
+          "cells": [
+            {
+              "display": "specialized data-parallel GKR/sumcheck prover (checker v2 + LogUp lookups) for the exact numerical relation"
+            },
+            {
+              "display": "No"
+            },
+            {
+              "display": "honest (non-ZK, soundness only)"
+            },
+            {
+              "display": "2^-128"
+            },
+            {
+              "display": "none (no trusted setup)"
+            },
+            {
+              "display": "interactive; Fiat–Shamir variant non-interactive"
+            },
+            {
+              "display": "collision-resistant hash (SHA-512 Merkle); Fiat–Shamir in the random-oracle model for the non-interactive variant; LogUp fractional-sum soundness over BabyBear^6"
+            }
+          ]
+        },
+        {
+          "label": "B-Ligero",
+          "cells": [
+            {
+              "display": "specialized Ligero-style interleaved-RS proof over the exact numerical checker"
+            },
+            {
+              "display": "Malicious-verifier ZK (interactive, coin-commitment; transcript is live-verifier-only per D7); HVZK (Fiat–Shamir variant, transferable)"
+            },
+            {
+              "display": "malicious (interactive) / honest (Fiat–Shamir)"
+            },
+            {
+              "display": "2^-128"
+            },
+            {
+              "display": "none (no trusted setup)"
+            },
+            {
+              "display": "interactive; Fiat–Shamir variant non-interactive"
+            },
+            {
+              "display": "collision-resistant hash (BLAKE3/BLAKE2b); SHAKE-256 mask sampling; random oracle only for the Fiat–Shamir variant; proximity-gap bound model named in the fingerprint (security.bound_model)"
+            }
+          ]
+        },
+        {
+          "label": "SP1",
+          "cells": [
+            {
+              "display": "general-purpose zkVM baseline executing the exact relation"
+            },
+            {
+              "display": "as configured"
+            },
+            {
+              "display": "as configured"
+            },
+            {
+              "display": "as configured"
+            },
+            {
+              "display": "none (no trusted setup)"
+            },
+            {
+              "display": "non-interactive (Fiat–Shamir)"
+            },
+            {
+              "display": "SP1 / STARK hash assumptions"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "table-2",
+      "standard": "new",
+      "title": "Table 2 — End-to-end overhead per subcircuit, hardware class and commitment scheme",
+      "caption": "N = compute-bound datasheet estimate, instances/s (busiest unit, peak entry); P = instances/s end to end at the reference network (same datacenter, 1 ms RTT, 100 Gb/s: t = compute + rounds × RTT + bytes ÷ bandwidth) (committing the batch, `commit.seconds`, then proving); cell = N / P of the family's best admissible configuration (highest P). `(prov.)` = no red-team clearance of the statement yet; `(under re-verification)` = the latest `finding` label on the result is open (a `PULLED` one rejects it, D); `(alg.)` = its soundness argument uses an algebraic hash: algebraic hash, not for highest-stakes use (Table 1's flag); `—` = no admissible result; `n/s` = declared unsupported.",
+      "rowHeader": "Subcircuit · hardware · scheme",
+      "columns": [
+        "Native N",
+        "A-GKR",
+        "B-Ligero",
+        "SP1",
+        "Flock"
+      ],
+      "rows": [
+        {
+          "label": "NVIDIA A100 SXM4 80GB · BF16 · first-campaign-target/2026-09-21 · frame-v3 · SHA-256",
+          "cells": [
+            {
+              "display": "1.0e11/s · tensor cores, BF16 312 T",
+              "footnote": 1
+            },
+            {
+              "display": "—",
+              "footnote": 2
+            },
+            {
+              "display": "—",
+              "footnote": 3
+            },
+            {
+              "display": "—",
+              "footnote": 4
+            },
+            {
+              "display": "—",
+              "footnote": 5
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA A100 SXM4 80GB · BF16 · first-campaign-target/2026-09-21 · frame-v3 · keyed-BLAKE3 rows",
+          "cells": [
+            {
+              "display": "1.0e11/s · tensor cores, BF16 312 T",
+              "footnote": 6
+            },
+            {
+              "display": "—",
+              "footnote": 7
+            },
+            {
+              "display": "—",
+              "footnote": 8
+            },
+            {
+              "display": "—",
+              "footnote": 9
+            },
+            {
+              "display": "—",
+              "footnote": 10
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA A100 SXM4 80GB · BF16 · first-campaign-target/2026-09-21 · vllm-v1 · SHA-256",
+          "cells": [
+            {
+              "display": "1.0e11/s · tensor cores, BF16 312 T",
+              "footnote": 11
+            },
+            {
+              "display": "—",
+              "footnote": 12
+            },
+            {
+              "display": "—",
+              "footnote": 13
+            },
+            {
+              "display": "—",
+              "footnote": 14
+            },
+            {
+              "display": "—",
+              "footnote": 15
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA A100 SXM4 80GB · BF16 · first-campaign-target/2026-09-21 · frame-v3 · Poseidon2 rows",
+          "cells": [
+            {
+              "display": "1.0e11/s · tensor cores, BF16 312 T",
+              "footnote": 16
+            },
+            {
+              "display": "—",
+              "footnote": 17
+            },
+            {
+              "display": "1.9e7× (prov.) (alg.)",
+              "footnote": 18,
+              "value": 19000000
+            },
+            {
+              "display": "—",
+              "footnote": 19
+            },
+            {
+              "display": "—",
+              "footnote": 20
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA H100 SXM5 80GB · BF16 · bf16-hopper-mma-draft/2026-09-22 · frame-v3 · SHA-256",
+          "cells": [
+            {
+              "display": "3.2e11/s · tensor cores, BF16 989 T",
+              "footnote": 21
+            },
+            {
+              "display": "—",
+              "footnote": 22
+            },
+            {
+              "display": "1.2e8×",
+              "footnote": 23,
+              "value": 120000000
+            },
+            {
+              "display": "—",
+              "footnote": 24
+            },
+            {
+              "display": "—",
+              "footnote": 25
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA H100 SXM5 80GB · BF16 · bf16-hopper-mma-draft/2026-09-22 · frame-v3 · keyed-BLAKE3 rows",
+          "cells": [
+            {
+              "display": "3.2e11/s · tensor cores, BF16 989 T",
+              "footnote": 26
+            },
+            {
+              "display": "—",
+              "footnote": 27
+            },
+            {
+              "display": "2.8e8×",
+              "footnote": 28,
+              "value": 280000000
+            },
+            {
+              "display": "—",
+              "footnote": 29
+            },
+            {
+              "display": "—",
+              "footnote": 30
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA H100 SXM5 80GB · BF16 · bf16-hopper-mma-draft/2026-09-22 · vllm-v1 · SHA-256",
+          "cells": [
+            {
+              "display": "3.2e11/s · tensor cores, BF16 989 T",
+              "footnote": 31
+            },
+            {
+              "display": "—",
+              "footnote": 32
+            },
+            {
+              "display": "—",
+              "footnote": 33
+            },
+            {
+              "display": "—",
+              "footnote": 34
+            },
+            {
+              "display": "—",
+              "footnote": 35
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA H100 SXM5 80GB · BF16 · bf16-hopper-mma-draft/2026-09-22 · frame-v3 · Poseidon2 rows",
+          "cells": [
+            {
+              "display": "3.2e11/s · tensor cores, BF16 989 T",
+              "footnote": 36
+            },
+            {
+              "display": "—",
+              "footnote": 37
+            },
+            {
+              "display": "3.2e7× (prov.) (alg.)",
+              "footnote": 38,
+              "value": 32000000
+            },
+            {
+              "display": "—",
+              "footnote": 39
+            },
+            {
+              "display": "—",
+              "footnote": 40
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA H100 SXM5 80GB · E4M3 · fp8-hopper-wgmma-draft/2026-09-22 · frame-v3 · SHA-256",
+          "cells": [
+            {
+              "display": "6.4e11/s · tensor cores, E4M3 1979 T",
+              "footnote": 41
+            },
+            {
+              "display": "—",
+              "footnote": 42
+            },
+            {
+              "display": "1.2e8×",
+              "footnote": 43,
+              "value": 120000000
+            },
+            {
+              "display": "—",
+              "footnote": 44
+            },
+            {
+              "display": "—",
+              "footnote": 45
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA H100 SXM5 80GB · E4M3 · fp8-hopper-wgmma-draft/2026-09-22 · frame-v3 · keyed-BLAKE3 rows",
+          "cells": [
+            {
+              "display": "6.4e11/s · tensor cores, E4M3 1979 T",
+              "footnote": 46
+            },
+            {
+              "display": "—",
+              "footnote": 47
+            },
+            {
+              "display": "2.9e8×",
+              "footnote": 48,
+              "value": 290000000
+            },
+            {
+              "display": "—",
+              "footnote": 49
+            },
+            {
+              "display": "—",
+              "footnote": 50
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA H100 SXM5 80GB · E4M3 · fp8-hopper-wgmma-draft/2026-09-22 · vllm-v1 · SHA-256",
+          "cells": [
+            {
+              "display": "6.4e11/s · tensor cores, E4M3 1979 T",
+              "footnote": 51
+            },
+            {
+              "display": "—",
+              "footnote": 52
+            },
+            {
+              "display": "—",
+              "footnote": 53
+            },
+            {
+              "display": "—",
+              "footnote": 54
+            },
+            {
+              "display": "—",
+              "footnote": 55
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA H100 SXM5 80GB · E4M3 · fp8-hopper-wgmma-draft/2026-09-22 · frame-v3 · Poseidon2 rows",
+          "cells": [
+            {
+              "display": "6.4e11/s · tensor cores, E4M3 1979 T",
+              "footnote": 56
+            },
+            {
+              "display": "—",
+              "footnote": 57
+            },
+            {
+              "display": "3.6e7× (prov.) (alg.)",
+              "footnote": 58,
+              "value": 36000000
+            },
+            {
+              "display": "—",
+              "footnote": 59
+            },
+            {
+              "display": "—",
+              "footnote": 60
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA GeForce RTX 4090 · E4M3 · fp8-ada-mma-draft/2026-09-22 · frame-v3 · SHA-256",
+          "cells": [
+            {
+              "display": "1.1e11/s · tensor cores, E4M3 330 T",
+              "footnote": 61
+            },
+            {
+              "display": "—",
+              "footnote": 62
+            },
+            {
+              "display": "—",
+              "footnote": 63
+            },
+            {
+              "display": "—",
+              "footnote": 64
+            },
+            {
+              "display": "—",
+              "footnote": 65
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA GeForce RTX 4090 · E4M3 · fp8-ada-mma-draft/2026-09-22 · frame-v3 · keyed-BLAKE3 rows",
+          "cells": [
+            {
+              "display": "1.1e11/s · tensor cores, E4M3 330 T",
+              "footnote": 66
+            },
+            {
+              "display": "—",
+              "footnote": 67
+            },
+            {
+              "display": "2.0e7×",
+              "footnote": 68,
+              "value": 20000000
+            },
+            {
+              "display": "—",
+              "footnote": 69
+            },
+            {
+              "display": "—",
+              "footnote": 70
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA GeForce RTX 4090 · E4M3 · fp8-ada-mma-draft/2026-09-22 · vllm-v1 · SHA-256",
+          "cells": [
+            {
+              "display": "1.1e11/s · tensor cores, E4M3 330 T",
+              "footnote": 71
+            },
+            {
+              "display": "—",
+              "footnote": 72
+            },
+            {
+              "display": "—",
+              "footnote": 73
+            },
+            {
+              "display": "—",
+              "footnote": 74
+            },
+            {
+              "display": "—",
+              "footnote": 75
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA GeForce RTX 4090 · E4M3 · fp8-ada-mma-draft/2026-09-22 · frame-v3 · Poseidon2 rows",
+          "cells": [
+            {
+              "display": "1.1e11/s · tensor cores, E4M3 330 T",
+              "footnote": 76
+            },
+            {
+              "display": "—",
+              "footnote": 77
+            },
+            {
+              "display": "8.9e6× (prov.) (alg.)",
+              "footnote": 78,
+              "value": 8900000
+            },
+            {
+              "display": "—",
+              "footnote": 79
+            },
+            {
+              "display": "—",
+              "footnote": 80
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA GeForce RTX 5090 · E2M1 · nvfp4-sm120-mma-draft/2026-09-22 · frame-v3 · SHA-256",
+          "cells": [
+            {
+              "display": "5.5e11/s · tensor cores, E2M1 1676 T",
+              "footnote": 81
+            },
+            {
+              "display": "—",
+              "footnote": 82
+            },
+            {
+              "display": "—",
+              "footnote": 83
+            },
+            {
+              "display": "—",
+              "footnote": 84
+            },
+            {
+              "display": "—",
+              "footnote": 85
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA GeForce RTX 5090 · E2M1 · nvfp4-sm120-mma-draft/2026-09-22 · frame-v3 · keyed-BLAKE3 rows",
+          "cells": [
+            {
+              "display": "5.5e11/s · tensor cores, E2M1 1676 T",
+              "footnote": 86
+            },
+            {
+              "display": "—",
+              "footnote": 87
+            },
+            {
+              "display": "—",
+              "footnote": 88
+            },
+            {
+              "display": "—",
+              "footnote": 89
+            },
+            {
+              "display": "—",
+              "footnote": 90
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA GeForce RTX 5090 · E2M1 · nvfp4-sm120-mma-draft/2026-09-22 · vllm-v1 · SHA-256",
+          "cells": [
+            {
+              "display": "5.5e11/s · tensor cores, E2M1 1676 T",
+              "footnote": 91
+            },
+            {
+              "display": "—",
+              "footnote": 92
+            },
+            {
+              "display": "—",
+              "footnote": 93
+            },
+            {
+              "display": "—",
+              "footnote": 94
+            },
+            {
+              "display": "—",
+              "footnote": 95
+            }
+          ]
+        },
+        {
+          "label": "NVIDIA GeForce RTX 5090 · E2M1 · nvfp4-sm120-mma-draft/2026-09-22 · frame-v3 · Poseidon2 rows",
+          "cells": [
+            {
+              "display": "5.5e11/s · tensor cores, E2M1 1676 T",
+              "footnote": 96
+            },
+            {
+              "display": "—",
+              "footnote": 97
+            },
+            {
+              "display": "1.6e7× (alg.)",
+              "footnote": 98,
+              "value": 16000000
+            },
+            {
+              "display": "—",
+              "footnote": 99
+            },
+            {
+              "display": "—",
+              "footnote": 100
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "table-3",
+      "standard": "new",
+      "title": "Table 3 — Where the overhead comes from (each stage × N, share of the cell)",
+      "caption": "Each stage is its contribution to the Table 2 overhead: its time per instance × N, so commitment + interaction + the six buckets + Other add up to the cell (Total). Commitment is the serving overhead; interaction is the network wait at the reference profile (rounds × 1 ms + bytes ÷ 100 Gb/s, plus verifier compute the prover waits on); the buckets and Other are the proving overhead. A fused stage prints once in its first column, `↞` in the others. Setup, one-time (keys, circuit setup: `fixed.setup_seconds`) is outside the cell: its seconds, and ×native amortized over the measured batch (setup × N ÷ the batch's instances). Seconds per instance are in the drill-down below.",
+      "rowHeader": "Cell",
+      "columns": [
+        "Commitment",
+        "Interaction",
+        "Witness",
+        "Encoding + witness commitment",
+        "Arithmetic",
+        "Lookup",
+        "ZK additional",
+        "Serialization",
+        "Other",
+        "Total (the cell)",
+        "Setup, one-time (not in the total)"
+      ],
+      "rows": [
+        {
+          "label": "first-campaign-target/2026-09-21 · frame-v3 · Poseidon2 rows · B-Ligero",
+          "cells": [
+            {
+              "display": "1.6e6× (8%)",
+              "value": 1600000,
+              "share": 8
+            },
+            {
+              "display": "3.4e5× (2%)",
+              "value": 340000,
+              "share": 2
+            },
+            {
+              "display": "2.6e6× (14%)",
+              "value": 2600000,
+              "share": 14
+            },
+            {
+              "display": "3.9e6× (21%)",
+              "value": 3900000,
+              "share": 21
+            },
+            {
+              "display": "9.3e6× (49%)",
+              "value": 9300000,
+              "share": 49
+            },
+            {
+              "display": "0× (0%)",
+              "value": 0,
+              "share": 0
+            },
+            {
+              "display": "1.5e3× (0%)",
+              "value": 1500,
+              "share": 0
+            },
+            {
+              "display": "1.0e6× (5%)",
+              "value": 1000000,
+              "share": 5
+            },
+            {
+              "display": "4.6e4× (0%)",
+              "value": 46000,
+              "share": 0
+            },
+            {
+              "display": "1.9e7× (100%)",
+              "value": 19000000,
+              "share": 100
+            },
+            {
+              "display": "—"
+            }
+          ]
+        },
+        {
+          "label": "bf16-hopper-mma-draft/2026-09-22 · frame-v3 · SHA-256 · B-Ligero",
+          "cells": [
+            {
+              "display": "2.6e6× (2%)",
+              "value": 2600000,
+              "share": 2
+            },
+            {
+              "display": "1.1e7× (10%)",
+              "value": 11000000,
+              "share": 10
+            },
+            {
+              "display": "1.4e7× (12%)",
+              "value": 14000000,
+              "share": 12
+            },
+            {
+              "display": "4.7e7× (40%)",
+              "value": 47000000,
+              "share": 40
+            },
+            {
+              "display": "3.5e7× (30%)",
+              "value": 35000000,
+              "share": 30
+            },
+            {
+              "display": "0× (0%)",
+              "value": 0,
+              "share": 0
+            },
+            {
+              "display": "3.2e3× (0%)",
+              "value": 3200,
+              "share": 0
+            },
+            {
+              "display": "6.5e6× (6%)",
+              "value": 6500000,
+              "share": 6
+            },
+            {
+              "display": "3.7e5× (0%)",
+              "value": 370000,
+              "share": 0
+            },
+            {
+              "display": "1.2e8× (100%)",
+              "value": 120000000,
+              "share": 100
+            },
+            {
+              "display": "—"
+            }
+          ]
+        },
+        {
+          "label": "bf16-hopper-mma-draft/2026-09-22 · frame-v3 · keyed-BLAKE3 rows · B-Ligero",
+          "cells": [
+            {
+              "display": "6.6e5× (0%)",
+              "value": 660000,
+              "share": 0
+            },
+            {
+              "display": "4.6e6× (2%)",
+              "value": 4600000,
+              "share": 2
+            },
+            {
+              "display": "2.6e7× (9%)",
+              "value": 26000000,
+              "share": 9
+            },
+            {
+              "display": "1.1e8× (40%)",
+              "value": 110000000,
+              "share": 40
+            },
+            {
+              "display": "1.2e8× (44%)",
+              "value": 120000000,
+              "share": 44
+            },
+            {
+              "display": "0× (0%)",
+              "value": 0,
+              "share": 0
+            },
+            {
+              "display": "1.7e4× (0%)",
+              "value": 17000,
+              "share": 0
+            },
+            {
+              "display": "1.2e7× (4%)",
+              "value": 12000000,
+              "share": 4
+            },
+            {
+              "display": "3.2e5× (0%)",
+              "value": 320000,
+              "share": 0
+            },
+            {
+              "display": "2.8e8× (100%)",
+              "value": 280000000,
+              "share": 100
+            },
+            {
+              "display": "—"
+            }
+          ]
+        },
+        {
+          "label": "bf16-hopper-mma-draft/2026-09-22 · frame-v3 · Poseidon2 rows · B-Ligero",
+          "cells": [
+            {
+              "display": "1.6e6× (5%)",
+              "value": 1600000,
+              "share": 5
+            },
+            {
+              "display": "1.0e6× (3%)",
+              "value": 1000000,
+              "share": 3
+            },
+            {
+              "display": "3.4e6× (11%)",
+              "value": 3400000,
+              "share": 11
+            },
+            {
+              "display": "5.2e6× (16%)",
+              "value": 5200000,
+              "share": 16
+            },
+            {
+              "display": "1.8e7× (55%)",
+              "value": 18000000,
+              "share": 55
+            },
+            {
+              "display": "0× (0%)",
+              "value": 0,
+              "share": 0
+            },
+            {
+              "display": "5.8e3× (0%)",
+              "value": 5800,
+              "share": 0
+            },
+            {
+              "display": "3.0e6× (9%)",
+              "value": 3000000,
+              "share": 9
+            },
+            {
+              "display": "1.7e5× (1%)",
+              "value": 170000,
+              "share": 1
+            },
+            {
+              "display": "3.2e7× (100%)",
+              "value": 32000000,
+              "share": 100
+            },
+            {
+              "display": "—"
+            }
+          ]
+        },
+        {
+          "label": "fp8-hopper-wgmma-draft/2026-09-22 · frame-v3 · SHA-256 · B-Ligero",
+          "cells": [
+            {
+              "display": "4.7e6× (4%)",
+              "value": 4700000,
+              "share": 4
+            },
+            {
+              "display": "1.1e7× (10%)",
+              "value": 11000000,
+              "share": 10
+            },
+            {
+              "display": "1.4e7× (12%)",
+              "value": 14000000,
+              "share": 12
+            },
+            {
+              "display": "4.5e7× (39%)",
+              "value": 45000000,
+              "share": 39
+            },
+            {
+              "display": "3.4e7× (30%)",
+              "value": 34000000,
+              "share": 30
+            },
+            {
+              "display": "0× (0%)",
+              "value": 0,
+              "share": 0
+            },
+            {
+              "display": "3.2e3× (0%)",
+              "value": 3200,
+              "share": 0
+            },
+            {
+              "display": "6.4e6× (6%)",
+              "value": 6400000,
+              "share": 6
+            },
+            {
+              "display": "4.4e5× (0%)",
+              "value": 440000,
+              "share": 0
+            },
+            {
+              "display": "1.2e8× (100%)",
+              "value": 120000000,
+              "share": 100
+            },
+            {
+              "display": "—"
+            }
+          ]
+        },
+        {
+          "label": "fp8-hopper-wgmma-draft/2026-09-22 · frame-v3 · keyed-BLAKE3 rows · B-Ligero",
+          "cells": [
+            {
+              "display": "7.8e5× (0%)",
+              "value": 780000,
+              "share": 0
+            },
+            {
+              "display": "4.6e6× (2%)",
+              "value": 4600000,
+              "share": 2
+            },
+            {
+              "display": "2.4e7× (8%)",
+              "value": 24000000,
+              "share": 8
+            },
+            {
+              "display": "1.2e8× (41%)",
+              "value": 120000000,
+              "share": 41
+            },
+            {
+              "display": "1.3e8× (44%)",
+              "value": 130000000,
+              "share": 44
+            },
+            {
+              "display": "0× (0%)",
+              "value": 0,
+              "share": 0
+            },
+            {
+              "display": "1.1e4× (0%)",
+              "value": 11000,
+              "share": 0
+            },
+            {
+              "display": "1.5e7× (5%)",
+              "value": 15000000,
+              "share": 5
+            },
+            {
+              "display": "4.2e5× (0%)",
+              "value": 420000,
+              "share": 0
+            },
+            {
+              "display": "2.9e8× (100%)",
+              "value": 290000000,
+              "share": 100
+            },
+            {
+              "display": "—"
+            }
+          ]
+        },
+        {
+          "label": "fp8-hopper-wgmma-draft/2026-09-22 · frame-v3 · Poseidon2 rows · B-Ligero",
+          "cells": [
+            {
+              "display": "3.2e6× (9%)",
+              "value": 3200000,
+              "share": 9
+            },
+            {
+              "display": "1.0e6× (3%)",
+              "value": 1000000,
+              "share": 3
+            },
+            {
+              "display": "3.5e6× (10%)",
+              "value": 3500000,
+              "share": 10
+            },
+            {
+              "display": "6.5e6× (18%)",
+              "value": 6500000,
+              "share": 18
+            },
+            {
+              "display": "1.8e7× (51%)",
+              "value": 18000000,
+              "share": 51
+            },
+            {
+              "display": "0× (0%)",
+              "value": 0,
+              "share": 0
+            },
+            {
+              "display": "5.0e3× (0%)",
+              "value": 5000,
+              "share": 0
+            },
+            {
+              "display": "3.0e6× (8%)",
+              "value": 3000000,
+              "share": 8
+            },
+            {
+              "display": "1.4e5× (0%)",
+              "value": 140000,
+              "share": 0
+            },
+            {
+              "display": "3.6e7× (100%)",
+              "value": 36000000,
+              "share": 100
+            },
+            {
+              "display": "—"
+            }
+          ]
+        },
+        {
+          "label": "fp8-ada-mma-draft/2026-09-22 · frame-v3 · keyed-BLAKE3 rows · B-Ligero",
+          "cells": [
+            {
+              "display": "1.6e5× (1%)",
+              "value": 160000,
+              "share": 1
+            },
+            {
+              "display": "1.4e6× (7%)",
+              "value": 1400000,
+              "share": 7
+            },
+            {
+              "display": "2.1e6× (11%)",
+              "value": 2100000,
+              "share": 11
+            },
+            {
+              "display": "7.5e6× (37%)",
+              "value": 7500000,
+              "share": 37
+            },
+            {
+              "display": "6.8e6× (33%)",
+              "value": 6800000,
+              "share": 33
+            },
+            {
+              "display": "0× (0%)",
+              "value": 0,
+              "share": 0
+            },
+            {
+              "display": "1.5e3× (0%)",
+              "value": 1500,
+              "share": 0
+            },
+            {
+              "display": "2.3e6× (11%)",
+              "value": 2300000,
+              "share": 11
+            },
+            {
+              "display": "8.1e4× (0%)",
+              "value": 81000,
+              "share": 0
+            },
+            {
+              "display": "2.0e7× (100%)",
+              "value": 20000000,
+              "share": 100
+            },
+            {
+              "display": "—"
+            }
+          ]
+        },
+        {
+          "label": "fp8-ada-mma-draft/2026-09-22 · frame-v3 · Poseidon2 rows · B-Ligero",
+          "cells": [
+            {
+              "display": "1.3e6× (14%)",
+              "value": 1300000,
+              "share": 14
+            },
+            {
+              "display": "3.1e5× (4%)",
+              "value": 310000,
+              "share": 4
+            },
+            {
+              "display": "1.2e6× (13%)",
+              "value": 1200000,
+              "share": 13
+            },
+            {
+              "display": "1.8e6× (20%)",
+              "value": 1800000,
+              "share": 20
+            },
+            {
+              "display": "3.9e6× (44%)",
+              "value": 3900000,
+              "share": 44
+            },
+            {
+              "display": "0× (0%)",
+              "value": 0,
+              "share": 0
+            },
+            {
+              "display": "1.8e3× (0%)",
+              "value": 1800,
+              "share": 0
+            },
+            {
+              "display": "3.8e5× (4%)",
+              "value": 380000,
+              "share": 4
+            },
+            {
+              "display": "7.4e4× (1%)",
+              "value": 74000,
+              "share": 1
+            },
+            {
+              "display": "8.9e6× (100%)",
+              "value": 8900000,
+              "share": 100
+            },
+            {
+              "display": "—"
+            }
+          ]
+        },
+        {
+          "label": "nvfp4-sm120-mma-draft/2026-09-22 · frame-v3 · Poseidon2 rows · B-Ligero",
+          "cells": [
+            {
+              "display": "1.8e6× (12%)",
+              "value": 1800000,
+              "share": 12
+            },
+            {
+              "display": "6.2e5× (4%)",
+              "value": 620000,
+              "share": 4
+            },
+            {
+              "display": "1.9e6× (12%)",
+              "value": 1900000,
+              "share": 12
+            },
+            {
+              "display": "1.5e6× (10%)",
+              "value": 1500000,
+              "share": 10
+            },
+            {
+              "display": "8.2e6× (53%)",
+              "value": 8200000,
+              "share": 53
+            },
+            {
+              "display": "0× (0%)",
+              "value": 0,
+              "share": 0
+            },
+            {
+              "display": "7.0e2× (0%)",
+              "value": 700,
+              "share": 0
+            },
+            {
+              "display": "1.4e6× (9%)",
+              "value": 1400000,
+              "share": 9
+            },
+            {
+              "display": "3.0e4× (0%)",
+              "value": 30000,
+              "share": 0
+            },
+            {
+              "display": "1.6e7× (100%)",
+              "value": 16000000,
+              "share": 100
+            },
+            {
+              "display": "—"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

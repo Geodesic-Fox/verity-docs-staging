@@ -1,0 +1,110 @@
+This page describes inference workloads as the [vLLM integration](/docs/integrations/vllm) serves them:
+
+- [Model graphs](#model-graphs): the Program of each served configuration on record, and each Definition it calls, drawn down to its gates.
+- [Models](#what-a-model-entry-will-hold): what a model entry will hold, each model's weights of record, and the checkpoints the integration pins.
+- [Subcircuit templates](#subcircuit-templates): the computations a backend proves, each with its parameters bound.
+- [Served configurations](#served-configurations): every configuration the integration has served and checked, with one run in detail.
+
+## Model graphs
+
+A model graph is the [Program](/docs/accounting/circuits) the vLLM integration builds for a served config's requests, rendered from its Calls. 13 [served configs](#served-configurations) have a Program on record: nine models, on L40S and H100, in BF16 and FP8, with one or two tensor-parallel ranks. The table names each by vLLM's own arguments: the model and its quantization, the GPU, `tensor_parallel_size`, the number of requests, their prompt and output lengths and mix, and `SamplingParams`. Every config runs with `dtype="bfloat16"`, `enforce_eager=True` and vLLM's batch-invariant kernels, so these aren't columns. Select a row to open its graph.
+
+![Served Programs](/graphs/programs)
+
+The graph opens over the page, or as a sheet from the bottom on a phone. It has three panes:
+
+- The hierarchy is a tree of the circuit's levels, open down to where you are. Select a level to go to it.
+- The schematic draws one level.
+- The datasheet describes the Definition you're inside, or the component you select.
+
+The page's address names the circuit and where you are in it, so a link opens the graph at the same place. The Program is one circuit, and the schematic draws every level of it the same way: subcircuits you can open, gates, and the ports each level reads and writes, wired together. A module is a subcircuit, and so is each op: every Call of one Definition in one module. Edges are the values the Calls read from each other. Every level's inputs come in along the top and its outputs leave along the bottom, and hovering over one says what it holds and what it's wired to. A value is written as its elements and their format: 2,048 × BF16 is a row of 2,048 BF16 numbers, and 1 × int32, such as a token, is a single one. With Widths on, every wire is labeled this way. The export doesn't carry formats yet, so the site derives them from the primitives, whose names give them, and writes a value's width in bits where they don't. The Program's inputs are the prompt, the model's weights, and in a sampled config, the seed and the top-p split count. The input unit certifies all of them. The split count is how many slices vLLM's top-p kernel cuts each row of logits into. It's set by the number of live requests and the GPU's SM count, and the Program reads it because it changes the order of the kernel's sums. The sampled tokens leave at the bottom. The graph stays small by folding: a folded module shows only its boundary ports, and layers whose structure repeats exactly are drawn once. The levels control sets how many levels of modules are open at once, from only the module you're in to the whole model. A subcircuit's bar shows what's inside it: the [subcircuit templates](#subcircuit-templates) its Calls lower to, or below a Call, the arithmetic its components do. The legend ranks these by size. A subcircuit's size is its gates, AND, XOR and NOT alike, in the Boolean circuit it lowers to, and hovering over a subcircuit breaks its size down the same way. What isn't lowered to gates yet has no size to rank, so the legend names it below the ranking.
+
+Click an op to step inside one of its Calls, and keep stepping down to the gates. Each level is the body of the Definition the Call applies, from the vLLM integration's export of its Definitions. In Llama-3.2-1B:
+
+- A Q, K, V projection Call is a batch of 3,072 [`GemmCoordinate<2048>`](/circuits/gemm-coordinate/k2048/sm80-mma-bf16), one per output word, all reading the same input row.
+- One coordinate is 128 chained [`AmpereBF16TcDot16`](/circuits/AmpereBF16TcDot16_v1) steps from a zero accumulator, then a cast to BF16. On an H100, the steps are [`HopperBF16WgmmaDot16`](/circuits/HopperBF16WgmmaDot16_v1).
+- A [fused add and RMSNorm](/circuits/rmsnorm/fused-cuda-n2048) is the CUDA kernel's own reduction: 1,024 thread partials, a per-warp tree, then the warp sums in order.
+
+Each of these links opens its Definition on its own, with no served config around it, and so does a template's View circuit under [Subcircuit templates](#subcircuit-templates). Any Definition a Program on record calls opens this way, and you step down from it to its gates as you would inside a Call. A Definition with more than one specialization on record, such as `GemmCoordinate` at each K the Programs use, has a picker for them.
+
+You can keep going below a primitive, to AND, XOR and NOT gates, in every config. The gates come from C-Flock's lowering of each template to Boolean circuits. It's derived for this site, and it isn't a proof statement. Below a primitive, each level is a named subcircuit's components wired together, with the gates it has outside its components beside them. The tensor-core step's components include its operand decode, integer multiplies, group sums, normalize and round. Every subcircuit can also be drawn gate by gate, whatever its size: its own gates, with its components as boxes you open in place, down to every gate. A table read stays one box. Everything is gates: a special function such as SiLU, exp or tanh is a subcircuit like any other, stepped into down to its gates, with its real size. A primitive that only moves or clears bits, such as clearing a sign, is wiring and needs no gates. What isn't lowered yet is dashed, and nothing evaluates it. A subcircuit with a component that isn't lowered yet still has a size, but it counts only the gates that exist.
+
+Every primitive is lowered to gates, so every config's size is exact. The row gathers are multiplexers: the embedding's picks a row of the weights by the token id, and the MoE configs' pick one expert's row. Two primitives are too large to hold as one circuit: the embedding's gather, and the top-p keep word, with its pipelines and stages. Each is lowered as a composed Definition, down to pieces counted by instance, so it has a size, but its gates aren't drawn.
+
+A Call is the unit the sampler draws today. Checking the components inside a Call would take a finer cut, which is proposed, not of record. In the one proposed, each gate is certified by exactly one proof unit, and values cross from one unit to another only through commitments. The graph's Proof units toggle draws that cut, and changes only what's colored, outlined and hatched. Hovering over an op says how many units one of its Calls has. Inside a Call, an outline is one proof unit, around the components whose gates it checks together. A GEMM coordinate's 128 tensor-core steps and its rounding are one unit, for example, and so is a fused RMSNorm's whole reduction to its norm scale. A component that is many units, such as 3,072 coordinates side by side, says how many in its hover card, and its bar shows their kinds. Values are committed where they cross a unit's boundary. The values the input unit certifies are hatched: weights, the request's inputs and randomness.
+
+Coverage is counted against a finite matrix: 20 of the models the integration pins, with or without FP8 quantization, on L40S or H100, on one or two GPUs, at three prompt and output lengths, with greedy or top-p sampling. That's 960 configurations. vLLM can't serve 56 of them, so they don't count. In those, the prompt and output run past the model's context, the attention heads don't split over two GPUs, or the weights don't fit on one L40S. Of the 904 left, 12 are on record. There are 12 rather than 13 because two of OLMoE's served configs differ only in when their requests arrive. The integration's registry sorts the rest:
+- 312 can be represented but haven't been run;
+- 580 can't be represented yet, because the integration has no Definition for an architecture or an operation.
+
+The main operation gaps are vLLM's online FP8, Gemma-2's and the MoE expert GEMMs' kernels on H100, and GPT-NeoX's LayerNorm and exact GELU. For a two-rank config, the graph is one rank's shard, and its collectives read from the other rank.
+
+The graph's names, descriptions and formats come from annotations in verity's `verity/annotations/v0` format (`verity.primitives.circuits.annotations`). Each is keyed by an id the Program already has: `def:SiluMul_v1` names a Definition in every specialization, and `port:SiluMul_v1/in/gu` names one of its parameters. Annotations sit outside every digest, so naming something never changes a Program. Verity validates each key against the structure of the Program it annotates. The site adds names of its own that aren't in verity yet.
+
+For the headline config, Llama-3.2-1B on an L40S with one request, Serving lays the whole run out the way vLLM runs it. The run is drawn by engine step, then the request in each step, then that request's model runner: the model's modules and the sampler. It comes from the record Build of that config. The prefill step is drawn once, and so are the 31 decode steps, which share one structure. The next token runs back from each step's sampler into the next step's embedding. The KV cache runs back from each layer's Q, K, V projection and RoPE into later steps' attention. Every Call is in exactly one step, so the sizes add up to the Program's. For OLMoE with two tensor-parallel ranks, Serving shows an example of the rank level. It covers two of the config's eight requests, each module's Calls on both ranks, and the values each rank's collectives read from the other's. Its Build has no step chronology, so the steps are each request's own.
+
+## What a model entry will hold
+
+**Planned.** The Census has no model entries yet: `catalog/census/` on the verity repo's main branch has no models file. Its README plans for it to grow into a knowledge base of hardware, ML models and workloads, but no model schema exists yet. Today, the models the vLLM integration can serve are the ones its checkpoint manifest pins, together with each model's weights of record. Like every Census entry, a model entry will carry a stable id and a non-empty list of sources. It's planned to record:
+
+- the model's architecture
+- its weights of record
+
+## Weights of record
+
+A model's weights of record are the checkpoint files its served weights are checked against: the safetensors shards whose sha256 digests are pinned. They matter because hashing the served weights alone proves only self-consistency. A served model that differs from its checkpoint in a single element still replays bit for bit against itself.
+
+The [vLLM integration](/docs/integrations/vllm) checks served weights against the weights of record:
+
+1. It derives one digest per weight field from the pinned shard bytes, on CPU and without an engine.
+2. It compares each digest with the weights the serving side registered when it committed them.
+3. Any difference, or a field missing from the served model, fails the check by name.
+
+## Checkpoints the vLLM integration pins
+
+The vLLM integration serves a model only if `integrations/vllm/manifests/checkpoints.json` pins it, by Hugging Face repo and full commit revision. `verity_vllm.LLM` refuses an unpinned model, and a pinned model at any other revision. Each pin records the sha256 of every safetensors shard of the checkpoint. The manifest pins these 22 checkpoints:
+
+| Hugging Face repo | Revision (first 10 characters) | Shards pinned |
+| --- | --- | --- |
+| `allenai/OLMoE-1B-7B-0924` | `6d84c48581` | 3 |
+| `EleutherAI/pythia-160m` | `50f5173d93` | 1 |
+| `HuggingFaceTB/SmolLM2-135M` | `93efa2f097` | 1 |
+| `HuggingFaceTB/SmolLM2-360M` | `f8027fd0ea` | 1 |
+| `microsoft/phi-2`[^resolve-only] | `810d367871` | 2 |
+| `microsoft/Phi-3-mini-4k-instruct` | `f39ac1d28e` | 2 |
+| `Qwen/Qwen1.5-MoE-A2.7B-Chat` | `ec052fda17` | 8 |
+| `Qwen/Qwen2.5-0.5B` | `060db6499f` | 1 |
+| `Qwen/Qwen2.5-1.5B` | `8faed761d4` | 1 |
+| `Qwen/Qwen2.5-1.5B-Instruct` | `989aa7980e` | 1 |
+| `Qwen/Qwen2.5-1.5B-Instruct-AWQ`[^awq] | `3ecffa0ceb` | 1 |
+| `Qwen/Qwen2.5-7B` | `d149729398` | 4 |
+| `Qwen/Qwen2.5-7B-Instruct` | `a09a35458c` | 4 |
+| `Qwen/Qwen2.5-14B-Instruct` | `cf98f3b3bb` | 8 |
+| `Qwen/Qwen2.5-32B-Instruct` | `5ede1c97bb` | 17 |
+| `Qwen/Qwen3-4B-Instruct-2507` | `cdbee75f17` | 3 |
+| `Qwen/Qwen3-4B-Instruct-2507-FP8` | `8591804019` | 1 |
+| `Qwen/Qwen3-30B-A3B` | `ad44e777bc` | 16 |
+| `TinyLlama/TinyLlama-1.1B-Chat-v1.0` | `fe8a4ea1ff` | 1 |
+| `unsloth/gemma-2-2b` | `25319945f7` | 1 |
+| `unsloth/Llama-3.2-1B` | `9535bd9b1d` | 1 |
+| `unsloth/mistral-7b-v0.3` | `9ea1b83f5c` | 3 |
+
+Pass the full revision from the manifest when you construct an engine: a prefix isn't accepted.
+
+A pin isn't a Census entry. It records a checkpoint's files and their digests, not a summary of its architecture, and it doesn't say which of the model's computations have subcircuits. [Subcircuit templates](#subcircuit-templates) lists the subcircuits, and the [contributing guidelines](/docs/contributing) cover how entries are sourced and cited.
+
+## Subcircuit templates
+
+Every computation a backend proves is a subcircuit: a subcircuit template with each of its parameters bound. Select a template or subcircuit for its definition.
+
+![Subcircuit templates](/tables/subcircuit-templates)
+
+## Served configurations
+
+The first table lists every configuration the [vLLM integration](/docs/integrations/vllm) has served and checked, with the mix of subcircuit templates its serving run decomposes into. The second shows one run in detail: its subcircuits, how many inputs each holds, and samples with their exact outputs.
+
+![Served configurations](/tables/served-configs)
+
+[^resolve-only]: The manifest records this checkpoint's revision and shard digests, but no downloaded snapshot.
+
+[^awq]: Pinned, but outside the coverage matrix: the integration has no Definition for vLLM's AWQ int4 GEMM, so it can't be represented.

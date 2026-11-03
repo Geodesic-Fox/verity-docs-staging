@@ -1,0 +1,139 @@
+{
+  "schema": "verity-docs/program-annotations/v2",
+  "author": "docs site, from the Programs' module trees and dataflow",
+  "annotations": [
+    { "match": "**/AddScalarBf16_v1", "label": "1 + weight" },
+    { "match": "**/AddScalarF32_v1", "label": "+ ε" },
+    { "match": "**/MulVecF32_v1", "label": "× (1 + weight)" },
+    { "match": "**/AddWidenedBf16_v1", "label": "Add residual" },
+
+    { "match": "model", "label": "Model" },
+    { "match": "model.layers", "label": "Decoder layers" },
+    { "match": "model.embed_tokens", "label": "Embedding" },
+    {
+      "match": "model.embed_tokens/*",
+      "note": "Opens each token's row of the committed embedding table: the prompt's tokens, then each sampled token.",
+      "ports": { "in:prompt": "prompt", "**TokenSelect**": "next token" }
+    },
+    { "match": "model.embed_tokens/EmbeddingShard_v1", "label": "Look up this rank's rows" },
+    { "match": "model.layers.*.input_layernorm", "label": "Input norm" },
+    { "match": "model.layers.*.self_attn", "label": "Attention" },
+    { "match": "model.layers.*.self_attn.qkv_proj", "label": "Q, K, V projection" },
+    {
+      "match": "model.layers.*.self_attn.all_gather2",
+      "label": "All-gather",
+      "note": "The export gives each of these Calls its own module; they're drawn as one."
+    },
+    { "match": "model.layers.*.self_attn.q_norm", "label": "Q norm" },
+    { "match": "model.layers.*.self_attn.k_norm", "label": "K norm" },
+    { "match": "model.layers.*.self_attn.rotary_emb", "label": "RoPE" },
+    { "match": "model.layers.*.self_attn.rotary_emb/RoPE_v1#1", "label": "Rotate q" },
+    { "match": "model.layers.*.self_attn.rotary_emb/RoPE_v1#2", "label": "Rotate k" },
+    {
+      "match": "model.layers.*.self_attn.attn",
+      "label": "Attention heads",
+      "note": "Each token's query attends over every key so far."
+    },
+    {
+      "match": "model.layers.*.self_attn.attn/*",
+      "ports": {
+        "**.rotary_emb/RoPE_v1": "q, k",
+        "**.rotary_emb/RoPE_v1#1": "q",
+        "**.rotary_emb/RoPE_v1#2": "k",
+        "**.qkv_proj/**": "v"
+      }
+    },
+    { "match": "model.layers.*.self_attn.o_proj", "label": "Output projection" },
+    { "match": "model.layers.*.post_attention_layernorm", "label": "Post-attention norm" },
+    { "match": "model.layers.*.pre_feedforward_layernorm", "label": "Pre-MLP norm" },
+    { "match": "model.layers.*.post_feedforward_layernorm", "label": "Post-MLP norm" },
+    { "match": "model.layers.*.mlp", "label": "MLP" },
+    { "match": "model.layers.*.mlp.gate_up_proj", "label": "Gate and up projection" },
+    { "match": "model.layers.*.mlp.down_proj", "label": "Down projection" },
+    { "match": "model.layers.*.mlp.gate", "label": "Router logits" },
+    {
+      "match": "model.layers.*.mlp.experts",
+      "label": "Experts",
+      "note": "Each token runs through its top-k experts, and their outputs are summed, weighted by the router."
+    },
+    { "match": "model.norm", "label": "Final norm" },
+    { "match": "logits_processor", "label": "Unembedding", "note": "The final hidden state to a logit per vocabulary entry, once per sampled token." },
+    { "match": "logits_processor/Bf16DivScalar_v1", "label": "Softcap: ÷ cap" },
+    { "match": "logits_processor/Bf16Tanh_v1", "label": "Softcap: tanh" },
+    { "match": "logits_processor/Bf16MulScalar_v1", "label": "Softcap: × cap" },
+
+    {
+      "match": "model.layers.*.input_layernorm/RMSNormFusedCuda_v2",
+      "ports": { "**.mlp.**": "x", "**_layernorm/**": "residual" },
+      "edges": { "**.mlp.**": "next layer", "**_layernorm/**": "residual" }
+    },
+    {
+      "match": "model.layers.*.post_attention_layernorm/RMSNormFusedCuda_v2",
+      "ports": { "**.self_attn.**": "x", "**_layernorm/**": "residual", "model.embed_tokens/**": "residual" },
+      "edges": { "**_layernorm/**": "residual", "model.embed_tokens/**": "residual" }
+    },
+    {
+      "match": "model.norm/RMSNormFusedCuda_v2",
+      "ports": { "**.mlp.**": "x", "**_layernorm/**": "residual" },
+      "edges": { "**_layernorm/**": "residual" }
+    },
+    {
+      "match": "model.layers.*.input_layernorm/AddWidenedBf16_v1",
+      "ports": { "**.post_feedforward_layernorm/**": "x", "**.pre_feedforward_layernorm/**": "residual" },
+      "edges": { "**.post_feedforward_layernorm/**": "next layer", "**.pre_feedforward_layernorm/**": "residual" }
+    },
+    {
+      "match": "model.layers.*.pre_feedforward_layernorm/AddWidenedBf16_v1",
+      "ports": {
+        "**.post_attention_layernorm/**": "x",
+        "**.input_layernorm/**": "residual",
+        "Bf16MulScalarTensor_v1": "residual"
+      },
+      "edges": { "**.input_layernorm/**": "residual", "Bf16MulScalarTensor_v1": "residual" }
+    },
+    {
+      "match": "model.norm/AddWidenedBf16_v1",
+      "ports": { "**.post_feedforward_layernorm/**": "x", "**.pre_feedforward_layernorm/**": "residual" },
+      "edges": { "**.pre_feedforward_layernorm/**": "residual" }
+    },
+
+    {
+      "match": "Bf16MulScalarTensor_v1",
+      "label": "Scale embeddings",
+      "note": "Gemma scales the embeddings by √H, its normalizer, before the first layer."
+    },
+    {
+      "match": "GumbelTopPTokenSelect_v1",
+      "label": "Sample next token",
+      "ports": { "logits_processor/**": "logits", "in:seed": "seed", "in:splits": "split" },
+      "edges": { "out": "next token" }
+    },
+    {
+      "match": "TokenSelect_v1",
+      "label": "Pick next token",
+      "note": "Greedy decoding: the token with the highest logit.",
+      "edges": { "out": "next token" }
+    },
+    { "match": "in:prompt", "label": "Prompt", "note": "The request's prompt: its token ids, 32 bits each." },
+    {
+      "match": "in:weights",
+      "label": "Weights",
+      "note": "The model's weights: every tensor the Calls read, checked against the weights of record, the checkpoint files whose digests are pinned."
+    },
+    {
+      "match": "in:seed",
+      "label": "Seed",
+      "note": "The request's sampling seed, 64 bits. With each token's position, it keys the Philox stream the sampler draws its Gumbel noise from."
+    },
+    {
+      "match": "in:splits",
+      "label": "Splits",
+      "note": "How many pieces vLLM's top-p kernel splits the vocabulary into, 32 bits per sampled token. It's launch geometry, set by the live requests and the GPU's SM count, and the Program reads it because it changes the rounding."
+    },
+    {
+      "match": "out:*",
+      "label": "Sampled tokens",
+      "note": "The Program's output: the token it samples at each step, which also runs back as the next token's input."
+    }
+  ]
+}

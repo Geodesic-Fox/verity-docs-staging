@@ -1,0 +1,382 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+@source "../app";
+@source "../components";
+@source "../lib";
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-chip-accent: var(--sidebar-chip-accent);
+  --color-sidebar-separator: var(--sidebar-separator);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --font-sans: var(--font-sans);
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    scrollbar-gutter: stable;
+  }
+  @supports (scrollbar-gutter: stable) {
+    html body[data-scroll-locked] {
+      margin-right: 0 !important;
+      padding-right: 0 !important;
+    }
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/*
+ * Sidebar row grammar, measured from the Vercel dashboard (both themes):
+ * 36px rows with a 6px radius, medium labels with tight tracking, muted
+ * text snapping to foreground on a solid hover fill, the selected row on a
+ * darker fill. Only the drill chevron chip fades.
+ */
+:root {
+  --sidebar: hsla(0, 0%, 98%, 1);
+  --sidebar-foreground: hsla(0, 0%, 9%, 1);
+  --sidebar-muted: hsla(0, 0%, 30%, 1);
+  --sidebar-accent: hsla(0, 0%, 95%, 1);
+  --sidebar-accent-foreground: hsla(0, 0%, 9%, 1);
+  --sidebar-active: hsla(0, 0%, 92%, 1);
+  --sidebar-chip-accent: #0000000d;
+  --sidebar-border: hsla(0, 0%, 95%, 1);
+  --sidebar-separator: hsla(0, 0%, 92%, 1);
+  --sidebar-ring: hsla(212, 100%, 48%, 1);
+  --sidebar-row-height: 2.25rem;
+  --sidebar-row-radius: 0.375rem;
+  --sidebar-row-gap: 1px;
+  --sidebar-inset: 0.5rem;
+  --sidebar-label-tracking: -0.02em;
+  --sidebar-chip-size: 1.5rem;
+  --sidebar-chip-radius: 0.25rem;
+  --sidebar-chip-duration: 150ms;
+  --sidebar-ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Drill-in panel swap: 8px translate, fade and 2px blur over 200ms. */
+  --sidebar-drill-duration: 200ms;
+  --sidebar-drill-ease: ease;
+  --sidebar-drill-offset: 8px;
+  --sidebar-drill-parallax: 1;
+  --sidebar-drill-blur: 2px;
+  --sidebar-drill-scale: 1;
+  --sidebar-drill-fade: 1;
+}
+
+.dark {
+  --sidebar: hsla(0, 0%, 0%, 1);
+  --sidebar-foreground: hsla(0, 0%, 93%, 1);
+  --sidebar-muted: hsla(0, 0%, 63%, 1);
+  --sidebar-accent: hsla(0, 0%, 10%, 1);
+  --sidebar-accent-foreground: hsla(0, 0%, 93%, 1);
+  --sidebar-active: hsla(0, 0%, 12%, 1);
+  --sidebar-chip-accent: #ffffff0f;
+  --sidebar-border: hsla(0, 0%, 10%, 1);
+  --sidebar-separator: hsla(0, 0%, 12%, 1);
+  --sidebar-ring: hsla(210, 100%, 66%, 1);
+}
+
+/*
+ * Geist's grays for the console's diagrams (lib/design/tokens.ts `G`), in both themes. A page's background in the dark
+ * theme is the console's own, so a diagram sits on it without a seam.
+ */
+:root {
+  --g-bg-100: hsl(0 0% 100%);
+  --g-bg-200: hsl(0 0% 98%);
+  --g-gray-100: hsl(0 0% 95%);
+  --g-gray-200: hsl(0 0% 92%);
+  --g-gray-400: hsl(0 0% 92%);
+  --g-gray-500: hsl(0 0% 79%);
+  --g-gray-700: hsl(0 0% 56%);
+  --g-gray-800: hsl(0 0% 49%);
+  --g-gray-900: hsl(0 0% 30%);
+  --g-gray-1000: hsl(0 0% 9%);
+  --g-alpha-200: #00000014;
+}
+
+.dark {
+  --g-bg-100: var(--background);
+  --g-bg-200: var(--background);
+  --g-gray-100: hsl(0 0% 10%);
+  --g-gray-200: hsl(0 0% 12%);
+  --g-gray-400: hsl(0 0% 18%);
+  --g-gray-500: hsl(0 0% 27%);
+  --g-gray-700: hsl(0 0% 56%);
+  --g-gray-800: hsl(0 0% 49%);
+  --g-gray-900: hsl(0 0% 63%);
+  --g-gray-1000: hsl(0 0% 93%);
+  --g-alpha-200: #ffffff17;
+}
+
+[data-slot="sidebar-drill-panel"][data-motion] {
+  animation-duration: var(--sidebar-drill-duration);
+  animation-timing-function: var(--sidebar-drill-ease);
+  animation-fill-mode: both;
+  will-change: transform, opacity, filter;
+}
+[data-slot="sidebar-drill-panel"][data-motion="enter-forward"] { animation-name: sidebar-drill-enter-forward; }
+[data-slot="sidebar-drill-panel"][data-motion="exit-forward"] { animation-name: sidebar-drill-exit-forward; }
+[data-slot="sidebar-drill-panel"][data-motion="enter-back"] { animation-name: sidebar-drill-enter-back; }
+[data-slot="sidebar-drill-panel"][data-motion="exit-back"] { animation-name: sidebar-drill-exit-back; }
+
+@keyframes sidebar-drill-enter-forward {
+  from {
+    opacity: calc(1 - var(--sidebar-drill-fade));
+    transform: translateX(var(--sidebar-drill-offset));
+    filter: blur(var(--sidebar-drill-blur));
+  }
+}
+@keyframes sidebar-drill-exit-forward {
+  to {
+    opacity: calc(1 - var(--sidebar-drill-fade));
+    transform: translateX(calc(var(--sidebar-drill-offset) * var(--sidebar-drill-parallax) * -1))
+      scale(var(--sidebar-drill-scale));
+    filter: blur(var(--sidebar-drill-blur));
+  }
+}
+@keyframes sidebar-drill-enter-back {
+  from {
+    opacity: calc(1 - var(--sidebar-drill-fade));
+    transform: translateX(calc(var(--sidebar-drill-offset) * var(--sidebar-drill-parallax) * -1))
+      scale(var(--sidebar-drill-scale));
+    filter: blur(var(--sidebar-drill-blur));
+  }
+}
+@keyframes sidebar-drill-exit-back {
+  to {
+    opacity: calc(1 - var(--sidebar-drill-fade));
+    transform: translateX(var(--sidebar-drill-offset));
+    filter: blur(var(--sidebar-drill-blur));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="sidebar-drill-panel"][data-motion] { animation-duration: 0.01ms; }
+}
+
+/* Benchmark tables: shared by docs embeds and the backend comparison. */
+.docs-table { font-family: var(--font-sans); padding-block: 0.75rem; }
+.docs-cell { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.docs-data-table td, .docs-data-table th { font-size: 13px; white-space: normal; }
+.docs-data-table td { min-width: 5rem; }
+.docs-flag {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  vertical-align: 1px;
+  color: var(--muted-foreground);
+  background: var(--muted);
+}
+.docs-flag[data-flag="alg"] {
+  color: var(--trust-caution-fg);
+  background: var(--trust-caution-bg);
+}
+.docs-bars { display: flex; flex-direction: column; gap: 14px; list-style: none; margin: 0; padding: 0; }
+.docs-bars li { padding: 0; margin: 0; }
+.docs-pill {
+  display: inline-block;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--foreground);
+  background: var(--background);
+}
+
+/* Registry tokens: properties and assumptions. */
+.docs-token {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+  color: var(--foreground);
+  background: var(--background);
+  cursor: pointer;
+}
+.docs-token:hover { background: var(--muted); }
+.docs-token:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.docs-token-param .katex { font-size: 1em; }
+
+/*
+ * Trust ratings on a diverging blue-to-red scale: solid (strong blue),
+ * accepted (light blue), caution (light red), weak (strong red). Assumption
+ * tokens take their rating's colour; property tokens stay neutral.
+ */
+:root {
+  --trust-solid-fg: oklch(0.45 0.14 255);
+  --trust-solid-bg: oklch(0.955 0.03 252);
+  --trust-solid-border: oklch(0.86 0.06 252);
+  --trust-accepted-fg: oklch(0.5 0.08 240);
+  --trust-accepted-bg: oklch(0.97 0.012 240);
+  --trust-accepted-border: oklch(0.9 0.03 240);
+  --trust-caution-fg: oklch(0.52 0.1 32);
+  --trust-caution-bg: oklch(0.97 0.014 32);
+  --trust-caution-border: oklch(0.9 0.035 32);
+  --trust-weak-fg: oklch(0.5 0.18 25);
+  --trust-weak-bg: oklch(0.955 0.035 25);
+  --trust-weak-border: oklch(0.86 0.08 25);
+}
+.dark {
+  --trust-solid-fg: oklch(0.8 0.11 252);
+  --trust-solid-bg: oklch(0.3 0.07 255 / 0.55);
+  --trust-solid-border: oklch(0.45 0.1 255);
+  --trust-accepted-fg: oklch(0.82 0.05 240);
+  --trust-accepted-bg: oklch(0.3 0.03 240 / 0.5);
+  --trust-accepted-border: oklch(0.42 0.04 240);
+  --trust-caution-fg: oklch(0.82 0.06 32);
+  --trust-caution-bg: oklch(0.3 0.03 32 / 0.5);
+  --trust-caution-border: oklch(0.42 0.05 32);
+  --trust-weak-fg: oklch(0.78 0.13 25);
+  --trust-weak-bg: oklch(0.3 0.08 25 / 0.55);
+  --trust-weak-border: oklch(0.47 0.12 25);
+}
+.docs-token[data-kind="property"] { border-color: transparent; background: var(--muted); }
+.docs-token[data-kind="property"]:hover { background: color-mix(in oklch, var(--muted), var(--foreground) 6%); }
+.docs-token[data-trust],
+.docs-trust[data-trust] {
+  color: var(--trust-fg);
+  background: var(--trust-bg);
+  border-color: var(--trust-border);
+}
+.docs-token[data-trust]:hover { background: color-mix(in oklch, var(--trust-bg), var(--trust-fg) 8%); }
+[data-trust="solid"] { --trust-fg: var(--trust-solid-fg); --trust-bg: var(--trust-solid-bg); --trust-border: var(--trust-solid-border); }
+[data-trust="accepted"] { --trust-fg: var(--trust-accepted-fg); --trust-bg: var(--trust-accepted-bg); --trust-border: var(--trust-accepted-border); }
+[data-trust="caution"] { --trust-fg: var(--trust-caution-fg); --trust-bg: var(--trust-caution-bg); --trust-border: var(--trust-caution-border); }
+[data-trust="weak"] { --trust-fg: var(--trust-weak-fg); --trust-bg: var(--trust-weak-bg); --trust-border: var(--trust-weak-border); }
+.docs-trust {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "verity-docs/annotations-upstream/v1",
+  "source": {
+    "repo": "danielreuter/verity",
+    "commit": "f0810a11"
+  },
+  "files": {
+    "core": {
+      "path": "packages/verity/src/verity/ml/annotations.json",
+      "exists": false,
+      "entries": []
+    },
+    "vllm": {
+      "path": "integrations/vllm/verity_vllm/program/registry/annotations.json",
+      "exists": false,
+      "entries": []
+    }
+  }
+}
