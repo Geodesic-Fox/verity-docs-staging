@@ -1,4 +1,4 @@
-The vLLM integration makes an LLM serving run auditable. It hooks a pinned vLLM engine so that, for each served workload, it builds the workload's circuit with an embedded Torch-to-circuit frontend, supplies the circuit's silicon-specific bindings, acquires and commits runtime values while serving, and runs proving through the ZK server, as the [remote](/docs/protocols/remote) and [onsite](/docs/protocols/onsite) protocols run it. It composes the components and owns none of their semantics. The program format belongs to [circuits](/docs/accounting/circuits), the exact arithmetic to [silicon](/docs/hardware/accelerators#silicon), the leaves and trees to [commitments](/docs/proof-systems/commitments), the draw and the guarantee to [sampled proofs](/docs/proof-systems/sampling), and each accounting check to its own [protocol](/docs/accounting). [Served configs](/docs/workloads/inference#served-configurations) lists the configurations it serves.
+The vLLM integration makes an LLM serving run auditable. It hooks a pinned vLLM engine so that, for each served workload, it builds the workload's circuit with an embedded Torch-to-circuit frontend, supplies the circuit's silicon-specific bindings, acquires and commits runtime values while serving, and runs proving through the ZK server, as the [remote](/protocols/remote) and [onsite](/protocols/onsite) protocols run it. It composes the components and owns none of their semantics. The program format belongs to [circuits](/accounting/circuits), the exact arithmetic to [silicon](/hardware/accelerators#silicon), the leaves and trees to [commitments](/proof-systems/commitments), the draw and the guarantee to [sampled proofs](/proof-systems/sampling), and each accounting check to its own [protocol](/accounting). [Served configs](/workloads/inference#served-configurations) lists the configurations it serves.
 
 ## Parts
 
@@ -10,7 +10,7 @@ The vLLM integration makes an LLM serving run auditable. It hooks a pinned vLLM 
 | Runtime correspondence | Maps each Call to where vLLM runs it |
 | Acquisition | Reads each committed value where it is computed |
 | Commitment | Hashes the values into hiding leaves and trees while serving |
-| Proving | Proves the drawn units through the ZK server, as the [remote](/docs/protocols/remote#proving) protocol runs it |
+| Proving | Proves the drawn units through the ZK server, as the [remote](/protocols/remote#proving) protocol runs it |
 
 The **engine profile** fixes the dtype, the tokenizer and the attention kernel, turns prefix caching off so that each request computes its own prompt, and runs vLLM batch-invariant, so that a request's values don't depend on what it was batched with. The program of a request is then the same however the scheduler groups it.
 
@@ -30,11 +30,11 @@ Each request becomes a program that covers its prefill and each of its decode st
 | Run inputs | Each request's prompt token ids, and its sampling parameters: temperature, top-p and the positions of its sampler's random stream | While serving |
 | Structure | The Calls, their dataflow and every shape | Never: it is the program itself, and public |
 
-The partition is `Q_word` v1 with $X = 16$ and $W = 32$. It cuts each Call's circuit into proof units whose committed outputs total at most 16 bits, or are one value of at most 32 bits. A value read across units is committed once, and no unit recomputes a value another unit computes. The [model graphs](/docs/workloads/inference#model-graphs) draw the cut on the served configurations, with their Proof units toggle.
+The partition is `Q_word` v1 with $X = 16$ and $W = 32$. It cuts each Call's circuit into proof units whose committed outputs total at most 16 bits, or are one value of at most 32 bits. A value read across units is committed once, and no unit recomputes a value another unit computes. The [model graphs](/workloads/inference#model-graphs) draw the cut on the served configurations, with their Proof units toggle.
 
 ## What is committed, and when
 
-What is committed is the partition's [boundary gates](/docs/accounting/circuits#partitions), fixed by the program and its partition before serving starts:
+What is committed is the partition's [boundary gates](/accounting/circuits#partitions), fixed by the program and its partition before serving starts:
 
 - every value read across a proof-unit boundary, which includes every value one Call passes to another;
 - the prescribed inputs: the weights and each request's prompt token ids;
@@ -68,7 +68,7 @@ sequenceDiagram
 3. **After the window, before any draw**, the serving roots are registered with the challenger, which logs a receipt and only then draws.
 4. **After the draw**, the drawn units' values, still on the workers, are the witness the workers prove over. Nothing else is opened.
 
-[Sampling](/docs/proof-systems/sampling) states the protocol these steps run, and [C-Flock](/docs/proof-systems/c-flock#integrity) bounds its error terms.
+[Sampling](/proof-systems/sampling) states the protocol these steps run, and [C-Flock](/proof-systems/c-flock#integrity) bounds its error terms.
 
 ## The instrumented program
 
@@ -105,4 +105,4 @@ Serving overhead is paid on every request. Proving overhead is paid only on the 
 
 ## Composing protocols
 
-The integration can install the [accounting](/docs/accounting) protocols on the same engine, innermost first. [Compute accounting](/docs/accounting/compute) runs the linear layers' GEMMs under its useful-work scheme, [memory accounting](/docs/accounting/memory) decodes the weights those GEMMs read, and sampled proofs commits what the model computed. A run admits only the protocols its program describes. Memory accounting's decode is bit-identical to the plain weights, and compute accounting's scheme must have a circuit in the program, so the committed values remain the program's values. Each protocol keeps its own checks, and the integration only installs them in order.
+The integration can install the [accounting](/accounting) protocols on the same engine, innermost first. [Compute accounting](/accounting/compute) runs the linear layers' GEMMs under its useful-work scheme, [memory accounting](/accounting/memory) decodes the weights those GEMMs read, and sampled proofs commits what the model computed. A run admits only the protocols its program describes. Memory accounting's decode is bit-identical to the plain weights, and compute accounting's scheme must have a circuit in the program, so the committed values remain the program's values. Each protocol keeps its own checks, and the integration only installs them in order.

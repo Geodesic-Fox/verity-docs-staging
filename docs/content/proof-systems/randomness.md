@@ -10,7 +10,7 @@ Randomness fixes how every coin a protocol uses is produced, and how bytes becom
 | Memory accounting's challenged indices | The memory challenger | A key derived from its own secret, the indices committed before the session | One index revealed per timed round |
 | Hiding-leaf salts | Whoever commits the leaf: the workers, the ZK server or the challenger | Its own generator, fresh for every leaf | When the leaf is committed |
 
-Every protocol's soundness reads one requirement on these sources: each draw is uniform, and unknown to the prover until the prover has committed everything the draw tests. The [remote](/docs/protocols/remote#parties) and [onsite](/docs/protocols/onsite#placement) protocols place the challenger and the memory challenger, and [sampled proofs](/docs/proof-systems/sampling#integrity) states the requirement as the assumption that `random` is fresh.
+Every protocol's soundness reads one requirement on these sources: each draw is uniform, and unknown to the prover until the prover has committed everything the draw tests. The [remote](/protocols/remote#parties) and [onsite](/protocols/onsite#placement) protocols place the challenger and the memory challenger, and [sampled proofs](/proof-systems/sampling#integrity) states the requirement as the assumption that `random` is fresh.
 
 ## Live coins
 
@@ -20,7 +20,7 @@ A proof is interactive: the prover sends a message, and the challenger answers w
 - No coin is derived from another, so no coin rests on a pseudorandom function.
 - There are no retries. A failed proof is a visible failure, and nothing redraws a coin.
 
-A zero-knowledge session, such as an outer proof in [C-Flock's zero-knowledge mode](/docs/proof-systems/c-flock#zero-knowledge-mode), commits to its coins in advance. The challenger draws every coin of the session before the prover's first message and commits to all of them in a coin tree. It opens a round's coins only in its answer to the prover's message for that round, and opens only the coins that round uses. The prover checks each opening against the commitment before it uses a coin, and stops the session at the first coin that doesn't open.
+A zero-knowledge session, such as an outer proof in [C-Flock's zero-knowledge mode](/proof-systems/c-flock#zero-knowledge-mode), commits to its coins in advance. The challenger draws every coin of the session before the prover's first message and commits to all of them in a coin tree. It opens a round's coins only in its answer to the prover's message for that round, and opens only the coins that round uses. The prover checks each opening against the commitment before it uses a coin, and stops the session at the first coin that doesn't open.
 
 The commitment protects the prover. Its binding stops the challenger from choosing a coin after it has seen the prover's message, which zero knowledge against a dishonest verifier needs. Its hiding keeps each coin unknown to the prover until its round is answered, as drawing it fresh does. The verifier checks the record, not the openings.
 
@@ -41,7 +41,7 @@ sequenceDiagram
 
 ### The coin tree
 
-A zero-knowledge session's coins are committed in the coin tree `coin-tree/hm96-sha512/v2`: one [hiding leaf](/docs/proof-systems/commitments#hiding-leaves) per round of each stream, in a SHA-512 Merkle tree, with every hash keyed to the session by the prover's nonce.
+A zero-knowledge session's coins are committed in the coin tree `coin-tree/hm96-sha512/v2`: one [hiding leaf](/proof-systems/commitments#hiding-leaves) per round of each stream, in a SHA-512 Merkle tree, with every hash keyed to the session by the prover's nonce.
 
 **Hello.** The prover's `Hello` names the schedule, `{"block", "nonce", "rounds_log", "scheme", "streams"}`:
 
@@ -106,7 +106,7 @@ A work draw's `closure` is optional. Each sampling design draws this way:
 | `stratified:K` | `subset(k_s, n_s)` in each stratum, with $k_s = \max(1, \lfloor (2Kn_s + N)/(2N) \rfloor)$ |
 | `work:K` | `subset(k_s, n_s)` in each stratum, with $k_s = \min(n_s, \max(f_s, \lceil K w_s n_s / W \rceil))$ and $W = \sum_s w_s n_s$, plus the closure |
 
-The verifier derives the strata from its own program and partition, never from the prover. It groups the units by the template of their root node, writes each stratum's units as ascending, disjoint, non-empty ranges `[lo, hi)` with adjacent ones merged, and orders the strata by their first unit. A stratum is `{"template": id, "units": [[lo, hi], …], "k": k_s}`, and a work stratum adds `"work": w_s` and `"floor": f_s`, from the verifier's own work table, with $f_s \ge 1$. Each stratum draws on its own fresh bytes, its local index $j$ standing for its $j$-th unit, and `units` is the union, ascending. A closure lists the units that the drawn units' credit depends on and that weren't drawn themselves, from the verifier's own closure map. [Sampling designs](/docs/proof-systems/sampling#sampling-designs) gives each design's acceptance probability. The [two-stage variant](/docs/proof-systems/sampling#two-stage-sampling) draws replay units first and proof units inside them second, each draw after the commitment it tests.
+The verifier derives the strata from its own program and partition, never from the prover. It groups the units by the template of their root node, writes each stratum's units as ascending, disjoint, non-empty ranges `[lo, hi)` with adjacent ones merged, and orders the strata by their first unit. A stratum is `{"template": id, "units": [[lo, hi], …], "k": k_s}`, and a work stratum adds `"work": w_s` and `"floor": f_s`, from the verifier's own work table, with $f_s \ge 1$. Each stratum draws on its own fresh bytes, its local index $j$ standing for its $j$-th unit, and `units` is the union, ascending. A closure lists the units that the drawn units' credit depends on and that weren't drawn themselves, from the verifier's own closure map. [Sampling designs](/proof-systems/sampling#sampling-designs) gives each design's acceptance probability. The [two-stage variant](/proof-systems/sampling#two-stage-sampling) draws replay units first and proof units inside them second, each draw after the commitment it tests.
 
 ## Derived draws
 
@@ -163,9 +163,9 @@ The unit draw runs the same rules on raw bytes, with no key. `uniform(n)` reads 
 
 ## What each protocol draws
 
-**[Sampled proofs](/docs/proof-systems/sampling).** The unit draw above, and the proof's live round coins, from the coin tree in a zero-knowledge session. In [C-Flock](/docs/proof-systems/c-flock) every round coin is a 16-byte element of $\mathrm{GF}(2^{128})$.
+**[Sampled proofs](/proof-systems/sampling).** The unit draw above, and the proof's live round coins, from the coin tree in a zero-knowledge session. In [C-Flock](/proof-systems/c-flock) every round coin is a 16-byte element of $\mathrm{GF}(2^{128})$.
 
-**[Compute accounting](/docs/accounting/compute)**, proof of useful work. Before epoch $e$, the challenger draws one 32-byte coin per label, `salt` and then `draw`, and publishes a commitment to both:
+**[Compute accounting](/accounting/compute)**, proof of useful work. Before epoch $e$, the challenger draws one 32-byte coin per label, `salt` and then `draw`, and publishes a commitment to both:
 
 ~~~text
 x_l      = SHA-512("verity/pouw/epoch-coin/v1\0" ‖ coin_l)                         l ∈ {salt, draw}
@@ -185,7 +185,7 @@ tile_j  = the tile whose cumulative ticket range holds uniform(key, T, j),   j =
 
 Each tile holds integer tickets in proportion to its share of its matrix multiplication's reference work, and $T$ is the total. So each of the $t$ draws picks a tile independently, with probability $W_{\mathrm{ref}}(\text{tile})/W$. Pearl-C draws the same way under the domain `verity/pouw/pearl-c-draw/v1`, with the context `{"transcript", "records", "salt"}`, where `records` is the digest of its unit records. A scheme's noise isn't a coin: it is part of the scheme's computation, derived from the salt and the prover's roots inside the scheme, and the scheme's own assumption accounts for grinding it.
 
-**[Memory accounting](/docs/accounting/memory)**, proof of useful space. The setup salt is 24 bytes, derived from the auditor's secret after the server has committed to the weights' encoding:
+**[Memory accounting](/accounting/memory)**, proof of useful space. The setup salt is 24 bytes, derived from the auditor's secret after the server has committed to the weights' encoding:
 
 ~~~text
 salt = stream(derive(secret, "verity/pous/salt/v1", {"w": commitment}), "salt")[0..24)
@@ -212,8 +212,8 @@ Live coins convince the auditor, who trusts its own challenger and memory challe
 
 Randomness connects to these pages:
 
-- [Remote](/docs/protocols/remote#protocol) and [Onsite](/docs/protocols/onsite#protocol): the challenger, the ZK server and the order of commitments and coins
-- [Sampling](/docs/proof-systems/sampling): the sampling designs and the freshness assumption
-- [Commitments](/docs/proof-systems/commitments): the hiding leaves and trees the coin commitments use
-- [Compute](/docs/accounting/compute) and [Memory](/docs/accounting/memory): the protocols whose draws are derived
-- [C-Flock](/docs/proof-systems/c-flock): the proof system whose round coins these are, and whose zero-knowledge mode commits them in the coin tree
+- [Remote](/protocols/remote#protocol) and [Onsite](/protocols/onsite#protocol): the challenger, the ZK server and the order of commitments and coins
+- [Sampling](/proof-systems/sampling): the sampling designs and the freshness assumption
+- [Commitments](/proof-systems/commitments): the hiding leaves and trees the coin commitments use
+- [Compute](/accounting/compute) and [Memory](/accounting/memory): the protocols whose draws are derived
+- [C-Flock](/proof-systems/c-flock): the proof system whose round coins these are, and whose zero-knowledge mode commits them in the coin tree

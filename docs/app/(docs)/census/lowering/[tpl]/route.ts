@@ -7,7 +7,7 @@ export function generateStaticParams() {
 }
 
 // One template's Boolean circuits, for a Definition opened on its own to step below its primitives.
-export async function GET(_: Request, { params }: RouteContext<"/docs/census/lowering/[tpl]">) {
+export async function GET(_: Request, { params }: RouteContext<"/census/lowering/[tpl]">) {
   const { tpl } = await params
   const lowering = templateLowering(tpl)
   if (!lowering) return new Response("no such template", { status: 404 })

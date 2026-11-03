@@ -26,7 +26,7 @@ Throughout, $P^*$ is any prover and $V^*$ any verifier, however it behaves.
 | `x` | $x$ | The statement $\Pi$ proves. |
 | `V_pi` | $V_\Pi$ | $\Pi$'s verifier as a circuit: $V_\Pi(x, m, c) = (b, o)$, its verdict $b$ and its public outputs $o$ on the statement, the messages $m$ and the coins $c$. |
 | `Com` | $\mathsf{Com}$ | A commitment scheme: $\mathsf{Com}(m; s)$ commits to a message $m$ under a salt $s$. |
-| `Arg` | $\mathsf{Arg} = (P_{\mathsf{Arg}}, V_{\mathsf{Arg}})$ | A [commit-and-prove argument](/docs/proof-systems#methods) for the outer relation $R_{\mathrm{out}}$ below. |
+| `Arg` | $\mathsf{Arg} = (P_{\mathsf{Arg}}, V_{\mathsf{Arg}})$ | A [commit-and-prove argument](/proof-systems#methods) for the outer relation $R_{\mathrm{out}}$ below. |
 
 $\Pi = (P_\Pi, V_\Pi)$ must be public-coin: each of its verifier's messages is fresh uniform coins, so its verifier is the function $V_\Pi$. Its number of rounds $r$ and the length of each message must be fixed by $x$.
 
@@ -77,7 +77,7 @@ The protocol assumes the following of its components only.
 - **$\Pi$** is complete and sound with error $\varepsilon_\Pi$: for every prover, $V_\Pi$ outputs $(1, o)$ on a false claim, $(x, o) \notin L$, with probability at most $\varepsilon_\Pi$.
 - **Fresh randomness.** The salts and $P_{\mathsf{Arg}}$'s randomness are uniform, and the verifier's coins are uniform and unseen until sent.
 
-$\mathsf{Arg}$'s zero knowledge has to hold however $V^*$ picks its coins. A construction that has it for each fixed sequence of coins, as a VEIL-style one does, gets it from a commitment to its coins and Goldreich–Kahan rewinding, which belong to the construction: C-Flock's are on [its page](/docs/proof-systems/c-flock#zero-knowledge-mode).
+$\mathsf{Arg}$'s zero knowledge has to hold however $V^*$ picks its coins. A construction that has it for each fixed sequence of coins, as a VEIL-style one does, gets it from a commitment to its coins and Goldreich–Kahan rewinding, which belong to the construction: C-Flock's are on [its page](/proof-systems/c-flock#zero-knowledge-mode).
 
 ### Theorem
 
@@ -100,7 +100,7 @@ The simulator gets $o$ only at the coins $V^*$ chose, since $V^*$ chooses its co
 
 **Soundness.** When $V_{\mathsf{Arg}}$ accepts, its extractor recovers openings $(m_i, s_i)$ with $V_\Pi(x, m, c) = (1, o)$, except with probability $\varepsilon_{\mathrm{ks}}$. Each $m_i$ is fixed before $c_i$: forking the run just after $h_i$ and extracting again gives the same opening, unless the prover has opened $h_i$ two ways, which costs $\varepsilon_{\mathrm{bind},i}$. So committing and later opening makes a prover for $\Pi$ whose round-$i$ message precedes $c_i$, and $\Pi$'s soundness bounds a false claim by $\varepsilon_\Pi$.
 
-Lean proves soundness for C-Flock's instance, with the faithfulness of its verifier circuit as a named assumption ([C-Flock](/docs/proof-systems/c-flock#the-verifier-as-a-circuit)); the statement over abstract components isn't in Lean yet.
+Lean proves soundness for C-Flock's instance, with the faithfulness of its verifier circuit as a named assumption ([C-Flock](/proof-systems/c-flock#the-verifier-as-a-circuit)); the statement over abstract components isn't in Lean yet.
 ~~~
 
 ~~~python
@@ -116,14 +116,14 @@ def simulate(V_star, x, outputs):   # reads no message, salt or witness
 ~~~proof pending
 Two hybrids. First, replace $V^*$'s view of the outer proof with $\mathsf{Arg}$'s simulator for $V^*$ on $R_{\mathrm{out}}(x, h, c, o)$; the outer witness, which holds every message and salt, is no longer read, at a cost of $\varepsilon_{\mathrm{zk}}$. Second, replace each commitment with a commitment to zeros of the message's length, which $x$ fixes. $V^*$ picks each $c_i$ after seeing $h_1, \ldots, h_i$, so each message may depend on earlier commitments, and hiding covers that, at a cost of $\varepsilon_{\mathrm{hide}}$ over all of them. What remains reads $x$ and $o(c)$ only, and it is `simulate`.
 
-Lean proves this for C-Flock's commitments when the verifier's coins are fixed before the first commitment and there are no public outputs ([C-Flock](/docs/proof-systems/c-flock#the-verifier-as-a-circuit)). The statement here, with coins chosen after each commitment and the outputs in the outer statement, isn't in Lean yet.
+Lean proves this for C-Flock's commitments when the verifier's coins are fixed before the first commitment and there are no public outputs ([C-Flock](/proof-systems/c-flock#the-verifier-as-a-circuit)). The statement here, with coins chosen after each commitment and the outputs in the outer statement, isn't in Lean yet.
 ~~~
 
 ### What's revealed
 
 The verifier learns $x$ and $o$, by design. A public output is still a fact about the private values: a verdict is one bit, many verdicts over inputs a verifier chooses would make it an oracle for the model, and $V^*$ sees $o$ at coins of its own choosing. So each protocol that runs this one lists its public outputs with a reason for each, and anything not on its list stays hidden.
 
-For a public circuit, $x = (C, U, \mathcal{D})$: the [circuit](/docs/accounting/circuits#the-circuit-model), its [partition](/docs/accounting/circuits#partitions) into proof units and the [sampling design](/docs/proof-systems/sampling). The trace stays hidden, every inner message and opening and so every unit's inputs and outputs, but which units were proved doesn't: the verifier draws them with its own coins. The [remote](/docs/protocols/remote) and [onsite](/docs/protocols/onsite) protocols run in this setting.
+For a public circuit, $x = (C, U, \mathcal{D})$: the [circuit](/accounting/circuits#the-circuit-model), its [partition](/accounting/circuits#partitions) into proof units and the [sampling design](/proof-systems/sampling). The trace stays hidden, every inner message and opening and so every unit's inputs and outputs, but which units were proved doesn't: the verifier draws them with its own coins. The [remote](/protocols/remote) and [onsite](/protocols/onsite) protocols run in this setting.
 
 ## Private circuit
 
@@ -131,7 +131,7 @@ To hide the circuit as well, the prover commits to $x$ and moves it into the out
 
 ![Zero knowledge, private circuit](/programs/recursion-private)
 
-- **Registration.** Before the inner phase the prover sends $h_x = \mathsf{Com}(\mathrm{pad}(x, \mathit{cls}); s_x)$. The class $\mathit{cls}$ is public: bounds that every admissible statement meets, such as its number of proof units and the [width rule](/docs/accounting/circuits#partitions) $X$ on their outputs. $x$ is padded to the class's full size, so the commitment's length says nothing about it.
+- **Registration.** Before the inner phase the prover sends $h_x = \mathsf{Com}(\mathrm{pad}(x, \mathit{cls}); s_x)$. The class $\mathit{cls}$ is public: bounds that every admissible statement meets, such as its number of proof units and the [width rule](/accounting/circuits#partitions) $X$ on their outputs. $x$ is padded to the class's full size, so the commitment's length says nothing about it.
 - **$x$ moves into the witness.** The outer relation adds two clauses: $x$ opens $h_x$, and $x \in \mathit{cls}$.
 - **Shapes read only the class.** $\Pi$'s rounds, its message lengths and the sampling design are functions of $\mathit{cls}$, so neither the commitments nor the draw depend on $x$, and $V_\Pi$ is one circuit for the whole class that reads $x$ as data.
 
@@ -145,7 +145,7 @@ In simulation form: the simulator registers a dummy statement of the class and r
 Lean proves this for an abstract scheme: a hiding registration followed by a zero-knowledge session of one circuit for the class. Neither this construction nor the universal-unit route below is instantiated yet.
 ~~~
 
-The class still says something. Under the width rule every proof unit has at most $X$ output bits, so any set of units, the faulty ones included, has at most $X$ output bits per unit, which is the weight [network accounting](/docs/accounting/network) charges. A second route reaches the same end: make every proof unit of the class one *universal* unit, a circuit that takes its gates as private input, so the circuit becomes part of the trace and its privacy reduces to the public-circuit setting's, at the cost of proving each unit through the universal one. Private circuits are a prototype: a $V_\Pi$ for one session of eight RoPE instances has been built by hand against public bounds on the circuit's shape, 4.52 billion AND gates, 3.59 billion of them the matrix fold over the private circuit's 157,841 nonzeros. It agrees with C-Flock's verifier on every recorded session it was given, and no outer proof of it has run.
+The class still says something. Under the width rule every proof unit has at most $X$ output bits, so any set of units, the faulty ones included, has at most $X$ output bits per unit, which is the weight [network accounting](/accounting/network) charges. A second route reaches the same end: make every proof unit of the class one *universal* unit, a circuit that takes its gates as private input, so the circuit becomes part of the trace and its privacy reduces to the public-circuit setting's, at the cost of proving each unit through the universal one. Private circuits are a prototype: a $V_\Pi$ for one session of eight RoPE instances has been built by hand against public bounds on the circuit's shape, 4.52 billion AND gates, 3.59 billion of them the matrix fold over the private circuit's 157,841 nonzeros. It agrees with C-Flock's verifier on every recorded session it was given, and no outer proof of it has run.
 
 ## Deployment
 
@@ -159,7 +159,7 @@ The theorem above protects an honest prover: zero knowledge describes the transc
 | --- | --- | --- |
 | Workers | Neither party | The developer's servers and GPUs. They serve the model, run $P_\Pi$ and nearly all of $P_{\mathsf{Arg}}$'s arithmetic, and see the witness. |
 | ZK server | The developer | The workers' only path to the verifier, on CPUs the developer controls. It draws every salt and pad, and releases each value under [its contract](#the-contract). |
-| Verifier | The auditor | It runs a challenger online, which issues the coins and keeps the record, and checks the outer proofs offline ([remote](/docs/protocols/remote#parties)). |
+| Verifier | The auditor | It runs a challenger online, which issues the coins and keeps the record, and checks the outer proofs offline ([remote](/protocols/remote#parties)). |
 
 ### What it asks of the argument
 
@@ -170,7 +170,7 @@ The ZK server can't afford to compute the outer proof itself: that is the work t
 3. **A masked value**, an algebraic message plus a pad the ZK server drew and never shows the workers, with a relation the ZK server can check on the unmasked message.
 4. **A constant**: labels, lengths, counts.
 
-A VEIL-style argument has this form, and [C-Flock's](/docs/proof-systems/c-flock#zero-knowledge-mode) does.
+A VEIL-style argument has this form, and [C-Flock's](/proof-systems/c-flock#zero-knowledge-mode) does.
 
 ### The run
 
@@ -214,7 +214,7 @@ def release(msg):                       # one outer message from the workers
 - **Two leaks appear**, and the schedule removes a third, timing:
   - **Stops.** The workers can make a session stop, depending on a secret. Over $n$ sessions with a budget of $b$ stops before the ZK server stops for good, and $R$ points in a session at which a stop can show, the pattern of stops is one of at most $\sum_{i=0}^{b} \binom{n}{i} R^{\,i}$, so stops carry at most its $\log_2$. When a stop shows only at a session's release, $R = 1$.
   - **Output freedom.** Where $V_\Pi$ can output more than one value of an output on accepting transcripts, the workers choose which. Output $j$ carries at most $\log_2 q_j$ bits per session for $q_j$ such values, and none when $x$ and the coins fix it. A protocol keeps $q_j$ small by rounding an output the prover can influence, such as credited work, to a public grid.
-- **Cost.** The ZK server's checks take about 176 CPU seconds a session in the prototype ([benchmarks](/docs/proof-systems/performance#recursion)).
+- **Cost.** The ZK server's checks take about 176 CPU seconds a session in the prototype ([benchmarks](/proof-systems/performance#recursion)).
 
 ### Zero knowledge, deployed
 

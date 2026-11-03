@@ -1,18 +1,18 @@
 Novel communication intensity (NCI) is the policy behind inference-only: that the developer's records reflect only having performed inference, not training. It exploits an asymmetry between the two. Each inference episode, such as a chat session, depends on only a small amount of novel information, such as 100 KB of prompt tokens, while each training episode, such as a reinforcement-learning rollout, depends on an enormous amount, such as 1 TB of new parameters. NCI asks that the developer's declared circuit divide into *isolation units* of bounded size, each reading a bounded amount of novel information per gate. Inference complies as it is, at no cost. Under two named assumptions, both known to be false as stated ([below](#assumptions)), and a premise about what frontier training needs, a training computation complies only inside a circuit larger than itself by a factor computed [below](#what-compliance-implies).
 
-Read beside the [onsite](/docs/protocols/onsite#inference-only) protocol, whose network certifiers bound the covert ingress that each isolation unit's read cap is charged ([below](#what-ties-the-declaration-to-what-ran)). It isn't one of onsite's subprotocols, so the onsite verdict doesn't include it.
+Read beside the [onsite](/protocols/onsite#inference-only) protocol, whose network certifiers bound the covert ingress that each isolation unit's read cap is charged ([below](#what-ties-the-declaration-to-what-ran)). It isn't one of onsite's subprotocols, so the onsite verdict doesn't include it.
 
 The design's argument for inference-only ends in a conjecture: that circuits with low NCI cannot advance frontier capabilities on relevant timescales, such as years. The guarantees on this page bound how much larger a complying circuit must be. That this keeps it from advancing the frontier is a scientific claim, and nothing here proves it.
 
 ## Policies
 
-A *policy* is a condition on declarations that the verifier checks from the circuit and its baseline alone. It is a protocol with no rounds of its own: it draws no coins, asks for no proofs and reads no values. What ties the declared circuit to what actually ran is faithfulness, which [sampling](/docs/proof-systems/sampling) and [accounting](/docs/accounting) establish together. NCI is the first policy.
+A *policy* is a condition on declarations that the verifier checks from the circuit and its baseline alone. It is a protocol with no rounds of its own: it draws no coins, asks for no proofs and reads no values. What ties the declared circuit to what actually ran is faithfulness, which [sampling](/proof-systems/sampling) and [accounting](/accounting) establish together. NCI is the first policy.
 
 ## Declarations and novel information
 
-The developer *declares* $(D, \theta)$: the circuit $D$ it registers, and its *baseline* $\theta$, the input gates of $D$ whose values it committed beforehand. The baseline holds its models, code and data in storage. Every other value is *novel information*: the remaining input gates, which hold data such as prompts, and every computed gate, since each is computed after the commitment. Circuits are read as in [the circuit model](/docs/accounting/circuits#the-circuit-model): gates $0, \dots, N-1$ in topological order, gate $g$ holding a value of $w(g)$ bits, some of them input gates.
+The developer *declares* $(D, \theta)$: the circuit $D$ it registers, and its *baseline* $\theta$, the input gates of $D$ whose values it committed beforehand. The baseline holds its models, code and data in storage. Every other value is *novel information*: the remaining input gates, which hold data such as prompts, and every computed gate, since each is computed after the commitment. Circuits are read as in [the circuit model](/accounting/circuits#the-circuit-model): gates $0, \dots, N-1$ in topological order, gate $g$ holding a value of $w(g)$ bits, some of them input gates.
 
-An *isolation unit* (IU) is one part of a division of $D$'s computed gates into disjoint sets, each computed gate in exactly one: a [partition](/docs/accounting/circuits#partitions) in the role of isolating what each part reads. Input gates are in no IU, so an IU that uses an input reads it.
+An *isolation unit* (IU) is one part of a division of $D$'s computed gates into disjoint sets, each computed gate in exactly one: a [partition](/accounting/circuits#partitions) in the role of isolating what each part reads. Input gates are in no IU, so an IU that uses an input reads it.
 
 ~~~mermaid
 flowchart LR
@@ -86,7 +86,7 @@ sequenceDiagram
 
 | Function | Description |
 | --- | --- |
-| `declare() -> (D, θ)` | The developer registers its circuit $D$ as a program in the [program format](/docs/accounting/circuits#the-descriptor-and-its-digest), and lists its baseline $\theta$ as gate indices of the program's canonical layout, each an input gate, none twice. |
+| `declare() -> (D, θ)` | The developer registers its circuit $D$ as a program in the [program format](/accounting/circuits#the-descriptor-and-its-digest), and lists its baseline $\theta$ as gate indices of the program's canonical layout, each an input gate, none twice. |
 | `divide(D, θ) -> division` | The developer's division of $D$ into isolation units: one owner per gate, an IU index for each computed gate and none for each input gate, with every IU holding at least one gate. |
 | `check(D, θ, division, Γ, α) -> v` | Decides that the division partitions $D$'s computed gates and that every IU meets both bounds. The verdict $v$ reports the number of gates, each IU's size and novel reads, whether the declaration complies, and otherwise the first IU that fails, with the bound it breaks first: size, then NCI. |
 
@@ -150,9 +150,9 @@ Under their assumptions, the guarantees bound how much larger a complying circui
 
 ## What ties the declaration to what ran
 
-The check reads the declared circuit, never the datacenter. Faithfulness ties the two: [sampling](/docs/proof-systems/sampling#integrity) bounds which proof units of the committed computation can be faulty, and [accounting](/docs/accounting) bounds the compute, memory and network the developer used against what its records account for.
+The check reads the declared circuit, never the datacenter. Faithfulness ties the two: [sampling](/proof-systems/sampling#integrity) bounds which proof units of the committed computation can be faulty, and [accounting](/accounting) bounds the compute, memory and network the developer used against what its records account for.
 
-Novel information can also reach a node outside any declared wire, through a covert channel on its network link. [Network accounting](/docs/accounting/network) bounds how much such a channel can carry in. The inference-only policy charges each IU the covert ingress capacity since its node's last memory wipe before the IU starts, plus whatever survived that wipe, as a share of its read cap $K$.
+Novel information can also reach a node outside any declared wire, through a covert channel on its network link. [Network accounting](/accounting/network) bounds how much such a channel can carry in. The inference-only policy charges each IU the covert ingress capacity since its node's last memory wipe before the IU starts, plus whatever survived that wipe, as a share of its read cap $K$.
 
 ## Overhead
 

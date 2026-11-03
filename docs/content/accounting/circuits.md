@@ -1,4 +1,4 @@
-The developer declares the circuits it runs. A circuit is the exact computation a proof claims something about, and every other page takes its terms from this one: gates and their widths, traces, partitions into proof units, boundary gates and faulty units. A circuit describes logical computation, not a GPU schedule, a proof system, a commitment layout or a sampling design. Which parts are checked, how they are sampled and what is committed before a challenge are protocol questions, and none of them changes the circuit. Circuits are total: they match the hardware on every input bit pattern, NaN and infinity included, with the hardware's arithmetic fixed in [Silicon](/docs/hardware/accelerators#silicon). A *program* is one circuit written compactly, in [the program format](#the-program-format).
+The developer declares the circuits it runs. A circuit is the exact computation a proof claims something about, and every other page takes its terms from this one: gates and their widths, traces, partitions into proof units, boundary gates and faulty units. A circuit describes logical computation, not a GPU schedule, a proof system, a commitment layout or a sampling design. Which parts are checked, how they are sampled and what is committed before a challenge are protocol questions, and none of them changes the circuit. Circuits are total: they match the hardware on every input bit pattern, NaN and infinity included, with the hardware's arithmetic fixed in [Silicon](/hardware/accelerators#silicon). A *program* is one circuit written compactly, in [the program format](#the-program-format).
 
 ## The circuit model
 
@@ -18,7 +18,7 @@ $$
 
 A gate counts once in $\mathrm{in}(A)$ however many wires leave it for $A$.
 
-A circuit $D$ *implements* a circuit $C$ when every input gate of $C$ is an input gate of $D$ of the same width, distinct gates going to distinct gates, and on every assignment to its inputs $D$ produces $C$'s outputs among its own outputs, computed however it likes. $D$ *contains* $C$ when, besides, it computes each computed gate of $C$ with the same operation from the same wires. [NCI](/docs/policies/nci) reads both.
+A circuit $D$ *implements* a circuit $C$ when every input gate of $C$ is an input gate of $D$ of the same width, distinct gates going to distinct gates, and on every assignment to its inputs $D$ produces $C$'s outputs among its own outputs, computed however it likes. $D$ *contains* $C$ when, besides, it computes each computed gate of $C$ with the same operation from the same wires. [NCI](/policies/nci) reads both.
 
 ## Traces
 
@@ -48,11 +48,11 @@ A unit fed wrong inputs that computes faithfully from them isn't faulty, so chec
 
 Each proof unit outputs at most 16 bits, $w_{\mathrm{out}}(u) \le 16$, and its inputs are unbounded. A unit's inputs and outputs are ordered bit strings, counted in bits at any gate width, and a partition doesn't read elements, so a unit may hold some of an element's bits and not others. Under `Q_call` v1 with $X = 16$ every unit meets the limit by construction. The template queries have no width rule of their own: an instance's unit outputs what the template returns, such as the one BF16 word of a GEMM coordinate.
 
-[Sampling](/docs/proof-systems/sampling#integrity) bounds how many units are faulty from a sample of them, so it needs no unit's inputs to be small. The input gates form the *input unit*, which is never drawn: the verifier checks each input commitment against its external anchor, such as the declared model's weights or the client's request commitment.
+[Sampling](/proof-systems/sampling#integrity) bounds how many units are faulty from a sample of them, so it needs no unit's inputs to be small. The input gates form the *input unit*, which is never drawn: the verifier checks each input commitment against its external anchor, such as the declared model's weights or the client's request commitment.
 
 Each proof unit cut out on its own is a standalone circuit: the computed gates the partition assigns it, a copy of every constant and structure gate they read, its inputs in first-read order, and its outputs. Units whose standalone circuits are equal share a *shape*, so one lowering and one statement serve them all.
 
-Proof units, replay units and isolation units are partitions in three roles. A finer partition *refines* a coarser one when each fine unit lies inside one coarse unit, as the proof units of [two-stage sampling](/docs/proof-systems/sampling#two-stage-sampling) lie inside its replay units. [NCI](/docs/policies/nci)'s isolation units divide a declared circuit by what each part reads.
+Proof units, replay units and isolation units are partitions in three roles. A finer partition *refines* a coarser one when each fine unit lies inside one coarse unit, as the proof units of [two-stage sampling](/proof-systems/sampling#two-stage-sampling) lie inside its replay units. [NCI](/policies/nci)'s isolation units divide a declared circuit by what each part reads.
 
 ## The program format
 
@@ -175,7 +175,7 @@ Gates, wires, ports and elements are structure, and so are shapes such as batch 
 | Registration | `RegisteredInput<w>_v1` | When the program is registered | The weights; constants such as a norm's epsilon, the attention scale or a softcap; tables such as `gelu_tanh_bf16` |
 | Run | `Input<w>_v1` | Per request | The request's data; parameters such as temperature, top-p and the Philox positions |
 
-Values are always hidden. Each is committed under a [hiding leaf](/docs/proof-systems/commitments) and reaches the auditor only through [zero knowledge](/docs/proof-systems/zero-knowledge), never treated as part of the program the verifier holds. A table that tabulates a fixed function is a value too, unless it is one of the library's measured tables.
+Values are always hidden. Each is committed under a [hiding leaf](/proof-systems/commitments) and reaches the auditor only through [zero knowledge](/proof-systems/zero-knowledge), never treated as part of the program the verifier holds. A table that tabulates a fixed function is a value too, unless it is one of the library's measured tables.
 
 Formats are metadata. Annotations, `verity/annotations/v0`, give names, descriptions, formats and groupings to a program's parts, keyed by ids the descriptor already has (`def:`, `node:`, `wire:`, `port:`, `call:` and `group:` keys). They are checked against the descriptor's structure and never enter a digest.
 
@@ -254,8 +254,8 @@ Width parameters are integers from 1 to $2^{16}$. Units are numbered by Call, th
 
 Every query applies only to a topological program, whose nodes read only their body's parameters and earlier nodes; `Q_call` and `Q_word` apply only when every Call is a `call` or `primitive` node. Otherwise the query is inapplicable, and the verifier refuses the partition. A query's algorithm and constants are part of its version: any change to what it computes is a new version.
 
-`Q_word` v2 and `Q_call` v1 may let two units compute a common value. A count of their units bounds faulty work but not distinct work, so a consumer that credits work, such as [compute accounting](/docs/accounting/compute), takes neither.
+`Q_word` v2 and `Q_call` v1 may let two units compute a common value. A count of their units bounds faulty work but not distinct work, so a consumer that credits work, such as [compute accounting](/accounting/compute), takes neither.
 
 ### Subcircuit templates
 
-A *subcircuit template* is a named template with typed parameters, such as a GEMM coordinate of inner dimension K. Shape and numeric semantics are both parameters, and a semantics value is an instruction id from [silicon](/docs/hardware/accelerators#silicon). A *subcircuit* binds every parameter: it is what a proof system proves and a benchmark measures. The [GEMM coordinate](/assumptions/gemm-coordinate) is a chain of K multiply-accumulates from a zero accumulator on one tensor-core instruction's exact semantics. [Inference](/docs/workloads/inference#subcircuit-templates) lists every template and subcircuit, and [Statements](/docs/proof-systems#statements) says what a proof system proves about one.
+A *subcircuit template* is a named template with typed parameters, such as a GEMM coordinate of inner dimension K. Shape and numeric semantics are both parameters, and a semantics value is an instruction id from [silicon](/hardware/accelerators#silicon). A *subcircuit* binds every parameter: it is what a proof system proves and a benchmark measures. The [GEMM coordinate](/assumptions/gemm-coordinate) is a chain of K multiply-accumulates from a zero accumulator on one tensor-core instruction's exact semantics. [Inference](/workloads/inference#subcircuit-templates) lists every template and subcircuit, and [Statements](/proof-systems#statements) says what a proof system proves about one.

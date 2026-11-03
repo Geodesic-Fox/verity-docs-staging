@@ -1,4 +1,4 @@
-Proof of useful space (PoUS) bounds from below how much of an encoding of the committed weights a server holds. The server keeps the weights $W$ only as an encoding $C$, slow to build and fast to decode, and a memory challenger asks for random blocks of $C$ one at a time, each due within a deadline too short to rebuild a block the server doesn't hold. An accept certifies that the server held more than $S = \lfloor \tfrac{18}{19}\lvert C\rvert \rfloor$ bits at some point between setup and the session's last round: a server that keeps at most $S$ bits throughout fails. This page states the protocol and that bound; where those bits sit, and what they leave of a device's memory, is [memory accounting](/docs/accounting/memory)'s.
+Proof of useful space (PoUS) bounds from below how much of an encoding of the committed weights a server holds. The server keeps the weights $W$ only as an encoding $C$, slow to build and fast to decode, and a memory challenger asks for random blocks of $C$ one at a time, each due within a deadline too short to rebuild a block the server doesn't hold. An accept certifies that the server held more than $S = \lfloor \tfrac{18}{19}\lvert C\rvert \rfloor$ bits at some point between setup and the session's last round: a server that keeps at most $S$ bits throughout fails. This page states the protocol and that bound; where those bits sit, and what they leave of a device's memory, is [memory accounting](/accounting/memory)'s.
 
 ## Interface
 
@@ -74,7 +74,7 @@ The session passes when its signature verifies under a trusted key and names thi
 
 ### The model
 
-The bound is stated in a ring model. A server keeps at most $S$ bits between setup, the session and each round, with unbounded preprocessing. Each answer is computed in at most $D$ sequential rounds that contain a multiplication modulo $p$, $Q$ key queries and $L$ ring operations; all other local computation is free. Whether a real responder fits $D$ within the deadline is a question about hardware, taken up on [memory accounting](/docs/accounting/memory#physical-assumptions).
+The bound is stated in a ring model. A server keeps at most $S$ bits between setup, the session and each round, with unbounded preprocessing. Each answer is computed in at most $D$ sequential rounds that contain a multiplication modulo $p$, $Q$ key queries and $L$ ring operations; all other local computation is free. Whether a real responder fits $D$ within the deadline is a question about hardware, taken up on [memory accounting](/accounting/memory#physical-assumptions).
 
 ### Assumptions
 

@@ -1,6 +1,6 @@
-The bandwidth protocol of record since 12–15 Oct is the [remote bandwidth audit](/docs/accounting/bandwidth/remote), which treats a whole node as one resource of read capacity $R$. This page describes the per-GPU audit it grew from.
+The bandwidth protocol of record since 12–15 Oct is the [remote bandwidth audit](/accounting/bandwidth/remote), which treats a whole node as one resource of read capacity $R$. This page describes the per-GPU audit it grew from.
 
-The bandwidth audit bounds from below how much of a store a device read from its memory within a window. The memory challenger sends a fresh seed; the device must tag every block of its [PoUS](/docs/accounting/memory/pous) store under the seed and commit the tags before a deadline; the challenger then samples blocks and checks their tags. A tag reads the whole block and can't be computed before the seed, so every block whose tag is right came through the device's memory interface inside the window, unless it was already on chip. This page states the protocol and that bound; what it leaves of a device's memory bandwidth is [memory bandwidth accounting](/docs/accounting/bandwidth)'s.
+The bandwidth audit bounds from below how much of a store a device read from its memory within a window. The memory challenger sends a fresh seed; the device must tag every block of its [PoUS](/accounting/memory/pous) store under the seed and commit the tags before a deadline; the challenger then samples blocks and checks their tags. A tag reads the whole block and can't be computed before the seed, so every block whose tag is right came through the device's memory interface inside the window, unless it was already on chip. This page states the protocol and that bound; what it leaves of a device's memory bandwidth is [memory bandwidth accounting](/accounting/bandwidth)'s.
 
 ## Interface
 
@@ -54,7 +54,7 @@ The samples are drawn only for a root that arrived in time, and the openings are
 
 ### The model
 
-A device holds $S$ bits on chip when the seed arrives, can read at most $c$ bits from side sources laid out before the seed (the host, disks, the network, a peer GPU), may regenerate at most $G$ blocks, and makes at most $q$ queries to the tag. Its reads from device memory are counted as ingress. Whether a real device has these $S$, $c$ and $G$ is a question about hardware, taken up on [memory bandwidth accounting](/docs/accounting/bandwidth#physical-assumptions).
+A device holds $S$ bits on chip when the seed arrives, can read at most $c$ bits from side sources laid out before the seed (the host, disks, the network, a peer GPU), may regenerate at most $G$ blocks, and makes at most $q$ queries to the tag. Its reads from device memory are counted as ingress. Whether a real device has these $S$, $c$ and $G$ is a question about hardware, taken up on [memory bandwidth accounting](/accounting/bandwidth#physical-assumptions).
 
 ### Assumptions
 

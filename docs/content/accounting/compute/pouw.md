@@ -1,4 +1,4 @@
-Proof of useful work (PoUW) bounds from below the work a prover spent on the matrix multiplications it declared. After a salt it couldn't predict, the prover computes every tile of every product under noise derived from the salt and its committed operands, and commits the tiles; the verifier draws tiles in proportion to their work and checks them. The declared products still come out of the tiles for the workload to use, which is what makes the work useful. An accept certifies that the prover spent at least $(1-\gamma)(1-\varepsilon_s)W$ after the salt. This page states the protocol and that bound; what it leaves of a device's capacity is [compute accounting](/docs/accounting/compute)'s.
+Proof of useful work (PoUW) bounds from below the work a prover spent on the matrix multiplications it declared. After a salt it couldn't predict, the prover computes every tile of every product under noise derived from the salt and its committed operands, and commits the tiles; the verifier draws tiles in proportion to their work and checks them. The declared products still come out of the tiles for the workload to use, which is what makes the work useful. An accept certifies that the prover spent at least $(1-\gamma)(1-\varepsilon_s)W$ after the salt. This page states the protocol and that bound; what it leaves of a device's capacity is [compute accounting](/accounting/compute)'s.
 
 ## Interface
 
@@ -60,7 +60,7 @@ An unopened coin is statistically hidden, and the commitment binds under SHA-512
 
 ![Salt](/programs/pouw#salt)
 
-The salt is 32 bytes [derived](/docs/proof-systems/randomness) from the salt coin, the epoch, the coin root and the weights' root, in the domain `verity/pouw/epoch-salt/v1`. The work the bound counts is the work after this point.
+The salt is 32 bytes [derived](/proof-systems/randomness) from the salt coin, the epoch, the coin root and the weights' root, in the domain `verity/pouw/epoch-salt/v1`. The work the bound counts is the work after this point.
 
 ### Compute
 
@@ -82,7 +82,7 @@ Each of $K$ independent draws picks a tile with probability $W_{\mathrm{ref}}(\t
 
 ![Prove](/programs/pouw#prove,verify)
 
-A drawn tile passes when its rows open the committed roots, they pass the scheme's rules, and recomputing the tile through the scheme gives its leaf. The draw and the proofs are [sampling](/docs/proof-systems/sampling) with tiles as proof units. The protocol's target proves each drawn tile in zero knowledge, bound to the scheme, salt and workload by an identifier the verifier computes itself:
+A drawn tile passes when its rows open the committed roots, they pass the scheme's rules, and recomputing the tile through the scheme gives its leaf. The draw and the proofs are [sampling](/proof-systems/sampling) with tiles as proof units. The protocol's target proves each drawn tile in zero knowledge, bound to the scheme, salt and workload by an identifier the verifier computes itself:
 
 ~~~text
 identifier  {"format": "verity/pouw/identifier/v1", "scheme": name, "salt": hex(salt),
@@ -125,7 +125,7 @@ The game takes the drawn tiles' checks as ideal. With tiles proved in zero knowl
 
 ## Schemes
 
-A scheme is named and versioned. It fixes the tiling, the noise, the checked values and their digest, each tile's reference cost, and the assumption with its $\gamma_0$ and $\Omega^*$. Hardware uses the ids of [Accelerators](/docs/hardware/accelerators). Each $\gamma$ is proved from its scheme's assumption.
+A scheme is named and versioned. It fixes the tiling, the noise, the checked values and their digest, each tile's reference cost, and the assumption with its $\gamma_0$ and $\Omega^*$. Hardware uses the ids of [Accelerators](/hardware/accelerators). Each $\gamma$ is proved from its scheme's assumption.
 
 | Scheme | Hardware | Assumption | $\gamma$ |
 | --- | --- | --- | --- |

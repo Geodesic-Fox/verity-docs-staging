@@ -1,4 +1,4 @@
-This page describes inference workloads as the [vLLM integration](/docs/integrations/vllm) serves them:
+This page describes inference workloads as the [vLLM integration](/integrations/vllm) serves them:
 
 - [Model graphs](#model-graphs): the Program of each served configuration on record, and each Definition it calls, drawn down to its gates.
 - [Models](#what-a-model-entry-will-hold): what a model entry will hold, each model's weights of record, and the checkpoints the integration pins.
@@ -7,7 +7,7 @@ This page describes inference workloads as the [vLLM integration](/docs/integrat
 
 ## Model graphs
 
-A model graph is the [Program](/docs/accounting/circuits) the vLLM integration builds for a served config's requests, rendered from its Calls. 13 [served configs](#served-configurations) have a Program on record: nine models, on L40S and H100, in BF16 and FP8, with one or two tensor-parallel ranks. The table names each by vLLM's own arguments: the model and its quantization, the GPU, `tensor_parallel_size`, the number of requests, their prompt and output lengths and mix, and `SamplingParams`. Every config runs with `dtype="bfloat16"`, `enforce_eager=True` and vLLM's batch-invariant kernels, so these aren't columns. Select a row to open its graph.
+A model graph is the [Program](/accounting/circuits) the vLLM integration builds for a served config's requests, rendered from its Calls. 13 [served configs](#served-configurations) have a Program on record: nine models, on L40S and H100, in BF16 and FP8, with one or two tensor-parallel ranks. The table names each by vLLM's own arguments: the model and its quantization, the GPU, `tensor_parallel_size`, the number of requests, their prompt and output lengths and mix, and `SamplingParams`. Every config runs with `dtype="bfloat16"`, `enforce_eager=True` and vLLM's batch-invariant kernels, so these aren't columns. Select a row to open its graph.
 
 ![Served Programs](/graphs/programs)
 
@@ -54,7 +54,7 @@ For the headline config, Llama-3.2-1B on an L40S with one request, Serving lays 
 
 A model's weights of record are the checkpoint files its served weights are checked against: the safetensors shards whose sha256 digests are pinned. They matter because hashing the served weights alone proves only self-consistency. A served model that differs from its checkpoint in a single element still replays bit for bit against itself.
 
-The [vLLM integration](/docs/integrations/vllm) checks served weights against the weights of record:
+The [vLLM integration](/integrations/vllm) checks served weights against the weights of record:
 
 1. It derives one digest per weight field from the pinned shard bytes, on CPU and without an engine.
 2. It compares each digest with the weights the serving side registered when it committed them.
@@ -91,7 +91,7 @@ The vLLM integration serves a model only if `integrations/vllm/manifests/checkpo
 
 Pass the full revision from the manifest when you construct an engine: a prefix isn't accepted.
 
-A pin isn't a Census entry. It records a checkpoint's files and their digests, not a summary of its architecture, and it doesn't say which of the model's computations have subcircuits. [Subcircuit templates](#subcircuit-templates) lists the subcircuits, and the [contributing guidelines](/docs/contributing) cover how entries are sourced and cited.
+A pin isn't a Census entry. It records a checkpoint's files and their digests, not a summary of its architecture, and it doesn't say which of the model's computations have subcircuits. [Subcircuit templates](#subcircuit-templates) lists the subcircuits, and the [contributing guidelines](/contributing) cover how entries are sourced and cited.
 
 ## Subcircuit templates
 
@@ -101,7 +101,7 @@ Every computation a backend proves is a subcircuit: a subcircuit template with e
 
 ## Served configurations
 
-The first table lists every configuration the [vLLM integration](/docs/integrations/vllm) has served and checked, with the mix of subcircuit templates its serving run decomposes into. The second shows one run in detail: its subcircuits, how many inputs each holds, and samples with their exact outputs.
+The first table lists every configuration the [vLLM integration](/integrations/vllm) has served and checked, with the mix of subcircuit templates its serving run decomposes into. The second shows one run in detail: its subcircuits, how many inputs each holds, and samples with their exact outputs.
 
 ![Served configurations](/tables/served-configs)
 

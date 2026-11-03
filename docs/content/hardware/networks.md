@@ -1,4 +1,4 @@
-A network profile fixes the round-trip time (RTT) and bandwidth that a result's interaction is charged at. Evaluations use one reference profile, the same datacenter, and every published overhead is computed at it. The other profiles are sensitivity profiles: each changes one of the two numbers, to show how a result moves on a slower network. This page lists the profiles from `catalog/census/networks.json` on the verity repo's main branch. [Performance](/docs/proof-systems/performance#interaction) defines the cost model they feed.
+A network profile fixes the round-trip time (RTT) and bandwidth that a result's interaction is charged at. Evaluations use one reference profile, the same datacenter, and every published overhead is computed at it. The other profiles are sensitivity profiles: each changes one of the two numbers, to show how a result moves on a slower network. This page lists the profiles from `catalog/census/networks.json` on the verity repo's main branch. [Performance](/proof-systems/performance#interaction) defines the cost model they feed.
 
 ## Profiles
 
@@ -20,7 +20,7 @@ The reference network, `dc-1ms-100gbps`, is the same datacenter: 1 ms RTT and 10
 - Every Table 2 cell is evaluated at the reference network.
 - Each result in the render names that network by id.
 
-Cite the reference by its id, `dc-1ms-100gbps`, rather than restating its numbers. The [contributing guidelines](/docs/contributing#citing-an-entry) cover how to cite an entry.
+Cite the reference by its id, `dc-1ms-100gbps`, rather than restating its numbers. The [contributing guidelines](/contributing#citing-an-entry) cover how to cite an entry.
 
 ## Sensitivity profiles
 
@@ -39,7 +39,7 @@ $$
 t = t_{\mathrm{compute}} + \mathrm{rounds} \times \mathrm{RTT} + \frac{8\,(\mathrm{bytes}_{\mathrm{up}} + \mathrm{bytes}_{\mathrm{down}})}{\mathrm{bandwidth}}
 $$
 
-The factor of 8 converts bytes to bits, since bandwidth is in bits per second. A result verified from its proof file counts no rounds, so only its bandwidth term depends on the profile. [Performance](/docs/proof-systems/performance#interaction) defines each term and how the overhead is computed from it.
+The factor of 8 converts bytes to bits, since bandwidth is in bits per second. A result verified from its proof file counts no rounds, so only its bandwidth term depends on the profile. [Performance](/proof-systems/performance#interaction) defines each term and how the overhead is computed from it.
 
 This diagram shows where a profile's two numbers go, and where the resulting interaction time is reported:
 

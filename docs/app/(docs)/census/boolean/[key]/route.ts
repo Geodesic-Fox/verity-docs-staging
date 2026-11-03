@@ -12,7 +12,7 @@ export function generateStaticParams() {
 }
 
 // One served row's Boolean circuits, for the visualizer to load when you step below a primitive.
-export async function GET(_: Request, { params }: RouteContext<"/docs/census/boolean/[key]">) {
+export async function GET(_: Request, { params }: RouteContext<"/census/boolean/[key]">) {
   const { key } = await params
   return new Response(readFileSync(path.join(dir(), `${key}.json`), "utf8"), {
     headers: { "content-type": "application/json" },

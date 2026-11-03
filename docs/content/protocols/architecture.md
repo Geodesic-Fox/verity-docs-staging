@@ -30,11 +30,11 @@ flowchart TB
 
 | Layer | What it establishes |
 | --- | --- |
-| [Protocols](/docs/protocols) | The parties and their trust, the run, and the composed guarantee, for [remote](/docs/protocols/remote) and [onsite](/docs/protocols/onsite). |
-| [Resource accounting](/docs/accounting) | What the developer declares: its [hardware](/docs/accounting/hardware), and its [circuits](/docs/accounting/circuits), what a computation is bit for bit, with gates and their widths, traces, the partition into proof units and the program format. Then bounds on the compute, memory and network a deployment used, against those declarations. Compute and network accounting read the integrity guarantee. |
-| [Policies](/docs/policies/nci) | Conditions on the declared circuits themselves, checked from the circuits alone. |
-| [Proof systems](/docs/proof-systems) | Integrity from a random sample of proof units ([sampling](/docs/proof-systems/sampling)), proofs that show the auditor only the public outputs ([zero knowledge](/docs/proof-systems/zero-knowledge)), and [C-Flock](/docs/proof-systems/c-flock), the construction that implements both, with the [commitments](/docs/proof-systems/commitments) and [coins](/docs/proof-systems/randomness) they share. |
-| [Integrations](/docs/integrations/vllm) | Real serving systems, wrapped so that what they compute is a committed circuit. |
+| [Protocols](/protocols) | The parties and their trust, the run, and the composed guarantee, for [remote](/protocols/remote) and [onsite](/protocols/onsite). |
+| [Resource accounting](/accounting) | What the developer declares: its [hardware](/accounting/hardware), and its [circuits](/accounting/circuits), what a computation is bit for bit, with gates and their widths, traces, the partition into proof units and the program format. Then bounds on the compute, memory and network a deployment used, against those declarations. Compute and network accounting read the integrity guarantee. |
+| [Policies](/policies/nci) | Conditions on the declared circuits themselves, checked from the circuits alone. |
+| [Proof systems](/proof-systems) | Integrity from a random sample of proof units ([sampling](/proof-systems/sampling)), proofs that show the auditor only the public outputs ([zero knowledge](/proof-systems/zero-knowledge)), and [C-Flock](/proof-systems/c-flock), the construction that implements both, with the [commitments](/proof-systems/commitments) and [coins](/proof-systems/randomness) they share. |
+| [Integrations](/integrations/vllm) | Real serving systems, wrapped so that what they compute is a committed circuit. |
 
 ## How a run works
 
@@ -61,7 +61,7 @@ The auditor never runs any part of the developer's computation. It only checks p
 
 ## Composition
 
-A protocol is the product of its subprotocols, in the order of their identifiers: [remote](/docs/protocols/remote#composition) composes two and [onsite](/docs/protocols/onsite#composition) four. A subprotocol joins the product by stating four things:
+A protocol is the product of its subprotocols, in the order of their identifiers: [remote](/protocols/remote#composition) composes two and [onsite](/protocols/onsite#composition) four. A subprotocol joins the product by stating four things:
 
 | A subprotocol states | Description |
 | --- | --- |

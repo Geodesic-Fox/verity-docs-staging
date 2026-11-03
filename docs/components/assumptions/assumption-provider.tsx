@@ -21,9 +21,9 @@ import type { DialogEntry } from "@/lib/assumption-index"
  * a dialog can be linked and Back closes it.
  */
 
-export const assumptionsHref = "/docs/assumptions"
-const commitmentsHref = "/docs/proof-systems/commitments"
-const templatesHref = "/docs/workloads/inference#subcircuit-templates"
+export const assumptionsHref = "/assumptions"
+const commitmentsHref = "/proof-systems/commitments"
+const templatesHref = "/workloads/inference#subcircuit-templates"
 
 const kindLabels = {
   property: "Property",

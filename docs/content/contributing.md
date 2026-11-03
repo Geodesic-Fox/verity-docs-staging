@@ -8,15 +8,15 @@ Each kind of entry has its own file, with a schema under `catalog/census/schemas
 
 | Kind | File | What an entry holds | Listed on |
 | --- | --- | --- | --- |
-| Hardware line | `hardware.json` | One device running one operand datatype, with its dense tensor-core peak at FP32 accumulate | [Accelerators](/docs/hardware/accelerators) |
-| Datatype | `datatypes.json` | An operand format, shown as its common name, then its precise format | [Accelerators](/docs/hardware/accelerators#datatypes) |
-| Network profile | `networks.json` | A round-trip time and bandwidth, with the profile's role | [Networks](/docs/hardware/networks) |
-| Subcircuit template | `subcircuits.json` | A template with typed parameters, with every subcircuit (the template with each parameter bound) under it | [Inference](/docs/workloads/inference#subcircuit-templates) |
+| Hardware line | `hardware.json` | One device running one operand datatype, with its dense tensor-core peak at FP32 accumulate | [Accelerators](/hardware/accelerators) |
+| Datatype | `datatypes.json` | An operand format, shown as its common name, then its precise format | [Accelerators](/hardware/accelerators#datatypes) |
+| Network profile | `networks.json` | A round-trip time and bandwidth, with the profile's role | [Networks](/hardware/networks) |
+| Subcircuit template | `subcircuits.json` | A template with typed parameters, with every subcircuit (the template with each parameter bound) under it | [Inference](/workloads/inference#subcircuit-templates) |
 | Input set | `input_sets.json` | The frozen input set of one subcircuit: its dataset, size, manifest digest, seed and provenance | This page, below |
 
-Models aren't in the Census yet. The Census README plans for it to grow into a knowledge base of hardware, ML models and workloads, and [Inference](/docs/workloads/inference#what-a-model-entry-will-hold) describes what a model entry will hold.
+Models aren't in the Census yet. The Census README plans for it to grow into a knowledge base of hardware, ML models and workloads, and [Inference](/workloads/inference#what-a-model-entry-will-hold) describes what a model entry will hold.
 
-The Census never encodes proof units or replay units. Those are roles that [sampled proofs](/docs/proof-systems/sampling) assigns, and applications choose them per run.
+The Census never encodes proof units or replay units. Those are roles that [sampled proofs](/proof-systems/sampling) assigns, and applications choose them per run.
 
 ### Input sets
 
@@ -74,7 +74,7 @@ flowchart TB
   pages -.->|"cite by id"| census
 ~~~
 
-In docs, name the id and link the page that lists it. For example, write that a result is evaluated at the reference network, [`dc-1ms-100gbps`](/docs/hardware/networks), and leave its round-trip time and bandwidth to the Networks page.
+In docs, name the id and link the page that lists it. For example, write that a result is evaluated at the reference network, [`dc-1ms-100gbps`](/hardware/networks), and leave its round-trip time and bandwidth to the Networks page.
 
 In benchmark results, the render cites entries by id. Each result names:
 
@@ -102,7 +102,7 @@ Every entry carries the sources its values were read from. The rules are:
 
 - **Sources:** each entry has `sources`, a non-empty list of `{label, href?}`. The label names the document and the table or row the value came from.
 - **Methodology:** each hardware line also states its `methodology`. Peaks are datasheet dense figures at the FP32 accumulate width the relations use. A fused multiply-add counts as two FLOP, and sparsity figures are never used.
-- **Measurements:** a measured value, rather than a datasheet one, says how it was measured and names the artifact that holds the measurement. Artifacts live in the evidence store that [Autoresearch](/docs/autoresearch) describes.
+- **Measurements:** a measured value, rather than a datasheet one, says how it was measured and names the artifact that holds the measurement. Artifacts live in the evidence store that [Autoresearch](/autoresearch) describes.
 
 ## How entries are reviewed
 

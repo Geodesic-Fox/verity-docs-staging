@@ -17,7 +17,7 @@ Each line's peak is its `flop_per_second` field, shown here in TFLOP/s ($10^{12}
 | `rtx-4090/e4m3` | RTX 4090 | FP8 (E4M3) | 330.3 TFLOP/s | FP32 | Ada whitepaper[^ada] |
 | `rtx-5090/e2m1` | RTX 5090 | FP4 (NVFP4, E2M1) | 1676 TFLOP/s | FP32 | RTX Blackwell whitepaper, Appendix A[^blackwell] |
 
-A line's id is the device slug and the datatype id, so the same device appears once per datatype it runs. The [contributing guidelines](/docs/contributing#ids) cover the id rules.
+A line's id is the device slug and the datatype id, so the same device appears once per datatype it runs. The [contributing guidelines](/contributing#ids) cover the id rules.
 
 ## Methodology
 
@@ -58,7 +58,7 @@ A subcircuit's target names only its anchor device. The benchmark finds the hard
 | [sm89 FP8](/assumptions/gemm-coordinate/k1536/sm89-mma-e4m3) | `rtx-4090/e4m3` |
 | [sm120 FP4](/assumptions/gemm-coordinate/k1536/sm120-mma-e2m1-nvf4) | `rtx-5090/e2m1` |
 
-The subcircuit's semantics say what is computed, and the hardware line is the device whose peak sets the native rate. The two are one-to-one today. [Inference](/docs/workloads/inference#subcircuit-templates) lists every subcircuit with its parameters.
+The subcircuit's semantics say what is computed, and the hardware line is the device whose peak sets the native rate. The two are one-to-one today. [Inference](/workloads/inference#subcircuit-templates) lists every subcircuit with its parameters.
 
 ## Silicon
 
@@ -66,7 +66,7 @@ Silicon is the exact semantics of the accelerators' arithmetic, stated as intege
 
 ### Totality
 
-Every function here is total and exact, as [evaluation](/docs/accounting/circuits#evaluation) requires, and matches the hardware bit for bit on every encoding. An accumulator step is stated in two layers: a model of its finite arithmetic, which is where the hardware's grouping, alignment and truncation live, and rules for NaN, infinities, saturation and zero signs, measured like the rest. Together they give a total function, and a Definition registers only that total function.
+Every function here is total and exact, as [evaluation](/accounting/circuits#evaluation) requires, and matches the hardware bit for bit on every encoding. An accumulator step is stated in two layers: a model of its finite arithmetic, which is where the hardware's grouping, alignment and truncation live, and rules for NaN, infinities, saturation and zero signs, measured like the rest. Together they give a total function, and a Definition registers only that total function.
 
 ### Number formats
 
@@ -191,7 +191,7 @@ The 14-bit FP8 adders of `sm_89` and `sm_90` keep only the top 14 bits of the in
 
 ### Definitions
 
-Each step is registered as a primitive Definition that a program can call, and each has a Boolean Definition that computes the same function on bits, from a body of And, Xor and Not gates. A word Definition that a [served Program](/docs/workloads/inference#model-graphs) calls is linked, and opens as a circuit down to its gates. Under the word view, the Boolean Definition takes and returns exactly what its word Definition does:
+Each step is registered as a primitive Definition that a program can call, and each has a Boolean Definition that computes the same function on bits, from a body of And, Xor and Not gates. A word Definition that a [served Program](/workloads/inference#model-graphs) calls is linked, and opens as a circuit down to its gates. Under the word view, the Boolean Definition takes and returns exactly what its word Definition does:
 
 | Word Definition | Boolean Definition | Signature | Step of |
 | --- | --- | --- | --- |
@@ -264,7 +264,7 @@ $$
 t_{\mathrm{native}} = \frac{2K}{F}
 $$
 
-where $F$ is the Census hardware line of the instruction's anchor device and operand datatype: the device's dense tensor-core peak at FP32 accumulate. A proof's overhead is the prover's seconds per GEMM coordinate over $t_{\mathrm{native}}$, and [Performance](/docs/proof-systems/performance) reports it for every proof system. The anchor device fixes the semantics and the native rate, not the machine a prover runs on.
+where $F$ is the Census hardware line of the instruction's anchor device and operand datatype: the device's dense tensor-core peak at FP32 accumulate. A proof's overhead is the prover's seconds per GEMM coordinate over $t_{\mathrm{native}}$, and [Performance](/proof-systems/performance) reports it for every proof system. The anchor device fixes the semantics and the native rate, not the machine a prover runs on.
 
 [^hopper-bf16]: The whitepaper lists BF16 at 1978.9 TFLOP/s with sparsity. The Census uses the dense figure.
 

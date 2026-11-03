@@ -294,7 +294,7 @@ export function DocsShell({
                   asChild
                   className="h-auto text-sidebar-foreground data-[slot=sidebar-menu-button]:!p-1.5"
                 >
-                  <Link aria-label="Documentation home" href="/docs">
+                  <Link aria-label="Documentation home" href="/">
                     <BoundaryMark
                       className="!h-[22px] !w-[26px]"
                       strokeWidth={4.25}

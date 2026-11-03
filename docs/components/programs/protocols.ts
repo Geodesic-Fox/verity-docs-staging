@@ -16,12 +16,12 @@ import type {
   Protocol,
 } from "@/components/programs/types"
 
-const ZK = "/docs/proof-systems/zero-knowledge"
-const C_FLOCK = "/docs/proof-systems/c-flock"
-const SAMPLING = "/docs/proof-systems/sampling"
-const COMPUTE = "/docs/accounting/compute"
-const MEMORY = "/docs/accounting/memory"
-const NETWORK = "/docs/accounting/network"
+const ZK = "/proof-systems/zero-knowledge"
+const C_FLOCK = "/proof-systems/c-flock"
+const SAMPLING = "/proof-systems/sampling"
+const COMPUTE = "/accounting/compute"
+const MEMORY = "/accounting/memory"
+const NETWORK = "/accounting/network"
 
 /* The workers are trusted by neither party; they sit on the developer's side
    because they are the developer's machines, behind its ZK server. */
@@ -243,7 +243,7 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "commitment",
     signature: "commit(x) -> Commitment",
     body: [
-      "A hiding, binding commitment to `x`. The workers commit values under the hiding leaves of SHA-512 Merkle trees ([commitments](/docs/proof-systems/commitments)). The ZK server commits each message under a salt it draws for that message alone. The challenger and the memory challenger commit their coins in coin trees.",
+      "A hiding, binding commitment to `x`. The workers commit values under the hiding leaves of SHA-512 Merkle trees ([commitments](/proof-systems/commitments)). The ZK server commits each message under a salt it draws for that message alone. The challenger and the memory challenger commit their coins in coin trees.",
     ],
   },
   open: {
@@ -256,14 +256,14 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
   check_coin: {
     signature: "check_coin(coin, coin_com) -> None",
     body: [
-      `The ZK server checks the opening against \`coin_com\` before it passes the salt on, so the challenger can't choose a salt after seeing a commitment ([randomness](/docs/proof-systems/randomness#what-each-protocol-draws)). A salt that fails stops the session.`,
+      `The ZK server checks the opening against \`coin_com\` before it passes the salt on, so the challenger can't choose a salt after seeing a commitment ([randomness](/proof-systems/randomness#what-each-protocol-draws)). A salt that fails stops the session.`,
     ],
   },
   serve: {
     returns: "data",
     signature: "serve(program, requests, salt) -> Trace",
     body: [
-      `Runs the program on the requests. Each declared matrix multiplication is computed as [compute accounting](${COMPUTE}/pouw#compute)'s tiles, noised under \`salt\`, and the product the workload uses comes out of them. What stays behind is the [trace](/docs/accounting/circuits#traces).`,
+      `Runs the program on the requests. Each declared matrix multiplication is computed as [compute accounting](${COMPUTE}/pouw#compute)'s tiles, noised under \`salt\`, and the product the workload uses comes out of them. What stays behind is the [trace](/accounting/circuits#traces).`,
     ],
   },
   boundary_gates: {

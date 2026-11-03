@@ -6,7 +6,7 @@
 export const families = [
   { letter: "A", name: "A-GKR", column: "A-GKR", href: null },
   { letter: "B", name: "B-Ligero", column: "B-Ligero", href: null },
-  { letter: "C", name: "C-Flock", column: "Flock", href: "/docs/proof-systems/c-flock" },
+  { letter: "C", name: "C-Flock", column: "Flock", href: "/proof-systems/c-flock" },
   { letter: "D", name: "D-SP1", column: "SP1", href: null },
 ] as const
 

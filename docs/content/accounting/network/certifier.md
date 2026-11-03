@@ -1,4 +1,4 @@
-The network certifier fixes when a node's frames leave. It is a device of the auditor's on each uplink: it releases exactly $r$ frames of $B$ bytes in every bucket, real frames first, and signs a record of each window. The check accepts a window only if its record is the grid the Program schedules, so a covert sender's only say over timing is the clock sync each window declares. This page states the protocol and the bound an accept gives in the certifier's model; whether a real link meets that model, and what the bound leaves of a link's capacity, is [network accounting](/docs/accounting/network)'s.
+The network certifier fixes when a node's frames leave. It is a device of the auditor's on each uplink: it releases exactly $r$ frames of $B$ bytes in every bucket, real frames first, and signs a record of each window. The check accepts a window only if its record is the grid the Program schedules, so a covert sender's only say over timing is the clock sync each window declares. This page states the protocol and the bound an accept gives in the certifier's model; whether a real link meets that model, and what the bound leaves of a link's capacity, is [network accounting](/accounting/network)'s.
 
 ## Interface
 
@@ -81,7 +81,7 @@ Certificates are witness. In the protocols the developer is to prove in zero kno
 
 ### The model
 
-The bound is stated about what the wire carries, and takes two facts about the device as its model: everything the certifier puts on the wire is a function of its record (*regeneration*, W2), and each bucket's timing falls in one of $D$ classes (*bounded jitter*, J). Whether a physical certifier meets them is a question about hardware, taken up on [network accounting](/docs/accounting/network#physical-assumptions). The certifier's own rules (frames of $B$ bytes, left-packed rows, an untimed status, fail-closed faults) are enforced by its code.
+The bound is stated about what the wire carries, and takes two facts about the device as its model: everything the certifier puts on the wire is a function of its record (*regeneration*, W2), and each bucket's timing falls in one of $D$ classes (*bounded jitter*, J). Whether a physical certifier meets them is a question about hardware, taken up on [network accounting](/accounting/network#physical-assumptions). The certifier's own rules (frames of $B$ bytes, left-packed rows, an untimed status, fail-closed faults) are enforced by its code.
 
 ### Assumptions
 
@@ -104,7 +104,7 @@ $$
 $W$ is the number of windows the audit checks and $m$ the number the horizon reaches. The bound has no error term, and holds under W2 and J (`NetTiming.Guarantees.EncardDecodableLeConstantRate`). At $16 \times 8$ sync values and $D = 1$ it is $A_c$ plus 7 bits per window. Two forms refine it:
 
 - **Per window.** Over the run's first $m$ whole windows: $A_c$ once, then $\log_2 \lvert\Sigma_{\mathrm{sync}}\rvert + T \log_2 D$ bits per window, counted from the run's first window.
-- **Ingress.** What arrival times can deliver into the unit: $T \log_2(r_{\mathrm{in}} + 1)$ bits per link-window, plus $T \log_2 D$ of jitter, on runs whose statuses are all complete. This is the unit of [NCI](/docs/policies/nci)'s charge.
+- **Ingress.** What arrival times can deliver into the unit: $T \log_2(r_{\mathrm{in}} + 1)$ bits per link-window, plus $T \log_2 D$ of jitter, on runs whose statuses are all complete. This is the unit of [NCI](/policies/nci)'s charge.
 
 A rejected window carries no bound: it may already have carried the link's whole capacity, about $8TrB$ bits.
 

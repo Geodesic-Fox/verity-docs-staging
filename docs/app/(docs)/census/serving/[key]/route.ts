@@ -10,7 +10,7 @@ export function generateStaticParams() {
 }
 
 // One served row's serving view, laid out by engine step, for the visualizer to load when asked.
-export async function GET(_: Request, { params }: RouteContext<"/docs/census/serving/[key]">) {
+export async function GET(_: Request, { params }: RouteContext<"/census/serving/[key]">) {
   const { key } = await params
   return new Response(readFileSync(path.join(process.cwd(), "data", "serving", `${key}.json`), "utf8"), {
     headers: { "content-type": "application/json" },

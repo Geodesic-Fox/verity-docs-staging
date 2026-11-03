@@ -2,7 +2,7 @@ import { Server, ShieldCheck } from "lucide-react"
 
 import type { Protocol, Step } from "@/components/programs/types"
 
-const SPEC = "/docs/proof-systems/sampling"
+const SPEC = "/proof-systems/sampling"
 
 /* Sampled proofs over an abstract commit-and-prove argument. The page
    states the definitions; each entry here says what its function computes. */

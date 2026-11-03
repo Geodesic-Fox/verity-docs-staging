@@ -4,9 +4,9 @@ const nextConfig: NextConfig = {
   // The dev badge sits over the bottom of the sidebar.
   devIndicators: false,
   async redirects() {
-    // Earlier page layouts, so open tabs and shared links land. Paths are
-    // under /docs; an empty destination is the Overview. Order matters: the
-    // first match wins, so specific rules come before the /verity catch-all.
+    // Earlier page layouts, so open tabs and shared links land; an empty
+    // destination is the Overview. Order matters: the first match wins, so
+    // specific rules come before the /verity catch-all.
     // The /census data routes (boolean, definitions, modules, programs,
     // serving) are route handlers the graphs fetch: never redirect them.
     const moved: [string, string][] = [
@@ -77,17 +77,19 @@ const nextConfig: NextConfig = {
       ["/verity/:path*", "/:path*"],
     ]
     return [
-      { source: "/", destination: "/docs", permanent: false },
       {
         source: "/benchmarks/:path*",
-        destination: "/docs/proof-systems/performance",
+        destination: "/proof-systems/performance",
         permanent: false,
       },
       ...moved.map(([source, destination]) => ({
-        source: `/docs${source}`,
-        destination: `/docs${destination}`,
+        source,
+        destination: destination || "/",
         permanent: false,
       })),
+      // Pages lived under /docs until the site moved to its own domain.
+      { source: "/docs", destination: "/", permanent: false },
+      { source: "/docs/:path*", destination: "/:path*", permanent: false },
     ]
   },
 }

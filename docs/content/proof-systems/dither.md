@@ -48,7 +48,7 @@ The bound is `StagedFloorKOneSided` (`Security/Models/Pouw/Guarantees/RelativeSe
 
 ### Assumptions
 
-- **Live coins, the hash and the proof system.** A trusted challenger draws the coins after each stage's commitment (`trusted-nebius-host`), SHA-512 is a random oracle, and the [zero-knowledge](/docs/proof-systems/zero-knowledge) proof of each check binds and hides except with probability $\delta_{\mathrm{bind}}$ and $\delta_{\mathrm{ZK}}$ a round (`ServiceSoundStaged`).
+- **Live coins, the hash and the proof system.** A trusted challenger draws the coins after each stage's commitment (`trusted-nebius-host`), SHA-512 is a random oracle, and the [zero-knowledge](/proof-systems/zero-knowledge) proof of each check binds and hides except with probability $\delta_{\mathrm{bind}}$ and $\delta_{\mathrm{ZK}}$ a round (`ServiceSoundStaged`).
 - **Duo receipts bind** every word they fold ($\text{H-}\mu^+$), a named exception to the one-hash rule.
 - **The covered family $\mathcal{K}$**, Theorem K's one-sided scope (`KScopeOneSided`). The prover's program for each stage is straight-line; every product is a function of the noise's bits times a function of the dither's; and no product is two-sided at two cell-blocks whose words read it (charge purity), so Strassen-style sharing across output blocks or rows is outside it. The verifier can't observe whether a run is inside $\mathcal{K}$. Outside it, Theorem O gives a priced floor on paper only: $c \ge \tfrac14$, or $c \ge 1 - \delta$ given that finding coincidences in data-dependent loads is charged.
 - **The machine's prices** (`ChargeVF3j16`): the sm_120 price vector VF3j-16 charges at least $\kappa$ a product, every price at most its measured cost.

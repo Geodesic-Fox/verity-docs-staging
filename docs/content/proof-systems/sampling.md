@@ -1,4 +1,4 @@
-Sampling lets a verifier check a large computation by proving only a random sample of its parts. The prover commits to what it computed, the verifier draws a sample of proof units, and the prover proves that each sampled unit was computed correctly on the committed values. An accept then bounds how many units can be faulty, sampled or not. This page states the protocol over any commit-and-prove argument, and asks of it only the [properties below](#assumptions). Hiding what the prover computed is a separate layer, [zero knowledge](/docs/proof-systems/zero-knowledge), and [compute](/docs/accounting/compute) and [network](/docs/accounting/network) accounting read sampling's guarantee.
+Sampling lets a verifier check a large computation by proving only a random sample of its parts. The prover commits to what it computed, the verifier draws a sample of proof units, and the prover proves that each sampled unit was computed correctly on the committed values. An accept then bounds how many units can be faulty, sampled or not. This page states the protocol over any commit-and-prove argument, and asks of it only the [properties below](#assumptions). Hiding what the prover computed is a separate layer, [zero knowledge](/proof-systems/zero-knowledge), and [compute](/accounting/compute) and [network](/accounting/network) accounting read sampling's guarantee.
 
 ## Interface
 
@@ -13,8 +13,8 @@ Sampling lets a verifier check a large computation by proving only a random samp
 
 | Parameter | Symbol | Description |
 | --- | --- | --- |
-| `circuit` | $C$ | A [circuit](/docs/accounting/circuits#the-circuit-model) representing the prover's computation. |
-| `partition` | $U$ | A [partition](/docs/accounting/circuits#partitions) of `circuit` into proof units: the population the verifier samples. |
+| `circuit` | $C$ | A [circuit](/accounting/circuits#the-circuit-model) representing the prover's computation. |
+| `partition` | $U$ | A [partition](/accounting/circuits#partitions) of `circuit` into proof units: the population the verifier samples. |
 | `design` | $\mathcal{D}$ | A sampling design: a probability distribution over subsets of $U$, from which the verifier draws its sample. |
 
 ### Private input
@@ -38,7 +38,7 @@ Each line is run by the party beside it, and an arrow sends a value to the other
 
 The prover runs the circuit and commits to what it computed, before it knows which units will be sampled. Committing first is what turns the sample into a test: whatever the prover does afterwards, each sampled unit is checked against values that were fixed in advance.
 
-What the prover computes is a [trace](/docs/accounting/circuits#traces) $\tau$, and the honest trace is `evaluate(circuit, inputs)`. The prover commits only the trace's values at the [boundary gates](/docs/accounting/circuits#partitions) $\partial U$, which are everything a unit's check reads, every input gate included.
+What the prover computes is a [trace](/accounting/circuits#traces) $\tau$, and the honest trace is `evaluate(circuit, inputs)`. The prover commits only the trace's values at the [boundary gates](/accounting/circuits#partitions) $\partial U$, which are everything a unit's check reads, every input gate included.
 
 ![Commitment phase](/programs/sampled-proofs#commit)
 
@@ -50,7 +50,7 @@ Once `com` has arrived, the verifier draws a sample $S \subseteq U$ from the sam
 
 ### Verification phase
 
-The prover proves that no sampled unit is [faulty](/docs/accounting/circuits#partitions) in the committed values, its outputs some other function of its inputs than its gates compute, and the verifier checks the proof. Both parties build the statement from their own copies, so the prover can't choose what is proved, and the verifier sends fresh coins in each round of the proof.
+The prover proves that no sampled unit is [faulty](/accounting/circuits#partitions) in the committed values, its outputs some other function of its inputs than its gates compute, and the verifier checks the proof. Both parties build the statement from their own copies, so the prover can't choose what is proved, and the verifier sends fresh coins in each round of the proof.
 
 ![Verification phase](/programs/sampled-proofs#prove,verify)
 
@@ -146,7 +146,7 @@ A design's cost is the number of units it proves. Against a set of faulty units 
 
 ## Two-stage sampling
 
-A prover that doesn't keep its trace rebuilds a proof unit's values by replaying the part of the computation around it, a *replay unit*. The replay units are a partition $U_I$ of `circuit` that $U$ [refines](/docs/accounting/circuits#proof-units), and replay unit $i$ holds $N_i$ proof units, $U_i$. Cochran's cost model prices a run at $c_1$ per replay unit replayed and $c_2$ per proof unit proved, so a sample spread over many replay units pays $c_1$ many times over. The verifier therefore samples in two stages: it draws replay units $S_I$ from a first-stage sampling design $\mathcal{D}_I$, then proof units inside each drawn replay unit $i$, each $u \in U_i$ with probability $\pi_{u|i}$, independently across replay units. That two-stage sampling design is a sampling design on $U$ like any other, and everything above holds for it unchanged.
+A prover that doesn't keep its trace rebuilds a proof unit's values by replaying the part of the computation around it, a *replay unit*. The replay units are a partition $U_I$ of `circuit` that $U$ [refines](/accounting/circuits#proof-units), and replay unit $i$ holds $N_i$ proof units, $U_i$. Cochran's cost model prices a run at $c_1$ per replay unit replayed and $c_2$ per proof unit proved, so a sample spread over many replay units pays $c_1$ many times over. The verifier therefore samples in two stages: it draws replay units $S_I$ from a first-stage sampling design $\mathcal{D}_I$, then proof units inside each drawn replay unit $i$, each $u \in U_i$ with probability $\pi_{u|i}$, independently across replay units. That two-stage sampling design is a sampling design on $U$ like any other, and everything above holds for it unchanged.
 
 ### Lazy commitments
 
@@ -174,4 +174,4 @@ The committed boundary trace is a function of the prover's strategy after it sen
 
 ## With C-Flock
 
-[C-Flock](/docs/proof-systems/c-flock) provides `commit`, `prove` and `verify`, with $\varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$ evaluated at about $t \cdot 2^{-209}$ for a prover making $t$ SHA-512 evaluations on an audit whose drawn units read $2^{24}$ commit strings ([its bound](/docs/proof-systems/c-flock#integrity)).
+[C-Flock](/proof-systems/c-flock) provides `commit`, `prove` and `verify`, with $\varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$ evaluated at about $t \cdot 2^{-209}$ for a prover making $t$ SHA-512 evaluations on an audit whose drawn units read $2^{24}$ commit strings ([its bound](/proof-systems/c-flock#integrity)).

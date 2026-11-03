@@ -1,9 +1,9 @@
 Network accounting bounds what a node's traffic can carry out beyond the committed computation's output. A node can say something in two ways, in what its frames contain and in when they leave, and each has its own protocol:
 
-- **Content.** The [content bound](/docs/accounting/network/content) reads sampling's accept: what leaves must be the delivered output of the committed circuit, so only faulty proof units can add to it, charged their output bits.
-- **Timing.** The [network certifier](/docs/accounting/network/certifier) is the auditor's device on each uplink. It releases a constant number of frames per bucket on the grid the Program fixes, so the only timing freedom left is one clock sync per window.
+- **Content.** The [content bound](/accounting/network/content) reads sampling's accept: what leaves must be the delivered output of the committed circuit, so only faulty proof units can add to it, charged their output bits.
+- **Timing.** The [network certifier](/accounting/network/certifier) is the auditor's device on each uplink. It releases a constant number of frames per bucket on the grid the Program fixes, so the only timing freedom left is one clock sync per window.
 
-Both bounds are proved in a model. This page says what a deployment has to be true of its hardware for the model to describe it, and what the bounds leave of the wire's capacity. Network accounting is used by the [onsite](/docs/protocols/onsite) protocol, whose certifiers sit at the developer's site.
+Both bounds are proved in a model. This page says what a deployment has to be true of its hardware for the model to describe it, and what the bounds leave of the wire's capacity. Network accounting is used by the [onsite](/protocols/onsite) protocol, whose certifiers sit at the developer's site.
 
 ## Headroom
 
@@ -13,7 +13,7 @@ $$
 \underbrace{A_c + W \log_2 \lvert\Sigma_{\mathrm{sync}}\rvert + WT \log_2 D}_{\text{timing, over } W \text{ windows}} \;+\; \underbrace{b}_{\text{content}}
 $$
 
-The timing term is the certifier's [bound](/docs/accounting/network/certifier#timing-bound), and the content term is the [content charge](/docs/accounting/network/content#the-charge). The two are separate theorems over different models, added here as a budget, not as one statement. The headroom is the gap between the wire's capacity and this: at the deployed calibration, a link carries about $3.3 \times 10^{10}$ bits a window, of which an accepted run's timing can say 7.
+The timing term is the certifier's [bound](/accounting/network/certifier#timing-bound), and the content term is the [content charge](/accounting/network/content#the-charge). The two are separate theorems over different models, added here as a budget, not as one statement. The headroom is the gap between the wire's capacity and this: at the deployed calibration, a link carries about $3.3 \times 10^{10}$ bits a window, of which an accepted run's timing can say 7.
 
 ## Physical assumptions
 
@@ -21,7 +21,7 @@ The bounds hold of the certifier's model. These are what make a real deployment 
 
 | Assumption | What it asks | Kind |
 | --- | --- | --- |
-| Coverage (W1) | Every uplink of the spatial unit passes through a certifier the auditor trusts, with its parameters fixed before the run and independent of the traffic. Nothing leaves the unit another way. | Assumed: the auditor's placement, in the [onsite](/docs/protocols/onsite#placement) protocol. Stated in Lean as the named premise `Accounting.Covered` (no uncertified boundary capacity); B4 at a covered location (`B4Covered`) drops the uncertified term. Claim id: `certifier-coverage`. |
+| Coverage (W1) | Every uplink of the spatial unit passes through a certifier the auditor trusts, with its parameters fixed before the run and independent of the traffic. Nothing leaves the unit another way. | Assumed: the auditor's placement, in the [onsite](/protocols/onsite#placement) protocol. Stated in Lean as the named premise `Accounting.Covered` (no uncertified boundary capacity); B4 at a covered location (`B4Covered`) drops the uncertified term. Claim id: `certifier-coverage`. |
 | The device runs as built | The certifier executes its code, its key stays its own, and its host never restores an earlier copy of the state it keeps there. | Assumed: the trusted Nebius host (`DeviceIntact`). There is no attestation. |
 | Regeneration (W2) | Everything the certifier puts on the wire, faults included, is a function of its record. No acknowledgement, backpressure, power draw or other physical feature carries anything else. | Assumed. |
 | Bounded jitter (J) | Each bucket's timing offset, as an outside receiver sees it, falls in one of $D$ classes. | Assumed at $D = 1$. The certifier faults on a tick more than 25 ms late; $D$ hasn't been measured. |

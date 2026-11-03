@@ -10,7 +10,7 @@ export function generateStaticParams() {
 }
 
 // One served row's Program graph, for the visualizer to load when picked.
-export async function GET(_: Request, { params }: RouteContext<"/docs/census/programs/[key]">) {
+export async function GET(_: Request, { params }: RouteContext<"/census/programs/[key]">) {
   const { key } = await params
   return new Response(readFileSync(path.join(process.cwd(), "data", "programs", `${key}.json`), "utf8"), {
     headers: { "content-type": "application/json" },

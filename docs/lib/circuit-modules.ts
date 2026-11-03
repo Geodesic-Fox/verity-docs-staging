@@ -162,7 +162,7 @@ export class ModuleStore {
         if (!this.shards.has(k)) {
           this.shards.set(
             k,
-            fetch(`/docs/census/modules/${k}`)
+            fetch(`/census/modules/${k}`)
               .then((r) => r.json() as Promise<Record<string, CircuitType>>)
               .then((s) => {
                 for (const [id, t] of Object.entries(s)) this.types.set(id, t)

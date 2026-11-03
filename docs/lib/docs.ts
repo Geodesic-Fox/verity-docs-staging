@@ -35,7 +35,7 @@ function walk(dir: string): string[] {
 
 function load(): DocPage[] {
   const pages: DocPage[] = treePages().map(({ page, groups }) => {
-      const rel = page.href === "/docs" ? "index" : page.href.replace(/^\/docs\//, "")
+      const rel = page.href === "/" ? "index" : page.href.slice(1)
       const file = join(contentDir, `${rel}.md`)
       return {
         group: groups[groups.length - 1]?.label ?? null,
@@ -62,7 +62,7 @@ function load(): DocPage[] {
   }
   for (const file of walk(contentDir)) {
     const rel = relative(contentDir, file).replace(/\.md$/, "").split(sep).join("/")
-    if (!hrefs.has(rel === "index" ? "/docs" : `/docs/${rel}`)) {
+    if (!hrefs.has(rel === "index" ? "/" : `/${rel}`)) {
       throw new Error(`content/${rel}.md isn't in lib/tree.ts`)
     }
   }
@@ -77,7 +77,7 @@ export function getPages(): DocPage[] {
 }
 
 export function getPage(slug: string[] = []): DocPage | undefined {
-  const href = slug.length ? `/docs/${slug.join("/")}` : "/docs"
+  const href = slug.length ? `/${slug.join("/")}` : "/"
   return getPages().find((page) => page.href === href)
 }
 

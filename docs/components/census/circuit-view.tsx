@@ -44,8 +44,8 @@ function fetchJson<T>(url: string, schema: string): Promise<T> {
   return p as Promise<T>
 }
 
-const loadIndex = () => fetchJson<CircuitIndex>("/docs/census/circuits", "verity-docs/circuits/v1")
-const loadDefs = () => fetchJson<Definitions>("/docs/census/definitions", "verity-docs/definitions/v1")
+const loadIndex = () => fetchJson<CircuitIndex>("/census/circuits", "verity-docs/circuits/v1")
+const loadDefs = () => fetchJson<Definitions>("/census/definitions", "verity-docs/definitions/v1")
 
 // A view's state in the URL: ?units=1, ?widths=1, ?serving=1, ?levels=2 (or all).
 function setParam(name: string, value: string | null) {
@@ -107,7 +107,7 @@ export function CircuitView({
   useEffect(() => {
     if (!key) return
     let live = true
-    fetchJson<Graph>(`/docs/census/programs/${key}`, "verity-docs/program-graph/v2").then(
+    fetchJson<Graph>(`/census/programs/${key}`, "verity-docs/program-graph/v2").then(
       (g) => live && setGraph(g),
       (e: unknown) => live && setFailed(String(e))
     )
@@ -121,7 +121,7 @@ export function CircuitView({
   useEffect(() => {
     if (!servingOn || !key) return
     let live = true
-    fetchJson<Graph>(`/docs/census/serving/${key}`, "verity-docs/serving-graph/v1").then(
+    fetchJson<Graph>(`/census/serving/${key}`, "verity-docs/serving-graph/v1").then(
       (g) => live && setServingGraph(g),
       (e: unknown) => live && setFailed(String(e))
     )
@@ -142,10 +142,10 @@ export function CircuitView({
   const tpl = spec ? (index?.definitions[spec]?.tpl ?? null) : null
   const boolUrl = key
     ? index?.boolean.includes(key)
-      ? `/docs/census/boolean/${key}`
+      ? `/census/boolean/${key}`
       : null
     : tpl
-      ? `/docs/census/lowering/${encodeURIComponent(tpl)}`
+      ? `/census/lowering/${encodeURIComponent(tpl)}`
       : null
   const loadBool = useMemo(() => (boolUrl ? () => fetchJson<BooleanRow>(boolUrl, "verity-docs/boolean/v2") : null), [boolUrl])
 

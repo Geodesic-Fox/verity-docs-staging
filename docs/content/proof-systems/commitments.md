@@ -9,22 +9,22 @@ x, w and y are the previously committed values
 y = ExactDot(x, w)
 ~~~
 
-The commitment establishes the first, and the proof system's proof establishes the second. An accepted opening means "this value, at this verifier-derived position, of this verifier-derived commitment", except with the probability of finding a SHA-512 collision. It doesn't mean the value is right, that it relates to any other value, or that it came from a particular source. A proof unit is [faulty](/docs/accounting/circuits#partitions) when its committed outputs differ from its gates applied to its committed inputs, so correctness is always measured against what was committed.
+The commitment establishes the first, and the proof system's proof establishes the second. An accepted opening means "this value, at this verifier-derived position, of this verifier-derived commitment", except with the probability of finding a SHA-512 collision. It doesn't mean the value is right, that it relates to any other value, or that it came from a particular source. A proof unit is [faulty](/accounting/circuits#partitions) when its committed outputs differ from its gates applied to its committed inputs, so correctness is always measured against what was committed.
 
 A hiding commitment also keeps the values private: the published roots and commit strings reveal nothing about an unopened value, up to a stated statistical distance. Opening a leaf reveals its value and its salt, and nothing about the other leaves.
 
-The scheme is part of the [statement](/docs/proof-systems#statements): the same circuit under another scheme is another statement. A proof system's own internal commitments, such as the column trees of its polynomial commitment, stay inside its proof and aren't commitment schemes.
+The scheme is part of the [statement](/proof-systems#statements): the same circuit under another scheme is another statement. A proof system's own internal commitments, such as the column trees of its polynomial commitment, stay inside its proof and aren't commitment schemes.
 
 ## What serving commits, and when
 
-Every commitment comes before any coin that tests it. In a [sampled proof](/docs/proof-systems/sampling):
+Every commitment comes before any coin that tests it. In a [sampled proof](/proof-systems/sampling):
 
 1. **Registered values** (the weights, a program's constants and its tables) are committed once, when the program is registered, as hiding rows under a frame-v3-sha512 root. The weights' domain has owner −2.
 2. **Run values** are committed while serving: every value that crosses a proof-unit boundary of the program's partition, and the program's run inputs and outputs, as hiding rows under one root per port. The boundary's domain has owner −1.
 3. **Registration.** The developer registers a `verity/registration/v1` record that fixes the program, the query that partitions it, the sampling design, the commitment scheme and every root. The challenger holds each root's domain to its own derivation and logs a receipt.
 4. **Coins.** Only then does the challenger draw the proof units and, after them, the session's coins.
 
-A served root's domain binds the program, the partition, the port, its leaf schema, its leaf count and the run, so a root can't be replayed into another statement. The verifier derives every domain from its own data, never from the prover. The ZK server also commits every message it sends the auditor under a fresh salt. The [two-stage variant](/docs/proof-systems/sampling#lazy-commitments) commits in two steps, the replay units' boundary first and their interiors after the first draw. [Compute accounting](/docs/accounting/compute) commits the weights before the epoch's salt coin is opened and the tile transcript before its draw coin. [Memory accounting](/docs/accounting/memory) commits the encoded weights before the setup salt is drawn. [Randomness](/docs/proof-systems/randomness) covers the coins themselves.
+A served root's domain binds the program, the partition, the port, its leaf schema, its leaf count and the run, so a root can't be replayed into another statement. The verifier derives every domain from its own data, never from the prover. The ZK server also commits every message it sends the auditor under a fresh salt. The [two-stage variant](/proof-systems/sampling#lazy-commitments) commits in two steps, the replay units' boundary first and their interiors after the first draw. [Compute accounting](/accounting/compute) commits the weights before the epoch's salt coin is opened and the tile transcript before its draw coin. [Memory accounting](/accounting/memory) commits the encoded weights before the setup salt is drawn. [Randomness](/proof-systems/randomness) covers the coins themselves.
 
 ## The schemes
 
@@ -146,7 +146,7 @@ $M$ is the Hankel matrix of the key's bits, $M_{ij} = k_{i+j}$ for $i < 512$ and
 K = SHA-512("verity/hm96-sha512/key/v1\0" ‖ u32be(0)) ‖ … ‖ SHA-512("verity/hm96-sha512/key/v1\0" ‖ u32be(3)),   bit 2047 cleared
 ~~~
 
-A coin tree draws a fresh uniform key for each session instead ([Randomness](/docs/proof-systems/randomness#the-coin-tree)). Every leaf binds its key's digest, and the verifier takes the key from its own statement, never from an opening.
+A coin tree draws a fresh uniform key for each session instead ([Randomness](/proof-systems/randomness#the-coin-tree)). Every leaf binds its key's digest, and the verifier takes the key from its own statement, never from an opening.
 
 **Hiding.** With a uniform key and independent uniform salts, the published data of any two vectors of $N$ leaves is within statistical distance $N \cdot 2^{-256}$, by the generalized leftover hash lemma. With the pinned key the bound is $N \cdot 2^{-192}$, except for a $2^{-64}$ fraction of keys. Treating the pinned key as outside that fraction is a common-reference-string step, justified because a counter-mode hash of a public label is a typical draw: the setup assumption that the hash-derived key is typical. $N$ counts every leaf ever committed under the key, and the bound needs a fresh salt for every leaf: two leaves with one salt reveal $x \oplus x'$. Hiding rests on no hash property.
 
@@ -259,9 +259,9 @@ In both reads the position, the path and the leaf are values, hidden like any ot
 
 Commitments connect to these pages:
 
-- [Statements](/docs/proof-systems#statements): a statement is a circuit plus the scheme that binds its inputs and outputs
-- [Randomness](/docs/proof-systems/randomness): the coins that come after the commitments, and the coin trees
-- [Sampled proofs](/docs/proof-systems/sampling): the audit whose registration fixes the roots
-- [Remote](/docs/protocols/remote#parties): the workers that commit and the ZK server that salts every message
-- [Security assumptions](/docs/assumptions): the hash assumptions and their trust ratings
-- [vLLM](/docs/integrations/vllm): the integration whose committers emit vllm-v1-sha512
+- [Statements](/proof-systems#statements): a statement is a circuit plus the scheme that binds its inputs and outputs
+- [Randomness](/proof-systems/randomness): the coins that come after the commitments, and the coin trees
+- [Sampled proofs](/proof-systems/sampling): the audit whose registration fixes the roots
+- [Remote](/protocols/remote#parties): the workers that commit and the ZK server that salts every message
+- [Security assumptions](/assumptions): the hash assumptions and their trust ratings
+- [vLLM](/integrations/vllm): the integration whose committers emit vllm-v1-sha512

@@ -4,8 +4,8 @@ import type { ReactNode } from "react"
 import { familyName } from "@/lib/families"
 import { tablesSnapshot } from "@/lib/tables"
 
-export const benchmarksHref = "/docs/proof-systems/performance"
-export const tablesDataHref = "/docs/proof-systems/data.json"
+export const benchmarksHref = "/proof-systems/performance"
+export const tablesDataHref = "/proof-systems/data.json"
 
 /*
  * The frame for a table embedded in a docs page: one short title, the table,

@@ -192,6 +192,6 @@ Research runs can be accompanied by written notes and reports. `research notes` 
 
 ## Related pages
 
-- [Hardware](/docs/hardware) and [Workloads](/docs/workloads): the fixed quantities results are computed against
-- [Performance](/docs/proof-systems/performance): the published results
-- [Contributing guidelines](/docs/contributing): how reference entries are sourced and cited, and where measured values name their artifacts
+- [Hardware](/hardware) and [Workloads](/workloads): the fixed quantities results are computed against
+- [Performance](/proof-systems/performance): the published results
+- [Contributing guidelines](/contributing): how reference entries are sourced and cited, and where measured values name their artifacts

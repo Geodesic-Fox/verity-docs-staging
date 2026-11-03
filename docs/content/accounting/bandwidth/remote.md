@@ -1,4 +1,4 @@
-A verifier with no hardware at the site certifies, window by window, how many reads of a node's registered memory the node made. Over a session's span $\Sigma$, the credited reads are at least $(1 - \gamma)\,R\,\Sigma$ bytes, where $R$ is the node's read capacity, and every term of $\gamma$ is explicit with its premises named. It is the bandwidth protocol of record, and replaces the per-GPU [bandwidth audit](/docs/accounting/bandwidth/audit).
+A verifier with no hardware at the site certifies, window by window, how many reads of a node's registered memory the node made. Over a session's span $\Sigma$, the credited reads are at least $(1 - \gamma)\,R\,\Sigma$ bytes, where $R$ is the node's read capacity, and every term of $\gamma$ is explicit with its premises named. It is the bandwidth protocol of record, and replaces the per-GPU [bandwidth audit](/accounting/bandwidth/audit).
 
 The prover is the whole node: its GPUs' HBM, its host's DRAM, its CPUs and its NICs are one untrusted resource of capacity $R$ (Daniel, 12 Oct). Only the challenger and the verifier are trusted, as the auditor's own machines on hosts the prover doesn't control (`trusted-nebius-host`).
 
