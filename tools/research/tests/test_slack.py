@@ -2808,7 +2808,8 @@ def test_http_get_reads_the_private_notes_raw_files_with_the_notes_token(monkeyp
 
 def test_without_a_notes_token_the_service_asks_the_broker_for_one_by_its_oidc_identity(monkeypatch, capsys):
     """The Slack events service holds no notes token of its own: the broker mints one for its Vercel OIDC identity, kept until
-    shortly before it expires; $RESEARCH_NOTES_TOKEN still wins, and a refusal reads the notes unauthenticated."""
+    shortly before it expires, ahead of $RESEARCH_NOTES_TOKEN, which serves only while the broker refuses (asked again a
+    minute later); with neither, the notes are read unauthenticated."""
     seen, answers = [], []
 
     class Reply(io.BytesIO):
@@ -2844,13 +2845,17 @@ def test_without_a_notes_token_the_service_asks_the_broker_for_one_by_its_oidc_i
     monkeypatch.setattr(slack.time, "time", lambda: now + 3600)                                 # http_get reads the clock
     assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}' and seen[-1][2] == "Bearer minted-2"
     monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "t0k")
-    assert slack.notes_token() == "t0k"                                                          # the env var wins
-    monkeypatch.delenv("RESEARCH_NOTES_TOKEN")
+    assert slack.notes_token(now + 3600) == "minted-2" and slack._notes_token["source"] == "broker"   # the broker wins
     monkeypatch.setattr(slack, "_notes_token", {})
     answers.append(slack.urllib.error.HTTPError(slack.NOTES_TOKEN_URL, 403, "Forbidden", {}, io.BytesIO(b"")))
-    assert slack.notes_token(now) is None and "the broker gave no notes token (403)" in capsys.readouterr().err
+    assert slack.notes_token(now) == "t0k" and "the broker gave no notes token (403)" in capsys.readouterr().err
+    assert slack._notes_token["source"] == "env"                                                # refused: the old token
+    assert slack.notes_token(now + 30) == "t0k" and len(seen) == 4                              # not asked again so soon
     answers.append({})
-    assert slack.notes_token(now) is None and "has no `token`" in capsys.readouterr().err
+    assert slack.notes_token(now + 61) == "t0k" and "has no `token`" in capsys.readouterr().err
+    monkeypatch.delenv("RESEARCH_NOTES_TOKEN")
+    answers.append(slack.urllib.error.URLError("down"))
+    assert slack.notes_token(now + 122) is None and slack._notes_token["source"] is None
     monkeypatch.delenv("VERCEL_OIDC_TOKEN")
     assert slack.notes_token(now) is None
     with pytest.raises(slack.SlackError, match="no notes token: set RESEARCH_NOTES_TOKEN, or run where the broker mints one"):
