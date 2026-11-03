@@ -1259,15 +1259,48 @@ def _route_ok(r: Any, name: str) -> bool:
 RAW_HOST = "raw.githubusercontent.com"                           # the notes are private: `http_get` sends it the notes token
 
 
+NOTES_TOKEN_URL = BROKER.rsplit("/api/", 1)[0] + "/api/agent-github/token"   # the broker's notes token, by OIDC identity
+NOTES_TOKEN_TTL_S, NOTES_TOKEN_MARGIN_S = 50 * 60, 120          # a token with no stated expiry lasts this long; renewed early
+_notes_token: dict = {}
+
+
+def notes_token(now: float | None = None) -> str | None:
+    """A token for the private notes repository: $RESEARCH_NOTES_TOKEN when set, else one the broker mints
+    (`NOTES_TOKEN_URL`, scope `notes`) for this deployment's Vercel OIDC identity ($VERCEL_OIDC_TOKEN, as the Slack events
+    service has it), kept until shortly before it expires.  None when there is neither, or the broker refuses (said on
+    stderr), so a read goes unauthenticated and a private file answers 404."""
+    if token := os.environ.get("RESEARCH_NOTES_TOKEN"):
+        return token
+    if not (oidc := os.environ.get("VERCEL_OIDC_TOKEN")):
+        return None
+    now = time.time() if now is None else now
+    if _notes_token.get("oidc") == oidc and now < _notes_token.get("until", 0):
+        return _notes_token["token"]
+    try:
+        out = http_json("POST", NOTES_TOKEN_URL, json.dumps({"scope": "notes"}).encode(),
+                        {"Authorization": f"Bearer {oidc}", "Content-Type": "application/json"}) or {}
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        print(f"research msg: the broker gave no notes token ({getattr(e, 'code', '') or getattr(e, 'reason', e)}): reading "
+              "the notes unauthenticated", file=sys.stderr)
+        return None
+    token, expires = out.get("token"), out.get("expires_at")
+    if not token:
+        print("research msg: the broker's notes-token answer has no `token`: reading the notes unauthenticated", file=sys.stderr)
+        return None
+    until = (_iso_epoch(expires) if expires else now + NOTES_TOKEN_TTL_S) - NOTES_TOKEN_MARGIN_S
+    _notes_token.update(oidc=oidc, token=token, until=until)
+    return token
+
+
 def http_get(url: str, timeout: float = 10) -> bytes | None:
     """The body at `url` (http(s), or a `file://` directory for tests and offline use), or None when there is none.  A
-    github.com raw file is read with RESEARCH_NOTES_TOKEN when it is set: the notes repository is private, and without
-    the token its raw files answer 404 as if they weren't there."""
+    github.com raw file is read with the notes token (`notes_token`) when there is one: the notes repository is private,
+    and without a token its raw files answer 404 as if they weren't there."""
     if url.startswith("file://"):
         p = Path(urllib.parse.unquote(url[7:]))
         return p.read_bytes() if p.is_file() else None
     headers = {}
-    if urllib.parse.urlsplit(url).hostname == RAW_HOST and (token := os.environ.get("RESEARCH_NOTES_TOKEN")):
+    if urllib.parse.urlsplit(url).hostname == RAW_HOST and (token := notes_token()):
         headers["Authorization"] = f"Bearer {token}"
     try:
         with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as r:
@@ -2356,7 +2389,7 @@ def publish_route(root: Path, r: dict, message: str, where: str = ROUTES_DIR, na
         except ImportError:
             pass
     if not (root / ".git").exists():
-        if os.environ.get("RESEARCH_NOTES_TOKEN"):                  # no git here (the Slack events service): GitHub's API
+        if notes_token():                                           # no git here (the Slack events service): GitHub's API
             rel = f"{where}/{name}.json"
             cur = notes_api("GET", rel)
             notes_api("PUT", rel, {"message": message, "branch": "main",
@@ -2385,10 +2418,11 @@ def publish_route(root: Path, r: dict, message: str, where: str = ROUTES_DIR, na
 
 
 def notes_api(method: str, rel: str, body: dict | None = None) -> Any:
-    """GitHub's contents API on the notes repository, with RESEARCH_NOTES_TOKEN, for a caller with no clone (the Slack events
-    service): the JSON answer, or None for a GET of a path that isn't there."""
-    if not (token := os.environ.get("RESEARCH_NOTES_TOKEN")):
-        raise SlackError("RESEARCH_NOTES_TOKEN is not set: without a notes clone, the notes are read and written with it")
+    """GitHub's contents API on the notes repository, with the notes token (`notes_token`), for a caller with no clone (the
+    Slack events service): the JSON answer, or None for a GET of a path that isn't there."""
+    if not (token := notes_token()):
+        raise SlackError("no notes token: set RESEARCH_NOTES_TOKEN, or run where the broker mints one (VERCEL_OIDC_TOKEN); "
+                         "without a notes clone, the notes are read and written with it")
     req = urllib.request.Request(NOTES_API + urllib.parse.quote(rel) + ("?ref=main" if method == "GET" else ""), method=method,
                                  data=None if body is None else json.dumps(body).encode(),
                                  headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",

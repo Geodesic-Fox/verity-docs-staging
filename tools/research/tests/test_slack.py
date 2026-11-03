@@ -2796,6 +2796,7 @@ def test_http_get_reads_the_private_notes_raw_files_with_the_notes_token(monkeyp
         return Reply(b'{"name": "x"}')
 
     monkeypatch.setattr(slack.urllib.request, "urlopen", urlopen)
+    monkeypatch.delenv("VERCEL_OIDC_TOKEN", raising=False)
     monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "t0k")
     assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}'
     assert slack.http_get("https://example.invalid/routes.d/x.json") == b'{"name": "x"}'
@@ -2803,6 +2804,57 @@ def test_http_get_reads_the_private_notes_raw_files_with_the_notes_token(monkeyp
     assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}'
     assert seen == [(f"{slack.ROUTES_RAW}x.json", "Bearer t0k"), ("https://example.invalid/routes.d/x.json", None),
                     (f"{slack.ROUTES_RAW}x.json", None)]
+
+
+def test_without_a_notes_token_the_service_asks_the_broker_for_one_by_its_oidc_identity(monkeypatch, capsys):
+    """The Slack events service holds no notes token of its own: the broker mints one for its Vercel OIDC identity, kept until
+    shortly before it expires; $RESEARCH_NOTES_TOKEN still wins, and a refusal reads the notes unauthenticated."""
+    seen, answers = [], []
+
+    class Reply(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    def http_json(method, url, data, headers):
+        seen.append((url, method, headers.get("Authorization"), data))
+        assert url == slack.NOTES_TOKEN_URL
+        a = answers.pop(0)
+        if isinstance(a, Exception):
+            raise a
+        return a
+
+    def urlopen(req, timeout):
+        seen.append((req.full_url, req.get_method(), req.get_header("Authorization"), req.data))
+        return Reply(b'{"name": "x"}')
+
+    monkeypatch.setattr(slack, "http_json", http_json)
+    monkeypatch.setattr(slack.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(slack, "_notes_token", {})
+    monkeypatch.delenv("RESEARCH_NOTES_TOKEN", raising=False)
+    monkeypatch.setenv("VERCEL_OIDC_TOKEN", "oidc-1")
+    answers.append({"token": "minted", "expires_at": "2026-11-02T06:00:00Z"})
+    now = slack._iso_epoch("2026-11-02T05:00:00Z")
+    assert slack.notes_token(now) == "minted" and slack.notes_token(now + 600) == "minted"      # kept
+    assert seen == [(slack.NOTES_TOKEN_URL, "POST", "Bearer oidc-1", b'{"scope": "notes"}')]
+    answers.append({"token": "minted-2"})                                                         # no stated expiry
+    assert slack.notes_token(now + 3600) == "minted-2" and len(seen) == 2                       # renewed before 06:00Z
+    monkeypatch.setattr(slack.time, "time", lambda: now + 3600)                                 # http_get reads the clock
+    assert slack.http_get(f"{slack.ROUTES_RAW}x.json") == b'{"name": "x"}' and seen[-1][2] == "Bearer minted-2"
+    monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "t0k")
+    assert slack.notes_token() == "t0k"                                                          # the env var wins
+    monkeypatch.delenv("RESEARCH_NOTES_TOKEN")
+    monkeypatch.setattr(slack, "_notes_token", {})
+    answers.append(slack.urllib.error.HTTPError(slack.NOTES_TOKEN_URL, 403, "Forbidden", {}, io.BytesIO(b"")))
+    assert slack.notes_token(now) is None and "the broker gave no notes token (403)" in capsys.readouterr().err
+    answers.append({})
+    assert slack.notes_token(now) is None and "has no `token`" in capsys.readouterr().err
+    monkeypatch.delenv("VERCEL_OIDC_TOKEN")
+    assert slack.notes_token(now) is None
+    with pytest.raises(slack.SlackError, match="no notes token: set RESEARCH_NOTES_TOKEN, or run where the broker mints one"):
+        slack.notes_api("GET", "people.d/x.json")
 
 
 def notes_clone(tmp_path) -> Path:
