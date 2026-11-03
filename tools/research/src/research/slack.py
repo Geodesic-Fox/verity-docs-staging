@@ -3330,11 +3330,13 @@ def cmd_chat(ns: argparse.Namespace, reg: dict) -> int:
 # --- the app's configuration ------------------------------------------------------------------------------------------------
 
 MANIFEST_REL = REGISTRY_REL.with_name("slack-app.json")
-APP_STATE_ENV, APP_SEED_ENV = "RESEARCH_SLACK_APP_STATE", "SLACK_APP_CONFIG_REFRESH_TOKEN"
+APP_STATE_ENV = "RESEARCH_SLACK_APP_STATE"                      # set on the control pod only (infra/control/msg.sh)
 #: the app configuration API: these take the configuration token (rotating it, the refresh token), never the bot's scopes
 APP_METHODS = ("apps.manifest.export", "apps.manifest.update", "apps.manifest.validate", "tooling.tokens.rotate")
 ROTATE_BEFORE_S = 600                                            # a configuration token lives 12 h; rotate this long before its exp
 APP_TOKENS_PAGE = "https://api.slack.com/apps"                   # "Your App Configuration Tokens": where a person generates a pair
+NEW_PAIR = (f"A person generates a new pair at {APP_TOKENS_PAGE} (Your App Configuration Tokens) and, on the control pod, "
+            'writes its refresh token to {path} as {{"refresh_token": "..."}}, mode 600; no environment variable seeds it')
 MANIFEST_IGNORED = ("_metadata",)                                # the manifest format's version, which export adds
 
 
@@ -3343,7 +3345,11 @@ def _epoch() -> float:
 
 
 def app_state_path() -> Path:
-    return Path(os.environ.get(APP_STATE_ENV) or Path.home() / ".research" / "slack-app-token.json")
+    """The configuration token's state file, which only the control pod has: `slack-app` runs there, never on an agent."""
+    if not (p := os.environ.get(APP_STATE_ENV, "").strip()):
+        raise SlackError(f"${APP_STATE_ENV} is unset: `research msg slack-app` runs on the control pod, where infra/control/msg.sh "
+                         "sets it to the app configuration token's state file; ask @comms or @infra to run it there")
+    return Path(p)
 
 
 def _write_private(path: Path, data: dict) -> None:
@@ -3369,11 +3375,7 @@ def _write_private(path: Path, data: dict) -> None:
 
 def _app_state(path: Path) -> dict:
     if not path.exists():
-        if seed := os.environ.get(APP_SEED_ENV, "").strip():
-            return {"refresh_token": seed}
-        raise SlackError(f"no app configuration token: {path} is absent and {APP_SEED_ENV} is unset. A person generates a pair at "
-                         f"{APP_TOKENS_PAGE} (Your App Configuration Tokens); set {APP_SEED_ENV} to its refresh token, which "
-                         f"seeds the file once, or {APP_STATE_ENV} to the state file")
+        raise SlackError(f"no app configuration token: {path} is absent. " + NEW_PAIR.format(path=path))
     if path.stat().st_mode & 0o077:
         raise SlackError(f"{path} is readable by others: `chmod 600 {path}` (it holds the app's configuration tokens)")
     try:
@@ -3381,14 +3383,14 @@ def _app_state(path: Path) -> dict:
     except (OSError, ValueError) as e:
         raise SlackError(f"{path}: {type(e).__name__}; it should be {{token, refresh_token, exp}} as rotation writes it") from None
     if not isinstance(state, dict) or not isinstance(state.get("refresh_token"), str) or not state["refresh_token"]:
-        raise SlackError(f"{path} has no refresh_token; move it aside and set {APP_SEED_ENV} to a new one")
+        raise SlackError(f"{path} has no refresh_token. " + NEW_PAIR.format(path=path))
     return state
 
 
 def app_token(path: Path | None = None, *, transport=None) -> str:
     """The app configuration token from its state file (`app_state_path`), rotated through tooling.tokens.rotate first when it
     is within ROTATE_BEFORE_S of its exp. A refresh token works once, so the new pair is written before the new token is used,
-    under a lock so that two processes never spend the same one; an absent file is seeded once from $SLACK_APP_CONFIG_REFRESH_TOKEN."""
+    under a lock so that two processes never spend the same one."""
     path = path or app_state_path()
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     with open(path.with_name(path.name + ".lock"), "a") as lock:
@@ -3401,10 +3403,8 @@ def app_token(path: Path | None = None, *, transport=None) -> str:
         except SlackError as e:
             if e.code is None:                                     # no answer: whether Slack spent the token is unknown
                 raise SlackError(f"{e}; if Slack refuses the refresh token on the next try, it was spent: see the using-slack skill") from None
-            raise SlackError(f"tooling.tokens.rotate: {e.code}: Slack refused the refresh token in "
-                             f"{path if path.exists() else '$' + APP_SEED_ENV}. A refresh token works once, so an earlier "
-                             f"rotation or another copy of it spent it. A person generates a new pair at {APP_TOKENS_PAGE} "
-                             f"(Your App Configuration Tokens); then move {path} aside and set {APP_SEED_ENV} to the new refresh token") from None
+            raise SlackError(f"tooling.tokens.rotate: {e.code}: Slack refused the refresh token in {path}. A refresh token works "
+                             "once, so an earlier rotation or another copy of it spent it. " + NEW_PAIR.format(path=path)) from None
         token, refresh, exp = out.get("token"), out.get("refresh_token"), out.get("exp")
         if not (isinstance(token, str) and token and isinstance(refresh, str) and refresh and isinstance(exp, (int, float))):
             raise SlackError(f"tooling.tokens.rotate: the answer lacks a token, refresh_token or exp, so {path} is unchanged "
