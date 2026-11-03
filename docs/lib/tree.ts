@@ -2,12 +2,14 @@
  * The documentation tree: the one place that decides the sidebar, the
  * breadcrumbs, the previous/next order and which pages exist.
  *
- * A node with an `href` is a page, whose body is the markdown file at
- * content/<href>.md; without one it renders as a blank placeholder. A node
- * with `children` is a folder, always open in the sidebar; a folder with an
- * `href` is a page as well. A hidden page (a construction too long for its
- * abstract's page, a browser) is routed but left out of the sidebar and the
- * previous/next order: the page it belongs to links to it.
+ * The sidebar lists sections, each under its heading (if it has one), with a
+ * divider between sections. A node with an `href` is a page, whose body is
+ * the markdown file at content/<href>.md; without one it renders as a blank
+ * placeholder. A node with `children` is a dropdown: its chevron opens and
+ * closes it, and its label opens its page, or toggles it when it has none. A
+ * hidden page (a construction too long for its abstract's page, a browser) is
+ * routed but left out of the sidebar and the previous/next order: the page it
+ * belongs to links to it.
  */
 
 export type TreeNode = {
@@ -21,29 +23,36 @@ export type TreeNode = {
   children?: TreeNode[]
 }
 
-export type TreeIcon = "overview" | "protocols" | "subprotocols" | "classification" | "integrations"
+export type TreeIcon = "overview" | "remote" | "onsite" | "proof-systems" | "accounting" | "classification" | "vllm"
 
-export const tree: TreeNode[] = [
+export type TreeSection = { label?: string; nodes: TreeNode[] }
+
+export const tree: TreeSection[] = [
   {
-    label: "Overview",
-    href: "/",
-    icon: "overview",
-    title: "Verity",
-    description: "What Verity proves, its two protocols, and where to start.",
+    nodes: [
+      {
+        label: "Overview",
+        href: "/",
+        icon: "overview",
+        title: "Verity",
+        description: "What Verity proves, its two protocols, and where to start.",
+      },
+    ],
   },
   {
     label: "Protocols",
-    icon: "protocols",
-    children: [
+    nodes: [
       {
         label: "Remote protocol",
         href: "/protocols/remote",
+        icon: "remote",
         description:
           "Integrity and work, checked with no hardware of the auditor's at the site: its physical architecture, the run, the trusted base, the premises and the composed guarantee.",
       },
       {
         label: "Onsite protocol",
         href: "/protocols/onsite",
+        icon: "onsite",
         description:
           "Remote with the auditor's network certifiers and memory challengers at the site, which add space and communication: their placement, their premises and the composed guarantee.",
       },
@@ -51,10 +60,10 @@ export const tree: TreeNode[] = [
   },
   {
     label: "Subprotocols",
-    icon: "subprotocols",
-    children: [
+    nodes: [
       {
         label: "Proof systems",
+        icon: "proof-systems",
         children: [
           {
             label: "Basic proofs",
@@ -87,6 +96,7 @@ export const tree: TreeNode[] = [
       {
         label: "Resource accounting",
         href: "/accounting",
+        icon: "accounting",
         description:
           "Bounds on the compute, memory and network a deployment used, checked against what it declared, and how the subprotocols that give them compose.",
         children: [
@@ -94,12 +104,22 @@ export const tree: TreeNode[] = [
             label: "Compute",
             children: [
               {
-                label: "Forced matrix multiplication (useful)",
-                href: "/accounting/compute/useful",
-                description:
-                  "Each tile computed under noise from a salt the prover couldn't predict, a work-weighted sample proved in zero knowledge, and the lower bound on work an accept gives; and Dither, for int8 products.",
+                label: "Forced matrix multiplication",
+                children: [
+                  {
+                    label: "Useful",
+                    href: "/accounting/compute/useful",
+                    title: "Forced matrix multiplication (useful)",
+                    description:
+                      "Each tile computed under noise from a salt the prover couldn't predict, a work-weighted sample proved in zero knowledge, and the lower bound on work an accept gives; and Dither, for int8 products.",
+                  },
+                  {
+                    label: "Useless",
+                    href: "/accounting/compute/useless",
+                    title: "Forced matrix multiplication (useless)",
+                  },
+                ],
               },
-              { label: "Forced matrix multiplication (useless)", href: "/accounting/compute/useless" },
               {
                 label: "Accounting",
                 href: "/accounting/compute",
@@ -131,12 +151,18 @@ export const tree: TreeNode[] = [
             label: "Memory",
             children: [
               {
-                label: "Forced occupancy (useful)",
-                href: "/accounting/memory/useful",
-                description:
-                  "The weights kept only as a slow-to-encode, fast-to-decode encoding, timed challenges for random blocks, and the lower bound on held state an accept gives.",
+                label: "Forced storage",
+                children: [
+                  {
+                    label: "Useful",
+                    href: "/accounting/memory/useful",
+                    title: "Forced storage (useful)",
+                    description:
+                      "The weights kept only as a slow-to-encode, fast-to-decode encoding, timed challenges for random blocks, and the lower bound on held state an accept gives.",
+                  },
+                  { label: "Useless", href: "/accounting/memory/useless", title: "Forced storage (useless)" },
+                ],
               },
-              { label: "Forced occupancy (useless)", href: "/accounting/memory/useless" },
               { label: "Forced reads", href: "/accounting/memory/reads" },
               {
                 label: "Accounting",
@@ -151,21 +177,25 @@ export const tree: TreeNode[] = [
       },
     ],
   },
-  { label: "Workload classification", href: "/workload-classification", icon: "classification" },
+  {
+    nodes: [{ label: "Workload classification", href: "/workload-classification", icon: "classification" }],
+  },
   {
     label: "Integrations",
-    icon: "integrations",
-    children: [
+    nodes: [
       {
         label: "vLLM",
         href: "/integrations/vllm",
+        icon: "vllm",
         description: "Hooks vLLM to build each workload's circuit, commit its values while serving, and prove the drawn units.",
-      },
-      {
-        label: "Circuit browser",
-        href: "/integrations/vllm/circuits",
-        hidden: true,
-        description: "Every Program the vLLM integration has on record, drawn down to its gates.",
+        children: [
+          {
+            label: "Circuit browser",
+            href: "/integrations/vllm/circuits",
+            hidden: true,
+            description: "Every Program the vLLM integration has on record, drawn down to its gates.",
+          },
+        ],
       },
     ],
   },
@@ -173,12 +203,13 @@ export const tree: TreeNode[] = [
 
 export type TreePage = TreeNode & { href: string }
 
-// Every page in tree order, parents before their children, with the labels of the folders above it.
+// Every page in tree order, parents before their children, with the headings
+// and labels above it (its section's heading first, when it has one).
 export function treePages(): { page: TreePage; parents: string[] }[] {
   const walk = (nodes: TreeNode[], parents: string[]): { page: TreePage; parents: string[] }[] =>
     nodes.flatMap((node) => [
       ...(node.href ? [{ page: node as TreePage, parents }] : []),
       ...walk(node.children ?? [], [...parents, node.label]),
     ])
-  return walk(tree, [])
+  return tree.flatMap((section) => walk(section.nodes, section.label ? [section.label] : []))
 }
