@@ -92,6 +92,9 @@ const moved: [string, string][] = [
 const nextConfig: NextConfig = {
   // The dev badge sits over the bottom of the sidebar.
   devIndicators: false,
+  // Next 16 blocks its dev resources to any other host, and a page opened at
+  // 127.0.0.1 then never hydrates: no button works.
+  allowedDevOrigins: ["127.0.0.1"],
   async redirects() {
     return moved.map(([source, destination]) => ({
       source,
