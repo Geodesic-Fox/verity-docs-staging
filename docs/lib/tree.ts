@@ -5,9 +5,9 @@
  * The sidebar lists sections, each under its heading (if it has one), with a
  * divider between sections. A node with an `href` is a page, whose body is
  * the markdown file at content/<href>.md; without one it renders as a blank
- * placeholder. A node with `children` is a dropdown: its chevron opens and
- * closes it, and its label opens its page, or toggles it when it has none. A
- * hidden page (a construction too long for its abstract's page, a browser) is
+ * placeholder. A top-level node with `children` is a section: its row opens
+ * its page and swaps the sidebar for the section's own list, where each child
+ * with children of its own is a heading over its pages. A hidden page (a construction too long for its abstract's page, a browser) is
  * routed but left out of the sidebar and the previous/next order: the page it
  * belongs to links to it.
  */
@@ -17,13 +17,35 @@ export type TreeNode = {
   href?: string
   // The page's h1, when it differs from the sidebar label (e.g. "Overview").
   title?: string
+  // The row's label inside its section's list, when the title is too long for it.
+  nav?: string
   description?: string
   icon?: TreeIcon
   hidden?: boolean
   children?: TreeNode[]
 }
 
-export type TreeIcon = "overview" | "remote" | "onsite" | "proof-systems" | "accounting" | "classification" | "vllm"
+export type TreeIcon =
+  | "overview"
+  | "remote"
+  | "onsite"
+  | "proof-systems"
+  | "basic-proofs"
+  | "sampling"
+  | "zero-knowledge"
+  | "recursion"
+  | "accounting"
+  | "compute"
+  | "useful-compute"
+  | "useless-compute"
+  | "network"
+  | "certification"
+  | "memory"
+  | "useful-storage"
+  | "useless-storage"
+  | "reads"
+  | "classification"
+  | "vllm"
 
 export type TreeSection = { label?: string; nodes: TreeNode[] }
 
@@ -68,6 +90,7 @@ export const tree: TreeSection[] = [
           {
             label: "Basic proofs",
             href: "/proof-systems/basic-proofs",
+            icon: "basic-proofs",
             description:
               "Commit-and-prove arguments: statements, the methods sampling and zero knowledge call, the properties each needs, and C-Flock, the construction.",
           },
@@ -81,16 +104,18 @@ export const tree: TreeSection[] = [
           {
             label: "Sampling",
             href: "/proof-systems/sampling",
+            icon: "sampling",
             description:
               "Integrity from a random sample, over any commit-and-prove argument: the protocol, its integrity, and two-stage sampling with lazy commitments.",
           },
           {
             label: "Zero-knowledge",
             href: "/proof-systems/zero-knowledge",
+            icon: "zero-knowledge",
             description:
               "The verifier learns only whether a subprotocol's verifier would accept, and its public outputs: the contract, public and private circuits, what still leaks, and what it costs.",
           },
-          { label: "Recursion", href: "/proof-systems/recursion" },
+          { label: "Recursion", href: "/proof-systems/recursion", icon: "recursion" },
         ],
       },
       {
@@ -104,6 +129,7 @@ export const tree: TreeSection[] = [
             label: "Compute",
             href: "/accounting/compute",
             title: "Compute accounting",
+            icon: "compute",
             description:
               "The useful work an audit certifies, against the work the registered hardware could have done: the headroom left for unregistered compute.",
             children: [
@@ -114,6 +140,8 @@ export const tree: TreeSection[] = [
                     label: "Useful",
                     href: "/accounting/compute/useful",
                     title: "Forced matrix multiplication (useful)",
+                    nav: "Forced matmul (useful)",
+                    icon: "useful-compute",
                     description:
                       "Each tile computed under noise from a salt the prover couldn't predict, a work-weighted sample proved in zero knowledge, and the lower bound on work an accept gives; and Dither, for int8 products.",
                   },
@@ -121,6 +149,8 @@ export const tree: TreeSection[] = [
                     label: "Useless",
                     href: "/accounting/compute/useless",
                     title: "Forced matrix multiplication (useless)",
+                    nav: "Forced matmul (useless)",
+                    icon: "useless-compute",
                   },
                 ],
               },
@@ -130,12 +160,14 @@ export const tree: TreeSection[] = [
             label: "Network",
             href: "/accounting/network",
             title: "Network accounting",
+            icon: "network",
             description:
               "What a node's traffic can carry beyond the committed computation's output, in its timing and its content, against what its links could carry.",
             children: [
               {
                 label: "Network certification",
                 href: "/accounting/network/certification",
+                icon: "certification",
                 description:
                   "The auditor's device on each uplink: constant-rate release on a fixed grid, signed records, and the bound on what frame timing can carry.",
               },
@@ -145,6 +177,7 @@ export const tree: TreeSection[] = [
             label: "Memory",
             href: "/accounting/memory",
             title: "Memory accounting",
+            icon: "memory",
             description:
               "The state an audit certifies a server holds, against the memory its hardware has: the headroom left for unregistered state.",
             children: [
@@ -155,13 +188,14 @@ export const tree: TreeSection[] = [
                     label: "Useful",
                     href: "/accounting/memory/useful",
                     title: "Forced storage (useful)",
+                    icon: "useful-storage",
                     description:
                       "The weights kept only as a slow-to-encode, fast-to-decode encoding, timed challenges for random blocks, and the lower bound on held state an accept gives.",
                   },
-                  { label: "Useless", href: "/accounting/memory/useless", title: "Forced storage (useless)" },
+                  { label: "Useless", href: "/accounting/memory/useless", title: "Forced storage (useless)", icon: "useless-storage" },
                 ],
               },
-              { label: "Forced reads", href: "/accounting/memory/reads" },
+              { label: "Forced reads", href: "/accounting/memory/reads", icon: "reads" },
             ],
           },
         ],

@@ -112,7 +112,7 @@ Beyond its subprotocols' assumptions, the protocol rests on facts about the depl
 
 - **The ZK server is the only path out.** Nothing the workers compute leaves the site except through the ZK server. It is a property of the developer's network, such as its isolation, and it is the developer's premise: zero knowledge needs it, and integrity and work don't.
 - **The challenger's coins are its own.** Its randomness is uniform, and unseen by the developer until each coin is opened.
-- **The declared hardware and an honest clock**, for compute accounting's [deadline form](/accounting/compute#headroom): how much the developer's hardware can compute between the salt and the deadline, and that nothing computed after the deadline is stamped as received by it.
+- **The registered hardware and an honest clock**, for compute accounting's [deadline form](/accounting/compute#headroom): how much the developer's hardware can compute between the salt and the deadline, and that nothing computed after the deadline is stamped as received by it.
 
 No device of the auditor's watches the developer's site, so the protocol bounds neither the memory the developer used nor what crossed its network.
 
