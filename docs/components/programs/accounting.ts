@@ -2,7 +2,7 @@ import { Cpu, Dices, MemoryStick, Network, Server, ShieldCheck } from "lucide-re
 
 import type { Actor, FunctionEntry, Protocol } from "@/components/programs/types"
 
-const CERTIFIER = "/accounting/network/certifier"
+const CERTIFIER = "/accounting/network/certification"
 
 const ACTOR = {
   node: { id: "node", name: "Node", side: "developer", icon: Server, shade: "#f05252", colorKey: "workers" },

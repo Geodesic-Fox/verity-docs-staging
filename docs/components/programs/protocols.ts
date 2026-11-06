@@ -341,7 +341,7 @@ const ONSITE_FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "signature",
     signature: "certify(frames, grid) -> Certificate",
     body: [
-      `The [network certifier](${NETWORK}/certifier#release) releases each link's frames at a constant rate on the grid, and signs the transfer block's record. Certificates go back to the workers as witness and never reach the auditor in the clear.`,
+      `The [network certifier](${NETWORK}/certification#release) releases each link's frames at a constant rate on the grid, and signs the transfer block's record. Certificates go back to the workers as witness and never reach the auditor in the clear.`,
     ],
   },
   challenge: {

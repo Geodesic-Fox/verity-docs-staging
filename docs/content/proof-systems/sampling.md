@@ -189,7 +189,27 @@ $$
 | Compute accounting | The proof block's work | A total |
 | Network accounting | The proof block's output bits | Exfiltration |
 
-The confidence sets shrink as $\delta$ grows, so consumers that read one accept at levels $\delta_i$ fail together with probability at most $\max_i \delta_i + \varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$: an application that composes several of them pays the error once. Network accounting's content bound reads the same accept as integrity, the audit of the served program; compute accounting reads an accept of its own, over its tiles, so its terms add ([remote](/protocols/remote#integrity-and-work)).
+The confidence sets shrink as $\delta$ grows, so consumers that read one accept at levels $\delta_i$ fail together with probability at most $\max_i \delta_i + \varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$: an application that composes several of them pays the error once. Network accounting's [exfiltration bound](#exfiltration) reads the same accept as integrity, the audit of the served program; compute accounting reads an accept of its own, over its tiles, so its terms add ([remote](/protocols/remote#integrity-and-work)).
+
+### Exfiltration
+
+Network accounting reads an accept by this rule, to bound what a node's traffic can say beyond the committed computation's output. What leaves must be the delivered values of the committed circuit, so if no proof block is incorrect and the inputs are the anchored ones, the prover chooses nothing: its freedom lies in the incorrect proof blocks. The bound needs no device and no physical assumption. It charges each incorrect proof block its output bits $\mathrm{bits}_u$, the gates it exports to other proof blocks or to the outputs, and adds the choice of which set it was:
+
+$$
+b \;=\; \max_{B \in \mathcal{M}_\delta} \sum_{u \in B} \mathrm{bits}_u \;+\; \log_2 \lvert \mathcal{M}_\delta \rvert
+$$
+
+Two traces on the anchors' inputs whose incorrect proof blocks lie in $B$, and that agree on $B$'s exported gates, deliver the same values, so the first term is all the incorrect proof blocks can say. The second counts the sets they can form: with $K$ the size of the largest set in $\mathcal{M}_\delta$, out of $N$ proof blocks, $\lvert \mathcal{M}_\delta \rvert \le \sum_{j \le K} \binom{N}{j} \le 2^{N H_2(K/N)}$ for $K \le N/2$, and the term is 0 when the confidence set holds only the empty set.
+
+Take a prover that picks its strategy from a uniform $L$-bit message $M$, and a receiver that sees only the delivered values. Then
+
+$$
+\Pr\big[\mathsf{accept} \,\wedge\, \text{the receiver recovers } M\big] \;\le\; 2^{\,b - L} + \delta + \varepsilon_{\mathrm{ks}} + \delta_{\mathrm{link}} + \delta_{\mathrm{in}}
+$$
+
+$\varepsilon_{\mathrm{ks}}$ and $\delta_{\mathrm{link}}$ are the proof system's knowledge-soundness and binding terms, and $\delta_{\mathrm{in}}$ is the chance that the committed inputs differ from the anchors' values. It holds for any Boolean circuit, partition and one-stage sampling design (`FlockSoundness.Audit.Partition.audit_exfiltration`); the two-stage audit has only an influence form, not this one, and takes the proof system's knowledge soundness and binding as hypotheses, which are not yet proved of Flock's audit. Because it reads the same accept as integrity, an application that reads both pays $\delta + \varepsilon_{\mathrm{ks}} + \delta_{\mathrm{link}}$ once.
+
+The exfiltration bound and the [timing bound](/accounting/network/certification#timing-bound) are separate statements over different models; no theorem adds them. That the frames on the wire are the delivered values of the committed circuit is checked only as far as the certifier's check reads them.
 
 ## With Flock
 

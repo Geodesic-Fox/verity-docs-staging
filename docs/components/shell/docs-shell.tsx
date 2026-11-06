@@ -1,23 +1,28 @@
 "use client"
 
 import type { ComponentType, CSSProperties, ReactNode, SVGAttributes } from "react"
-import { Fragment, useState } from "react"
+import { Fragment } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  Brain,
+  BadgeCheck,
+  Binary,
   Building2,
-  ChevronDown,
+  ChevronRight,
   Cpu,
   Dices,
   EyeOff,
   FileCheck,
+  HardDrive,
   Globe,
   Layers,
   LayoutGrid,
   MemoryStick,
   Network,
+  Pickaxe,
   Repeat,
+  Scale,
+  VenetianMask,
 } from "lucide-react"
 
 import { BoundaryMark } from "@/components/boundary-mark"
@@ -40,9 +45,10 @@ import { cn } from "@/lib/utils"
 /*
  * The Vercel-dashboard shell: a fixed, full-height sidebar and a top bar with
  * breadcrumbs. The sidebar is one list of the tree's pages, each section under
- * its heading. Every row has an icon; none is bold. A page with constructions
- * beneath it has a chevron, which alone shows or hides them; its label opens
- * the page and shows them. They start shown on the page or one of them.
+ * its heading. Every row has an icon; none is bold. A page's constructions
+ * show beneath it, indented, while the reader is on it or one of them. As in
+ * Vercel's dashboard, a row is one link: its chevron only shows that it has
+ * pages beneath it.
  */
 
 const icons: Record<TreeIcon, ComponentType<SVGAttributes<SVGSVGElement>>> = {
@@ -57,7 +63,12 @@ const icons: Record<TreeIcon, ComponentType<SVGAttributes<SVGSVGElement>>> = {
   compute: Cpu,
   network: Network,
   memory: MemoryStick,
-  inference: Brain,
+  inference: Scale,
+  flock: Binary,
+  veil: VenetianMask,
+  pouw: Pickaxe,
+  pous: HardDrive,
+  certification: BadgeCheck,
   vllm: VllmIcon,
 }
 
@@ -67,57 +78,33 @@ function breadcrumbs(pathname: string): string[] {
 }
 
 const rowClass =
-  "flex h-9 w-full min-w-0 items-center rounded-[6px] pl-0.5 text-sm font-medium tracking-(--sidebar-label-tracking) text-sidebar-muted outline-hidden ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 data-active:bg-sidebar-active data-active:text-sidebar-accent-foreground"
+  "flex h-9 w-full min-w-0 items-center rounded-[6px] text-sm font-medium tracking-(--sidebar-label-tracking) text-sidebar-muted outline-hidden ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 data-active:bg-sidebar-active data-active:text-sidebar-accent-foreground"
 
-function Row({
-  node,
-  pathname,
-  open,
-  setOpen,
-}: {
-  node: TreeNode
-  pathname: string
-  open: boolean
-  setOpen: (open: boolean) => void
-}) {
+function Row({ node, pathname, depth = 0 }: { node: TreeNode; pathname: string; depth?: number }) {
   const Icon = node.icon ? icons[node.icon] : null
   const children = (node.children ?? []).filter((child) => !child.hidden)
+  const open = [node, ...children].some((n) => n.href === pathname)
   return (
-    <li className="relative">
+    <li>
       <Link
-        className={cn(rowClass, children.length ? "pr-9" : null)}
+        className={cn(rowClass, depth ? "pl-7" : "pl-0.5")}
         data-active={pathname === node.href ? "" : undefined}
         href={node.href ?? "/"}
-        onClick={() => setOpen(true)}
       >
         <span className="grid size-9 flex-none place-content-center">
           {Icon ? <Icon aria-hidden className="size-4" /> : null}
         </span>
         <span className="min-w-0 flex-1 truncate">{node.label}</span>
+        {children.length ? (
+          <span className="mr-1.5 grid size-6 flex-none place-content-center">
+            <ChevronRight aria-hidden className={cn("size-3 transition-transform duration-150", open ? "rotate-90" : null)} />
+          </span>
+        ) : null}
       </Link>
-      {children.length ? (
-        <button
-          aria-expanded={open}
-          aria-label={`${open ? "Hide" : "Show"} ${node.label}'s pages`}
-          className="absolute top-1.5 right-1.5 grid size-6 place-content-center rounded-[6px] text-sidebar-muted hover:bg-(--sidebar-chip-accent) hover:text-sidebar-accent-foreground"
-          onClick={() => setOpen(!open)}
-          type="button"
-        >
-          <ChevronDown aria-hidden className={cn("size-4 transition-transform duration-150", open ? null : "-rotate-90")} />
-        </button>
-      ) : null}
       {children.length && open ? (
         <ul className="mt-(--sidebar-row-gap) flex flex-col gap-(--sidebar-row-gap)">
           {children.map((child) => (
-            <li key={child.href}>
-              <Link
-                className={cn(rowClass, "pl-[38px]")}
-                data-active={pathname === child.href ? "" : undefined}
-                href={child.href ?? "/"}
-              >
-                <span className="min-w-0 flex-1 truncate">{child.label}</span>
-              </Link>
-            </li>
+            <Row depth={depth + 1} key={child.href} node={child} pathname={pathname} />
           ))}
         </ul>
       ) : null}
@@ -142,7 +129,6 @@ export function DocsShell({
 }) {
   const pathname = usePathname()
   const crumbs = breadcrumbs(pathname)
-  const [toggled, setToggled] = useState<Record<string, boolean>>({})
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -183,19 +169,9 @@ export function DocsShell({
                 {tree.map((section, i) => (
                   <Fragment key={section.label ?? i}>
                     {section.label ? <Heading>{section.label}</Heading> : null}
-                    {section.nodes.map((node) => {
-                      const key = node.href ?? node.label
-                      const within = [node, ...(node.children ?? [])].some((n) => n.href === pathname)
-                      return (
-                        <Row
-                          key={key}
-                          node={node}
-                          open={toggled[key] ?? within}
-                          pathname={pathname}
-                          setOpen={(open) => setToggled((prev) => ({ ...prev, [key]: open }))}
-                        />
-                      )
-                    })}
+                    {section.nodes.map((node) => (
+                      <Row key={node.href ?? node.label} node={node} pathname={pathname} />
+                    ))}
                   </Fragment>
                 ))}
               </ul>

@@ -34,6 +34,11 @@ export type TreeIcon =
   | "network"
   | "memory"
   | "inference"
+  | "flock"
+  | "veil"
+  | "pouw"
+  | "pous"
+  | "certification"
   | "vllm"
 
 export type TreeSection = { label?: string; nodes: TreeNode[] }
@@ -84,6 +89,7 @@ export const tree: TreeSection[] = [
           {
             label: "Flock",
             href: "/proof-systems/basic-proofs/flock",
+            icon: "flock",
             description:
               "The construction: Flock over GF(2^128) on live coins, its verifier in Lean, its knowledge soundness and integrity, and its parameters.",
           },
@@ -106,6 +112,7 @@ export const tree: TreeSection[] = [
           {
             label: "VEIL",
             href: "/proof-systems/zero-knowledge/veil",
+            icon: "veil",
             description: "VEIL's masking applied to Flock: the zero-knowledge mode, and its zero knowledge against honest and malicious verifiers.",
           },
         ],
@@ -123,9 +130,8 @@ export const tree: TreeSection[] = [
     label: "Resource accounting",
     nodes: [
       {
-        label: "Compute",
+        label: "Compute accounting",
         href: "/accounting/compute",
-        title: "Compute accounting",
         icon: "compute",
         description:
           "The headroom proof of useful work leaves: the work the registered hardware could have done beyond what an audit certifies.",
@@ -133,36 +139,31 @@ export const tree: TreeSection[] = [
           {
             label: "Proof of useful work",
             href: "/accounting/compute/pouw",
+            icon: "pouw",
             description:
               "Each tile computed under noise from a salt the prover couldn't predict, a work-weighted sample proved in zero knowledge, and the lower bound on work an accept gives; and Dither, for int8 products.",
           },
         ],
       },
       {
-        label: "Network",
+        label: "Network accounting",
         href: "/accounting/network",
-        title: "Network accounting",
         icon: "network",
         description:
           "What a node's traffic can carry beyond the committed computation's output, in its content and its timing, against what its links could carry.",
         children: [
           {
-            label: "Content bound",
-            href: "/accounting/network/content-bound",
-            description: "What leaves must be the delivered output of the committed circuit, so only incorrect proof blocks add to it, charged their output bits.",
-          },
-          {
-            label: "Network certifier",
-            href: "/accounting/network/certifier",
+            label: "Network certification",
+            href: "/accounting/network/certification",
+            icon: "certification",
             description:
               "The auditor's device on each uplink: constant-rate release on a fixed grid, signed records, and the bound on what frame timing can carry.",
           },
         ],
       },
       {
-        label: "Memory",
+        label: "Memory accounting",
         href: "/accounting/memory",
-        title: "Memory accounting",
         icon: "memory",
         description:
           "The headroom proof of useful space leaves: the memory a server has beyond the encoding of the weights an audit certifies it held.",
@@ -170,6 +171,7 @@ export const tree: TreeSection[] = [
           {
             label: "Proof of useful space",
             href: "/accounting/memory/pous",
+            icon: "pous",
             description:
               "The weights kept only as a slow-to-encode, fast-to-decode encoding, timed challenges for random blocks, and the lower bound on held state an accept gives.",
           },

@@ -15,7 +15,8 @@ const moved: [string, string][] = [
   ["/accounting/memory/useful", "/accounting/memory/pous"],
   ["/accounting/memory/useless", "/accounting/memory"],
   ["/accounting/memory/reads", "/accounting/memory"],
-  ["/accounting/network/certification", "/accounting/network/certifier"],
+  ["/accounting/network/certifier", "/accounting/network/certification"],
+  ["/accounting/network/content-bound", "/proof-systems/sampling#exfiltration"],
   ["/workload-classification", "/workload-classification/inference-vs-training"],
 
   // The tree of Nov 3, 2026.
@@ -24,7 +25,7 @@ const moved: [string, string][] = [
   ["/proof-systems/commitments", ""],
   ["/proof-systems/randomness", ""],
   ["/proof-systems/performance", ""],
-  ["/accounting/network/content", "/accounting/network/content-bound"],
+  ["/accounting/network/content", "/proof-systems/sampling#exfiltration"],
   ["/accounting/composition", "/architecture#composition"],
   ["/accounting/bandwidth/:path*", "/accounting/memory"],
   ["/accounting/hardware", "/architecture#resource-accounting"],

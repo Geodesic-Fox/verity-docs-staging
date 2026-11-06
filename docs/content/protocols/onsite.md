@@ -29,7 +29,7 @@ The remote protocol's [parameters](/protocols/remote#public-parameters), and the
 
 | Parameter | Description |
 | --- | --- |
-| `grid` | Network accounting's buckets, rates, frame size and sync values, fixed before the run ([public parameters](/accounting/network/certifier#public-parameters)). |
+| `grid` | Network accounting's buckets, rates, frame size and sync values, fixed before the run ([public parameters](/accounting/network/certification#public-parameters)). |
 | `encoding` | Memory accounting's scheme, its $k$ challenges and each answer's deadline ([public parameters](/accounting/memory/pous#public-parameters)). |
 
 ### Outputs
@@ -72,7 +72,7 @@ The remote protocol's [trusted base](/protocols/remote#trusted-base), and the de
 
 | Part | Trusted by | For | What it must do |
 | --- | --- | --- | --- |
-| Network certifier | The auditor | Communication | Release every frame by its rule, regenerate its link from its record alone, record one untimed status per transfer block, and fail closed ([the certifier](/accounting/network/certifier#protocol)). |
+| Network certifier | The auditor | Communication | Release every frame by its rule, regenerate its link from its record alone, record one untimed status per transfer block, and fail closed ([the certifier](/accounting/network/certification#protocol)). |
 | Memory challenger | The auditor | Space | Keep its indices secret until it reveals each one, time each answer on its own clock, and refuse an audit its guarantee doesn't cover ([the memory challenger](/accounting/memory/pous#challenge)). |
 
 Neither device is in the developer's trusted base: zero knowledge holds whatever they do, since nothing they record reaches the auditor except through the ZK server's outer proofs.
@@ -95,11 +95,11 @@ The remote protocol's [premises](/protocols/remote#premises), and premises about
 
 ### Assumptions
 
-Those of its subprotocols, [sampling](/proof-systems/sampling#assumptions), [compute](/accounting/compute/pouw#assumptions), [memory](/accounting/memory/pous#assumptions) and [network](/accounting/network/certifier#assumptions) accounting, with [recursion's](/proof-systems/recursion#assumptions) for the outer proofs.
+Those of its subprotocols, [sampling](/proof-systems/sampling#assumptions), [compute](/accounting/compute/pouw#assumptions), [memory](/accounting/memory/pous#assumptions) and [network](/accounting/network/certification#assumptions) accounting, with [recursion's](/proof-systems/recursion#assumptions) for the outer proofs.
 
 ### Completeness
 
-An honest developer is accepted except with its subprotocols' completeness errors: compute accounting's ($K \varepsilon_{\mathrm{cap}}$ for Pearl-C), and network accounting's calibration, which sizes the rates and sync values so that an honest node misses at most $10^{-4}$ of its windows ([completeness](/accounting/network/certifier#completeness)). Sampling, memory accounting's timed rounds within their calibrated deadline, and both layers of proof accept an honest prover always.
+An honest developer is accepted except with its subprotocols' completeness errors: compute accounting's ($K \varepsilon_{\mathrm{cap}}$ for Pearl-C), and network accounting's calibration, which sizes the rates and sync values so that an honest node misses at most $10^{-4}$ of its windows ([completeness](/accounting/network/certification#completeness)). Sampling, memory accounting's timed rounds within their calibrated deadline, and both layers of proof accept an honest prover always.
 
 ### The composed guarantee
 
@@ -110,8 +110,8 @@ An accept is an accept of all four subprotocols, so its guarantee is the conjunc
 | Integrity | The program's incorrect set lies in the confidence set, $B^\star \in \mathcal{M}_\delta$ ([integrity](/proof-systems/sampling#integrity)). | $\varepsilon_I = \delta + \varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$ |
 | Work | The prover spent at least $(1-\gamma)(1-\varepsilon_s)\,W$ after the salt ([compute accounting](/accounting/compute/pouw#work-bound)). | $\varepsilon_W$, as in [remote](/protocols/remote#integrity-and-work) |
 | Space | Each node's state held at least $\lfloor \rho \lvert C\rvert \rfloor$ bits when challenged ([memory accounting](/accounting/memory/pous#space-bound)). | $\varepsilon_M = \delta_{\mathrm{mem}} + \varepsilon_{\mathrm{mem}}$, memory accounting's $\delta$ and $\varepsilon$ |
-| Communication, timing | A covert sender carries at most $A_c + \min(W, m)\log_2\lvert\Sigma_{\mathrm{sync}}\rvert + n \log_2 D$ bits out through when frames leave ([network certifier](/accounting/network/certifier#timing-bound)). | None: it holds on every accepted run |
-| Communication, content | A receiver of the delivered values recovers an $L$-bit message with probability at most $2^{b-L}$, beyond the error ([content bound](/accounting/network/content-bound#guarantee)). | $\varepsilon_I + \delta_{\mathrm{in}}$, integrity's error shared |
+| Communication, timing | A covert sender carries at most $A_c + \min(W, m)\log_2\lvert\Sigma_{\mathrm{sync}}\rvert + n \log_2 D$ bits out through when frames leave ([network certifier](/accounting/network/certification#timing-bound)). | None: it holds on every accepted run |
+| Communication, content | A receiver of the delivered values recovers an $L$-bit message with probability at most $2^{b-L}$, beyond the error ([exfiltration bound](/proof-systems/sampling#exfiltration)). | $\varepsilon_I + \delta_{\mathrm{in}}$, integrity's error shared |
 
 Let $E_I$, $E_W$ and $E_M$ be the events that integrity's, work's and space's conclusions fail. For every prover,
 
@@ -119,10 +119,10 @@ $$
 \Pr\big[\mathsf{accept} \,\wedge\, (E_I \vee E_W \vee E_M)\big] \;\le\; \varepsilon_I + \varepsilon_W + \varepsilon_M + \varepsilon_{\mathrm{outer}}
 $$
 
-with $\varepsilon_{\mathrm{outer}}$ the outer proofs' term, as in [remote](/protocols/remote#integrity-and-work). The content bound reads the same accept as integrity, so its $\delta + \varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$ is integrity's error and an application that reads both pays it once: a receiver recovers an $L$-bit message from an accepted run with probability at most $2^{b-L} + \varepsilon_I + \delta_{\mathrm{in}} + \varepsilon_{\mathrm{outer}}$.
+with $\varepsilon_{\mathrm{outer}}$ the outer proofs' term, as in [remote](/protocols/remote#integrity-and-work). The exfiltration bound reads the same accept as integrity, so its $\delta + \varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$ is integrity's error and an application that reads both pays it once: a receiver recovers an $L$-bit message from an accepted run with probability at most $2^{b-L} + \varepsilon_I + \delta_{\mathrm{in}} + \varepsilon_{\mathrm{outer}}$.
 
 ~~~proof pending
-As in remote: when the outer proofs are accepted, their extractor recovers inner transcripts that Flock's verifier accepts, except with probability $\varepsilon_{\mathrm{outer}}$, so the workers behind the ZK server are a prover for each subprotocol and each subprotocol's guarantee bounds its own event. A union bound over the events gives the sum. Integrity, work and space take separate samples, so their terms add; the content bound is a reading of integrity's accept by [accounting's exfiltration rule](/proof-systems/sampling#reading-integrity), so it adds no sample of its own. The timing bound counts the secrets an accepted run can carry, and adds no probability.
+As in remote: when the outer proofs are accepted, their extractor recovers inner transcripts that Flock's verifier accepts, except with probability $\varepsilon_{\mathrm{outer}}$, so the workers behind the ZK server are a prover for each subprotocol and each subprotocol's guarantee bounds its own event. A union bound over the events gives the sum. Integrity, work and space take separate samples, so their terms add; the [exfiltration bound](/proof-systems/sampling#exfiltration) is a reading of integrity's accept, so it adds no sample of its own. The timing bound counts the secrets an accepted run can carry, and adds no probability.
 ~~~
 
 ### Zero knowledge
@@ -137,7 +137,7 @@ With an accept, each subprotocol's public outputs and profile under its identifi
 | --- | --- | --- |
 | Integrity and compute accounting | As in [remote](/protocols/remote#public-outputs) | As there. |
 | Memory accounting | `verdict`, `root_W`, `root_C`, `salt` and `coins` | Each with its reason, in [its table](/accounting/memory/pous#outputs). |
-| Network accounting | `verdict` and `charge` | Each with its reason, in [its table](/accounting/network/certifier#outputs). |
+| Network accounting | `verdict` and `charge` | Each with its reason, in [its table](/accounting/network/certification#outputs). |
 
 Every certificate, record, occupancy, signed session and on-time bit stays hidden.
 
