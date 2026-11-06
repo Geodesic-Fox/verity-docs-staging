@@ -1,8 +1,8 @@
-Compute accounting bounds how much of a device's compute could have gone to undeclared work. It has two layers. The cryptographic one, [proof of useful work](/accounting/compute/useful), secures a lower bound: after a salt it couldn't predict, the prover spent at least $W_{\mathrm{cert}} = (1-\gamma)(1-\varepsilon_s)W$ on the declared matrix multiplications. The physical one, this page, takes an upper bound on what the hardware can compute in the audit's window, and the headroom is the difference. Compute accounting is used by the [remote](/protocols/remote) and [onsite](/protocols/onsite) protocols.
+Compute accounting bounds how much of a device's compute could have gone to unregistered work. It has two layers. The cryptographic one, [proof of useful work](/accounting/compute/useful), secures a lower bound: after a salt it couldn't predict, the prover spent at least $W_{\mathrm{cert}} = (1-\gamma)(1-\varepsilon_s)W$ on the registered matrix multiplications. The physical one, this page, takes an upper bound on what the hardware can compute in the audit's window, and the headroom is the difference. Compute accounting is used by the [remote](/protocols/remote) and [onsite](/protocols/onsite) protocols.
 
 ## Headroom
 
-Between the salt's release $t_s$ and the deadline $t_d$, hardware of peak rate $F$ can spend at most $F(t_d - t_s)$. On an accepted audit, the work it can have spent on anything undeclared is at most
+Between the salt's release $t_s$ and the deadline $t_d$, hardware of peak rate $F$ can spend at most $F(t_d - t_s)$. On an accepted audit, the work it can have spent on anything unregistered is at most
 
 $$
 \underbrace{F\,(t_d - t_s)}_{\text{capacity, physical}} \;-\; \underbrace{(1-\gamma)(1-\varepsilon_s)\,W}_{\text{certified, cryptographic}}
@@ -21,7 +21,7 @@ The work bound is stated in the cost model's units. These connect it to a device
 
 | Assumption | What it asks | Kind |
 | --- | --- | --- |
-| Peak rate $F$ | The declared device can't price more than $F$ per second of the cost model's work. | Declared from the datasheet: 1,000 TFLOPS dense FP8 on the RTX PRO 6000, $5 \times 10^{14}$ MAC/s. Not measured. |
+| Peak rate $F$ | The registered device can't price more than $F$ per second of the cost model's work. | Declared from the datasheet: 1,000 TFLOPS dense FP8 on the RTX PRO 6000, $5 \times 10^{14}$ MAC/s. Not measured. |
 | The cost model fits the silicon | A tensor-core instruction costs its fragment's multiply-accumulates, and other instructions their measured class prices at the cheapest bit-exact implementation. | Assumed, with measured prices (FP32 add 8.376 in the loop, 8.00 issue-bound). Lean can't check it. |
 | Honest clock | Nothing computed after $t_d$ can be stamped as received by $t_d$. | Assumed (`HonestClock`). |
 | One account per operation | No operation the device runs is charged to two accounts, so compute certified to PoUW isn't also spent elsewhere. | Assumed in the device model (`Step.Fits`) of [#1807](https://github.com/danielreuter/verity/pull/1807). |

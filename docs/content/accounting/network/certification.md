@@ -120,4 +120,4 @@ The theorem is about accepted runs of the model. Two more connect it to the chec
 | Egress, with 8 capacity profiles fixed per audit (proposed) | 7 bits, plus 3 bits once | 10,083 bits |
 | Ingress, at $r_{\mathrm{in}} = 34$ | 3,077.6 bits per transfer block | 4.4 Mbit per link |
 
-The content advice is not yet declared: today the schedule is the workload manifest's arrival steps, which $A_c$ doesn't bound.
+The content advice is not yet reported: today the schedule is the workload manifest's arrival steps, which $A_c$ doesn't bound.

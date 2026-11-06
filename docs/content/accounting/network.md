@@ -36,7 +36,7 @@ The certifier enforces its own rules in code (frames of $B$ bytes, left-packed r
 | Egress, $r = 1{,}686$, $B = 4{,}096$, $\tau_b = 100$ ms | 552.5 Mbit/s | 7 bits per 60 s window, plus $A_c$ once |
 | Ingress, $r_{\mathrm{in}} = 34$ | 11.1 Mbit/s | 3,077.6 bits per window |
 
-The content advice $A_c$ is not yet declared, so today's runs leave it unbounded; with eight registered capacity profiles fixed per audit it would be 3 bits.
+The content advice $A_c$ is not yet reported, so today's runs leave it unbounded; with eight registered capacity profiles fixed per audit it would be 3 bits.
 
 ## Status
 

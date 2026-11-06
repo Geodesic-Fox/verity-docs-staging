@@ -30,8 +30,8 @@ import { tree, treePages, type TreeIcon, type TreeNode } from "@/lib/tree"
  * The Vercel-dashboard shell: a fixed, full-height sidebar of sections, each
  * under its heading with a divider between them, and a top bar with
  * breadcrumbs. A row with children is a dropdown: the chevron on its right
- * opens and closes it, and its label opens its page (or toggles it, when it
- * has none). Every dropdown starts open.
+ * opens and closes it, and its label opens its page, opening the dropdown too
+ * (or toggles it, when it has no page). Every dropdown starts open.
  */
 
 const icons: Record<TreeIcon, ComponentType<SVGAttributes<SVGSVGElement>>> = {
@@ -90,6 +90,9 @@ function Row({
           className={rowStyle}
           data-active={pathname === node.href ? "" : undefined}
           href={node.href}
+          onClick={() => {
+            if (children.length && !open) toggle(path)
+          }}
           style={indent}
         >
           {label}

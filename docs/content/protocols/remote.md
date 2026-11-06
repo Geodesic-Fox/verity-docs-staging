@@ -42,7 +42,7 @@ In the subprotocols' statements the prover $\mathcal{P}$ is the workers behind t
 | `program` | The circuit the workers serve, a program named by its digest. |
 | `partition` | Its partition into proof blocks. |
 | `designs` | Each subprotocol's [sampling design](/proof-systems/sampling#sampling-designs): integrity's over the program's proof blocks, and compute accounting's over its tiles. |
-| `scheme` | Compute accounting's scheme, with the declared matrix multiplications, $\varepsilon_s$ and $\delta$ ([public parameters](/accounting/compute/useful#public-parameters)). |
+| `scheme` | Compute accounting's scheme, with the registered matrix multiplications, $\varepsilon_s$ and $\delta$ ([public parameters](/accounting/compute/useful#public-parameters)). |
 | `v_pi` | The inner proofs' verifier as a circuit, $V_\Pi$, the statement of every outer proof ([zero knowledge](/proof-systems/zero-knowledge#public-parameters)). |
 | `schedule` | The slots at which the ZK server releases outer proofs. |
 
@@ -66,7 +66,7 @@ Before serving, the challenger generates every salt the run opens and commits to
 
 ### Serving
 
-The challenger opens the salt, and the ZK server passes it on once it has checked it against the coin commitment. The workers serve: each declared matrix multiplication is computed as compute accounting's tiles, noised under the salt, and the product the workload uses comes out of them. They commit the trace at the boundary gates, and the challenger logs a receipt for the commitment before anything is sampled.
+The challenger opens the salt, and the ZK server passes it on once it has checked it against the coin commitment. The workers serve: each registered matrix multiplication is computed as compute accounting's tiles, noised under the salt, and the product the workload uses comes out of them. They commit the trace at the boundary gates, and the challenger logs a receipt for the commitment before anything is sampled.
 
 ![Serving](/programs/remote#serve)
 

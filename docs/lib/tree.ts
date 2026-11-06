@@ -98,10 +98,14 @@ export const tree: TreeSection[] = [
         href: "/accounting",
         icon: "accounting",
         description:
-          "Bounds on the compute, memory and network a deployment used, checked against what it declared, and how the subprotocols that give them compose.",
+          "Bounds on the compute, memory and network a deployment used, checked against what it registered, and how the subprotocols that give them compose.",
         children: [
           {
             label: "Compute",
+            href: "/accounting/compute",
+            title: "Compute accounting",
+            description:
+              "The useful work an audit certifies, against the work the registered hardware could have done: the headroom left for unregistered compute.",
             children: [
               {
                 label: "Forced matrix multiplication",
@@ -120,17 +124,14 @@ export const tree: TreeSection[] = [
                   },
                 ],
               },
-              {
-                label: "Accounting",
-                href: "/accounting/compute",
-                title: "Compute accounting",
-                description:
-                  "The useful work an audit certifies, against the work the registered hardware could have done: the headroom left for unregistered compute.",
-              },
             ],
           },
           {
             label: "Network",
+            href: "/accounting/network",
+            title: "Network accounting",
+            description:
+              "What a node's traffic can carry beyond the committed computation's output, in its timing and its content, against what its links could carry.",
             children: [
               {
                 label: "Network certification",
@@ -138,17 +139,14 @@ export const tree: TreeSection[] = [
                 description:
                   "The auditor's device on each uplink: constant-rate release on a fixed grid, signed records, and the bound on what frame timing can carry.",
               },
-              {
-                label: "Accounting",
-                href: "/accounting/network",
-                title: "Network accounting",
-                description:
-                  "What a node's traffic can carry beyond the committed computation's output, in its timing and its content, against what its links could carry.",
-              },
             ],
           },
           {
             label: "Memory",
+            href: "/accounting/memory",
+            title: "Memory accounting",
+            description:
+              "The state an audit certifies a server holds, against the memory its hardware has: the headroom left for unregistered state.",
             children: [
               {
                 label: "Forced storage",
@@ -164,13 +162,6 @@ export const tree: TreeSection[] = [
                 ],
               },
               { label: "Forced reads", href: "/accounting/memory/reads" },
-              {
-                label: "Accounting",
-                href: "/accounting/memory",
-                title: "Memory accounting",
-                description:
-                  "The state an audit certifies a server holds, against the memory its hardware has: the headroom left for undeclared state.",
-              },
             ],
           },
         ],
