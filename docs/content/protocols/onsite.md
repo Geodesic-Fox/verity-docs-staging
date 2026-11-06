@@ -23,7 +23,7 @@ The remote protocol's parties, and two devices of the auditor's:
 | Network certifier | The auditor | On each uplink of each node | Releases the node's traffic at a constant rate on a fixed grid, and attests what crossed the link in network certificates. |
 | Memory challenger | The auditor | Beside each node's network certifier, inside its isolation boundary | Runs memory accounting's timed rounds on its own clock, and signs each session. |
 | Challenger | The auditor | Online | Commits to every salt before the run and opens each once, answers each proof message with fresh coins, samples only after it has logged what it samples against, and keeps the record. It never sees the witness. |
-| Verifier | The auditor | Offline | Checks the challenger's record and the memory challengers' openings with [Flock's verifier](/proof-systems/c-flock#verification-phase), written in Lean, and decides. |
+| Verifier | The auditor | Offline | Checks the challenger's record and the memory challengers' openings with [Flock's verifier](/proof-systems/flock#verification-phase), written in Lean, and decides. |
 
 The devices are the auditor's and the developer doesn't trust them, so what they record of the developer's traffic and memory never reaches the auditor in the clear. Certificates and signed sessions go to the workers as witness, and the developer proves in zero knowledge that they pass their checks.
 

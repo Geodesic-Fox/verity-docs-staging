@@ -72,7 +72,7 @@ The bits whose values the verifier knows (the commit strings, the public outputs
 
 The prover derives the statement from `circuit` and `com`, lays out its trace as the witness $z$, and commits to $z$ with Ligerito ([Novakovic and Angeris](https://eprint.iacr.org/2025/1187)): it encodes $z$ with a Reed–Solomon code and hashes the codeword into SHA-512 Merkle trees with hiding leaves. The challenger responds with the link points. The statement, the committed witness and the link points are therefore fixed before the first challenge of either repetition.
 
-![Commitment phase](/programs/c-flock#commit)
+![Commitment phase](/programs/flock#commit)
 
 ### Proving phase
 
@@ -85,13 +85,13 @@ The prover then runs Flock twice against the committed witness, with Flock's 100
 
 The challenger records each prover message before it samples the challenge that answers it, and the record keeps the message bytes, so the verifier can check which message each challenge answered. The prover therefore cannot choose a message after seeing its challenge, and binding messages to challenges needs no hash function. Fiat–Shamir would give a much weaker bound at these parameters ([knowledge soundness](#knowledge-soundness)).
 
-![Proving phase](/programs/c-flock#prove)
+![Proving phase](/programs/flock#prove)
 
 ### Verification phase
 
 After the session, the challenger hands its record to the verifier. The verifier derives the statement from its own copies of `circuit` and `com`, not from anything the prover sent, and replays the record. `verify` is a total function written in Lean, and it reads nothing but its inputs: no clock, no randomness and no other file.
 
-![Verification phase](/programs/c-flock#verify)
+![Verification phase](/programs/flock#verify)
 
 `verify` accepts only statements covered by its soundness theorem and rejects all others, so the theorem applies to every session it accepts, for any Boolean circuit and with no hypothesis on the circuit file. Concretely, a session must record a sample (by `stratified:K`, or by `subset:K` in the zero-knowledge mode), retain every round's message bytes, use hiding leaves in every tree, and prove a single table (or several, in the zero-knowledge mode). Its sizes must lie in these ranges:
 
@@ -172,7 +172,7 @@ Proved in Lean for Flock as `verify` implements it: for a stratified sample prov
 
 In the zero-knowledge mode every value the prover sends is masked, so the verifier learns only the verdict and the public outputs. The outer proofs of [zero knowledge](/proof-systems/zero-knowledge) run in this mode. An audit that proves its sampled proof blocks directly may also use it, but then the workers that sample the masks must be trusted for privacy ([why](/proof-systems/zero-knowledge#why-not-zero-knowledge-in-the-workers)). The mode differs from the plain protocol in six ways, and the figure fades the lines they leave unchanged.
 
-![Flock, zero-knowledge mode](/programs/c-flock-zk)
+![Flock, zero-knowledge mode](/programs/flock-zk)
 
 - The challenger commits to its challenges in advance. The prover first sends a fresh nonce, and the challenger samples every challenge of the session and commits to all of them in a coin tree, keyed to the session by the nonce. Each response opens only the challenges its round uses, and the prover checks each opening before using it. Since the tree is binding, the challenger cannot choose a challenge after seeing a message, as zero knowledge against a malicious verifier requires.
 - The prover commits to its pads together with the witness, before it sends any value that depends on the witness, and sends each algebraic value $v$ masked as $v + h$ for a pad $h$.

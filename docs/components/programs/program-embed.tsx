@@ -1,7 +1,7 @@
 "use client"
 
 import { BANDWIDTH_AUDIT, NETWORK_CERTIFIER, POUS_PROTOCOL, POUW_PROTOCOL } from "@/components/programs/accounting"
-import { C_FLOCK_PLAIN, C_FLOCK_ZK } from "@/components/programs/c-flock"
+import { FLOCK_PLAIN, FLOCK_ZK } from "@/components/programs/flock"
 import { ProgramFigure } from "@/components/programs/program-figure"
 import { ONSITE, REMOTE } from "@/components/programs/protocols"
 import {
@@ -28,8 +28,8 @@ const PROGRAMS: Record<string, Protocol> = {
   recursion: RECURSION,
   "recursion-private": RECURSION_PRIVATE,
   "recursion-deployed": RECURSION_DEPLOYED,
-  "c-flock": C_FLOCK_PLAIN,
-  "c-flock-zk": C_FLOCK_ZK,
+  flock: FLOCK_PLAIN,
+  "flock-zk": FLOCK_ZK,
 }
 
 /*

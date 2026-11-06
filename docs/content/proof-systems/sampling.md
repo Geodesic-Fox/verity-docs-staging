@@ -174,4 +174,4 @@ The committed boundary trace is a function of the prover's strategy after it sen
 
 ## With Flock
 
-[Flock](/proof-systems/c-flock) provides `commit`, `prove` and `verify`, with $\varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$ evaluated at about $t \cdot 2^{-209}$ for a prover making $t$ SHA-512 evaluations on an audit whose sampled proof blocks read $2^{24}$ commit strings ([its bound](/proof-systems/c-flock#integrity)).
+[Flock](/proof-systems/flock) provides `commit`, `prove` and `verify`, with $\varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$ evaluated at about $t \cdot 2^{-209}$ for a prover making $t$ SHA-512 evaluations on an audit whose sampled proof blocks read $2^{24}$ commit strings ([its bound](/proof-systems/flock#integrity)).

@@ -73,7 +73,7 @@ export const tree: TreeSection[] = [
           },
           {
             label: "Flock",
-            href: "/proof-systems/c-flock",
+            href: "/proof-systems/flock",
             hidden: true,
             description:
               "The proof system: Flock over GF(2^128) on live coins, its verifier in Lean, its knowledge soundness and integrity, a zero-knowledge mode, and its verifier as a circuit.",

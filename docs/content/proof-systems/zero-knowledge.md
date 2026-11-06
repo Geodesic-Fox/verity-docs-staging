@@ -77,7 +77,7 @@ The protocol assumes the following of its primitives only.
 - **$\Pi$** is complete and sound with error $\varepsilon_\Pi$: for every prover, $V_\Pi$ outputs $(1, o)$ on a false claim, $(x, o) \notin L$, with probability at most $\varepsilon_\Pi$.
 - **Fresh randomness.** The salts and $P_{\mathsf{Arg}}$'s randomness are uniform, and the verifier's coins are uniform and unseen until sent.
 
-$\mathsf{Arg}$'s zero knowledge has to hold however $V^*$ picks its coins. A construction that has it for each fixed sequence of coins, as a VEIL-style one does, gets it from a commitment to its coins and Goldreich–Kahan rewinding, which belong to the construction: Flock's are on [its page](/proof-systems/c-flock#zero-knowledge-mode).
+$\mathsf{Arg}$'s zero knowledge has to hold however $V^*$ picks its coins. A construction that has it for each fixed sequence of coins, as a VEIL-style one does, gets it from a commitment to its coins and Goldreich–Kahan rewinding, which belong to the construction: Flock's are on [its page](/proof-systems/flock#zero-knowledge-mode).
 
 ### Theorem
 
@@ -100,7 +100,7 @@ The simulator gets $o$ only at the coins $V^*$ chose, since $V^*$ chooses its co
 
 **Soundness.** When $V_{\mathsf{Arg}}$ accepts, its extractor recovers openings $(m_i, s_i)$ with $V_\Pi(x, m, c) = (1, o)$, except with probability $\varepsilon_{\mathrm{ks}}$. Each $m_i$ is fixed before $c_i$: forking the run just after $h_i$ and extracting again gives the same opening, unless the prover has opened $h_i$ two ways, which costs $\varepsilon_{\mathrm{bind},i}$. So committing and later opening makes a prover for $\Pi$ whose round-$i$ message precedes $c_i$, and $\Pi$'s soundness bounds a false claim by $\varepsilon_\Pi$.
 
-Lean proves soundness for Flock's instance, with the faithfulness of its verifier circuit as a named assumption ([Flock](/proof-systems/c-flock#the-verifier-as-a-circuit)); the statement over abstract primitives isn't in Lean yet.
+Lean proves soundness for Flock's instance, with the faithfulness of its verifier circuit as a named assumption ([Flock](/proof-systems/flock#the-verifier-as-a-circuit)); the statement over abstract primitives isn't in Lean yet.
 ~~~
 
 ~~~python
@@ -116,7 +116,7 @@ def simulate(V_star, x, outputs):   # reads no message, salt or witness
 ~~~proof pending
 Two hybrids. First, replace $V^*$'s view of the outer proof with $\mathsf{Arg}$'s simulator for $V^*$ on $R_{\mathrm{out}}(x, h, c, o)$; the outer witness, which holds every message and salt, is no longer read, at a cost of $\varepsilon_{\mathrm{zk}}$. Second, replace each commitment with a commitment to zeros of the message's length, which $x$ fixes. $V^*$ picks each $c_i$ after seeing $h_1, \ldots, h_i$, so each message may depend on earlier commitments, and hiding covers that, at a cost of $\varepsilon_{\mathrm{hide}}$ over all of them. What remains reads $x$ and $o(c)$ only, and it is `simulate`.
 
-Lean proves this for Flock's commitments when the verifier's coins are fixed before the first commitment and there are no public outputs ([Flock](/proof-systems/c-flock#the-verifier-as-a-circuit)). The statement here, with coins chosen after each commitment and the outputs in the outer statement, isn't in Lean yet.
+Lean proves this for Flock's commitments when the verifier's coins are fixed before the first commitment and there are no public outputs ([Flock](/proof-systems/flock#the-verifier-as-a-circuit)). The statement here, with coins chosen after each commitment and the outputs in the outer statement, isn't in Lean yet.
 ~~~
 
 ### What's revealed
@@ -170,7 +170,7 @@ The ZK server can't afford to compute the outer proof itself: that is the work t
 3. **A masked value**, an algebraic message plus a pad the ZK server generated and never shows the workers, with a relation the ZK server can check on the unmasked message.
 4. **A constant**: labels, lengths, counts.
 
-A VEIL-style argument has this form, and [Flock's](/proof-systems/c-flock#zero-knowledge-mode) does.
+A VEIL-style argument has this form, and [Flock's](/proof-systems/flock#zero-knowledge-mode) does.
 
 ### The run
 

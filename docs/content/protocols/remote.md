@@ -31,7 +31,7 @@ The auditor never runs any part of the developer's computation. It only checks p
 | Workers | Neither party | The developer's site | The developer's servers and GPUs. They serve, commit, and run nearly all of the proving, with zero knowledge off. |
 | ZK server | The developer | The developer's site, on CPUs it controls | The workers' only path to the auditor. It salts, recomputes or masks every value that leaves, under its [contract](/proof-systems/zero-knowledge#the-contract), and releases outer proofs on a fixed schedule. |
 | Challenger | The auditor | Online | Commits to every salt before the run and opens each once, answers each proof message with fresh coins, samples only after it has logged what it samples against, and keeps the record. It never sees the witness. |
-| Verifier | The auditor | Offline | Checks the challenger's record with [Flock's verifier](/proof-systems/c-flock#verification-phase), written in Lean, and decides. |
+| Verifier | The auditor | Offline | Checks the challenger's record with [Flock's verifier](/proof-systems/flock#verification-phase), written in Lean, and decides. |
 
 In the subprotocols' statements the prover $\mathcal{P}$ is the workers behind the ZK server, and the verifier $\mathcal{V}$ is the challenger and the verifier together.
 
@@ -78,7 +78,7 @@ The challenger takes each subprotocol's sample from its own sampling design, wit
 
 ### Proving
 
-The workers prove the samples in two layers ([zero knowledge](/proof-systems/zero-knowledge#protocol)). The inner proofs run with zero knowledge off: each message reaches the challenger only as the ZK server's commitment to it, and the challenger answers each commitment with fresh coins. In the outer proofs, the workers prove that the committed messages make $V_\Pi$ accept at the coins sent. The outer proofs run in [Flock's zero-knowledge mode](/proof-systems/c-flock#zero-knowledge-mode), whose coins the challenger commits when each session opens. The ZK server checks every value of an outer proof against its contract before anything leaves, and releases each proof at its slot in the schedule.
+The workers prove the samples in two layers ([zero knowledge](/proof-systems/zero-knowledge#protocol)). The inner proofs run with zero knowledge off: each message reaches the challenger only as the ZK server's commitment to it, and the challenger answers each commitment with fresh coins. In the outer proofs, the workers prove that the committed messages make $V_\Pi$ accept at the coins sent. The outer proofs run in [Flock's zero-knowledge mode](/proof-systems/flock#zero-knowledge-mode), whose coins the challenger commits when each session opens. The ZK server checks every value of an outer proof against its contract before anything leaves, and releases each proof at its slot in the schedule.
 
 ![Proving](/programs/remote#prove)
 
@@ -98,8 +98,8 @@ Each guarantee rests on a different part of the system, and each party relies on
 
 | Part | Trusted by | For | What it must do |
 | --- | --- | --- | --- |
-| Verifier | The auditor | Integrity and work | Accept only what the subprotocols' specifications accept. It is written in Lean, with one soundness theorem over everything it accepts ([Flock's verifier](/proof-systems/c-flock#verification-phase)). |
-| $V_\Pi$ | The auditor | Integrity and work | Accept only inner transcripts the verifier accepts ([the verifier as a circuit](/proof-systems/c-flock#the-verifier-as-a-circuit)). |
+| Verifier | The auditor | Integrity and work | Accept only what the subprotocols' specifications accept. It is written in Lean, with one soundness theorem over everything it accepts ([Flock's verifier](/proof-systems/flock#verification-phase)). |
+| $V_\Pi$ | The auditor | Integrity and work | Accept only inner transcripts the verifier accepts ([the verifier as a circuit](/proof-systems/flock#the-verifier-as-a-circuit)). |
 | Challenger | The auditor | Integrity and work | Take its coins from its own fresh randomness, open each committed salt once, and sample only after logging the receipt. |
 | ZK server | The developer | Zero knowledge | Follow its contract, keep its pads from the workers, and release only at the schedule's slots. |
 | Workers | Neither party | Nothing | Integrity and work hold whatever they do, and so does zero knowledge, short of stopping sessions and choosing among accepting outputs ([what changes](/proof-systems/zero-knowledge#what-changes)). |

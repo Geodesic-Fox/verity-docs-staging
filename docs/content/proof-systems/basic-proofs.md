@@ -1,4 +1,4 @@
-A proof system here is a *commit-and-prove argument*: it binds values with a commitment, then proves statements about the committed values on the verifier's live coins. Two layers are stated once over any such argument. [Sampling](/proof-systems/sampling) proves a random sample of a computation's proof blocks and bounds how many of them are incorrect. [Zero knowledge](/proof-systems/zero-knowledge) wraps the inner proofs in an outer proof that they would have verified, so the auditor learns only the public outputs, whatever the provers do. A *construction* implements the methods both layers call, and [Flock](/proof-systems/c-flock) is the one documented here.
+A proof system here is a *commit-and-prove argument*: it binds values with a commitment, then proves statements about the committed values on the verifier's live coins. Two layers are stated once over any such argument. [Sampling](/proof-systems/sampling) proves a random sample of a computation's proof blocks and bounds how many of them are incorrect. [Zero knowledge](/proof-systems/zero-knowledge) wraps the inner proofs in an outer proof that they would have verified, so the auditor learns only the public outputs, whatever the provers do. A *construction* implements the methods both layers call, and [Flock](/proof-systems/flock) is the one documented here.
 
 ~~~mermaid
 flowchart TB
@@ -63,12 +63,12 @@ Verity asks three more things of every construction. Zero knowledge holds agains
 
 ## Flock
 
-[Flock](/proof-systems/c-flock) implements every method:
+[Flock](/proof-systems/flock) implements every method:
 
 | Method | Flock |
 | --- | --- |
 | `commit` | SHA-512 Merkle trees over hiding leaves, `frame-v3-sha512/hm96-sha512` |
-| `prove`, `verify` | Flock: block R1CS with a Ligerito polynomial commitment over $\mathrm{GF}(2^{128})$, on the challenger's live coins, with a [zero-knowledge mode](/proof-systems/c-flock#zero-knowledge-mode) for the outer proofs |
-| `verify` as a circuit | Its verifier as public Boolean circuits, proved by the outer sessions ([the verifier as a circuit](/proof-systems/c-flock#the-verifier-as-a-circuit)) |
+| `prove`, `verify` | Flock: block R1CS with a Ligerito polynomial commitment over $\mathrm{GF}(2^{128})$, on the challenger's live coins, with a [zero-knowledge mode](/proof-systems/flock#zero-knowledge-mode) for the outer proofs |
+| `verify` as a circuit | Its verifier as public Boolean circuits, proved by the outer sessions ([the verifier as a circuit](/proof-systems/flock#the-verifier-as-a-circuit)) |
 
-Its verifier is written in Lean, with upstream Flock's Rust verifier as a cross-check ([verification phase](/proof-systems/c-flock#verification-phase)). Flock's page bounds $\varepsilon_{\mathrm{ks}}$ and $\varepsilon_{\mathrm{bind}}$ by the success of SHA-512 collision finders built from the prover ([integrity](/proof-systems/c-flock#integrity)), and says how far Lean proves each property.
+Its verifier is written in Lean, with upstream Flock's Rust verifier as a cross-check ([verification phase](/proof-systems/flock#verification-phase)). Flock's page bounds $\varepsilon_{\mathrm{ks}}$ and $\varepsilon_{\mathrm{bind}}$ by the success of SHA-512 collision finders built from the prover ([integrity](/proof-systems/flock#integrity)), and says how far Lean proves each property.

@@ -8,7 +8,7 @@ import type {
   Protocol,
 } from "@/components/programs/types"
 
-const C_FLOCK = "/proof-systems/c-flock"
+const FLOCK = "/proof-systems/flock"
 
 const ACTORS: Actor[] = [
   {
@@ -50,7 +50,7 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
     signature: "statement(circuit, com) -> Statement",
     tex: String.raw`Az \circ Bz = z, \qquad A = I \otimes A_0,\ \ B = I \otimes B_0`,
     body: [
-      `The block R1CS over $\\mathrm{GF}(2)$ satisfied by exactly the witnesses whose trace satisfies \`circuit\` and whose rows open \`com\`. It constrains the circuit's gates, the SHA-512 digest and commit string of each committed row, and the bits the verifier knows ([the relation](${C_FLOCK}#the-relation)). Each party derives it from its own copies of \`circuit\` and \`com\`.`,
+      `The block R1CS over $\\mathrm{GF}(2)$ satisfied by exactly the witnesses whose trace satisfies \`circuit\` and whose rows open \`com\`. It constrains the circuit's gates, the SHA-512 digest and commit string of each committed row, and the bits the verifier knows ([the relation](${FLOCK}#the-relation)). Each party derives it from its own copies of \`circuit\` and \`com\`.`,
     ],
   },
   witness: {
@@ -85,7 +85,7 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "proof",
     signature: "prove(stmt, z, coins) -> bytes",
     body: [
-      `The prover's next Flock message, given the challenges so far: the rounds of the zerocheck, then of the lincheck, ring switching and the Ligerito opening ([proving phase](${C_FLOCK}#proving-phase)). The first message of each repetition names the statement by its digest and repeats the cap.`,
+      `The prover's next Flock message, given the challenges so far: the rounds of the zerocheck, then of the lincheck, ring switching and the Ligerito opening ([proving phase](${FLOCK}#proving-phase)). The first message of each repetition names the statement by its digest and repeats the cap.`,
     ],
   },
   verify: {
@@ -100,7 +100,7 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
 
 /* Flock with zero knowledge off: Flock's block R1CS proof on the
    challenger's fresh coins, replayed offline by the verifier. */
-export const C_FLOCK_PLAIN: Protocol = {
+export const FLOCK_PLAIN: Protocol = {
   title: "Flock",
   intro:
     "The prover commits to its witness, then answers the challenger's fresh challenges round by round, in two repetitions. The verifier replays the challenger's record afterwards.",
@@ -156,7 +156,7 @@ const kept = (leaf: Leaf): Leaf => ({ ...leaf, kept: true })
 
 /* The zero-knowledge mode: what changes reads at full strength, what the
    plain mode shares reads faded. */
-export const C_FLOCK_ZK: Protocol = {
+export const FLOCK_ZK: Protocol = {
   title: "Flock, zero-knowledge mode",
   intro:
     "The plain protocol, with every challenge of the session committed at its start and every algebraic message masked.",
@@ -255,7 +255,7 @@ export const C_FLOCK_ZK: Protocol = {
       returns: "proof",
       signature: "prove(stmt, z, pads, coins) -> bytes",
       body: [
-        `The next Flock message, with each algebraic value $v$ sent as $v + h$ for a pad $h$. The final rounds of each repetition prove that the masked values pass Flock's checks, so the verifier can check them without seeing the values ([zero-knowledge mode](${C_FLOCK}#zero-knowledge-mode)).`,
+        `The next Flock message, with each algebraic value $v$ sent as $v + h$ for a pad $h$. The final rounds of each repetition prove that the masked values pass Flock's checks, so the verifier can check them without seeing the values ([zero-knowledge mode](${FLOCK}#zero-knowledge-mode)).`,
       ],
     },
     verify: {

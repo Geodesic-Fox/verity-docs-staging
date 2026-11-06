@@ -17,7 +17,7 @@ import type {
 } from "@/components/programs/types"
 
 const ZK = "/proof-systems/zero-knowledge"
-const C_FLOCK = "/proof-systems/c-flock"
+const FLOCK = "/proof-systems/flock"
 const SAMPLING = "/proof-systems/sampling"
 const COMPUTE = "/accounting/compute"
 const MEMORY = "/accounting/memory"
@@ -303,7 +303,7 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "proof",
     signature: "outer_prove(v_pi, slot) -> bytes",
     body: [
-      `The outer proof due at \`slot\`: the ZK server's commitments open to messages on which $V_\\Pi$ accepts at the coins sent ([zero knowledge](${ZK}#outer-phase)). The workers compute it without its pads. It runs its own rounds in [C-Flock's zero-knowledge mode](${C_FLOCK}#zero-knowledge-mode), on live coins that the challenger commits when the session opens.`,
+      `The outer proof due at \`slot\`: the ZK server's commitments open to messages on which $V_\\Pi$ accepts at the coins sent ([zero knowledge](${ZK}#outer-phase)). The workers compute it without its pads. It runs its own rounds in [C-Flock's zero-knowledge mode](${FLOCK}#zero-knowledge-mode), on live coins that the challenger commits when the session opens.`,
     ],
   },
   release: {
