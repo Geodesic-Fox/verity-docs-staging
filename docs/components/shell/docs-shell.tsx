@@ -67,7 +67,7 @@ function Row({ node, pathname }: { node: TreeNode; pathname: string }) {
   return (
     <li>
       <Link
-        className="flex h-9 w-full min-w-0 items-center rounded-md pl-0.5 text-sm font-medium tracking-(--sidebar-label-tracking) text-sidebar-muted outline-hidden ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 data-active:bg-sidebar-active data-active:text-sidebar-accent-foreground"
+        className="flex h-9 w-full min-w-0 items-center rounded-[6px] pl-0.5 text-sm font-medium tracking-(--sidebar-label-tracking) text-sidebar-muted outline-hidden ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 data-active:bg-sidebar-active data-active:text-sidebar-accent-foreground"
         data-active={pathname === node.href ? "" : undefined}
         href={node.href ?? "/"}
       >
