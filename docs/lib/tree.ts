@@ -72,7 +72,7 @@ export const tree: TreeSection[] = [
               "Commit-and-prove arguments: statements, the methods sampling and zero knowledge call, the properties each needs, and C-Flock, the construction.",
           },
           {
-            label: "C-Flock",
+            label: "Flock",
             href: "/proof-systems/c-flock",
             hidden: true,
             description:
@@ -125,7 +125,7 @@ export const tree: TreeSection[] = [
                 href: "/accounting/compute",
                 title: "Compute accounting",
                 description:
-                  "The useful work an audit certifies, against the work the declared hardware could have done: the headroom left for undeclared compute.",
+                  "The useful work an audit certifies, against the work the registered hardware could have done: the headroom left for unregistered compute.",
               },
             ],
           },
@@ -187,13 +187,13 @@ export const tree: TreeSection[] = [
         label: "vLLM",
         href: "/integrations/vllm",
         icon: "vllm",
-        description: "Hooks vLLM to build each workload's circuit, commit its values while serving, and prove the drawn units.",
+        description: "Hooks vLLM to build each workload's circuit, commit its values while serving, and prove the sampled proof blocks.",
         children: [
           {
             label: "Circuit browser",
             href: "/integrations/vllm/circuits",
             hidden: true,
-            description: "Every Program the vLLM integration has on record, drawn down to its gates.",
+            description: "Every Program the vLLM integration has on record, shown down to its gates.",
           },
         ],
       },

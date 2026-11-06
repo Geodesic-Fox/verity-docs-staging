@@ -78,10 +78,10 @@ const KIND_LABELS: Record<string, string> = {
   // A word-level Definition that isn't one kind of arithmetic.
   composite: "Subcircuit",
   piece: "Primitive",
-  "c-flock-unit": "C-Flock unit",
+  "c-flock-unit": "Flock proof block",
   // A primitive too wide for one circuit type: its types, counted.
   composed: "Composed",
-  "proof-unit": "Proof unit",
+  "proof-unit": "Proof block",
 }
 export const kindLabel = (kind: string) => KIND_LABELS[kind] ?? kind
 

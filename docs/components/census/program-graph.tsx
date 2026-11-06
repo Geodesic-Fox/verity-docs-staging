@@ -942,7 +942,7 @@ function OpHover({ n }: { n: OpView }) {
       <Rows rows={rows} />
       <Repeats
         times={o.calls > 1 ? `${count(o.calls)} Calls` : null}
-        units={units !== null ? `${fmtRange(units)} proof unit${units === 1 ? "" : "s"} each` : null}
+        units={units !== null ? `${fmtRange(units)} proof block${units === 1 ? "" : "s"} each` : null}
       />
     </HoverShell>
   )
@@ -1397,7 +1397,7 @@ function UnitOutlineNode({ data }: NodeProps<Node<ViewData>>) {
           <div className="nodrag nopan flex h-8 w-fit max-w-full cursor-default items-center gap-1.5 px-3 text-[11.5px]">
             <span aria-hidden className="size-2 shrink-0 rounded-sm" style={{ background: color }} />
             <span className="truncate font-medium">{t.label}</span>
-            <span className="shrink-0 text-muted-foreground">proof unit</span>
+            <span className="shrink-0 text-muted-foreground">proof block</span>
           </div>
         </HoverCardTrigger>
         <HoverCardContent align="start" className="w-[290px] p-3 font-sans text-[11.5px]" side="right" sideOffset={10}>
@@ -1549,7 +1549,7 @@ function CutList({ vu }: { vu: VuView }) {
   const committed = Object.values(p.types).reduce((a, t) => a + (t.kind === "committed" ? t.units : 0), 0)
   return (
     <div className="flex flex-col gap-1">
-      <div className="text-[11px] text-muted-foreground">Proof units per Call</div>
+      <div className="text-[11px] text-muted-foreground">Proof blocks per Call</div>
       <ul className="flex flex-col gap-0.5">
         {types.map(([label, t]) => (
           <li key={label}>
@@ -1673,7 +1673,7 @@ function BoolCard({
       <Facts rows={rows} />
       {node.module ? null : node.kind === "composed" ? (
         <p className="leading-snug text-muted-foreground" data-gates-where="components">
-          Too wide for one circuit type, it&apos;s composed of its components, counted by instance. Each component opens down to its gates.
+          Too wide for one circuit type, it&apos;s composed of its parts, counted by instance. Each part opens down to its gates.
         </p>
       ) : (
         <p className="leading-snug text-muted-foreground" data-gates-where="none">
@@ -2392,8 +2392,8 @@ export function Canvas({
     const head =
       vu && !boolNode
         ? {
-            title: "Proof unit size",
-            note: "The gates (AND, XOR and NOT) in each kind of proof unit, in its Boolean circuit. What isn't lowered yet has no size counted.",
+            title: "Proof block size",
+            note: "The gates (AND, XOR and NOT) in each kind of proof block, in its Boolean circuit. What isn't lowered yet has no size counted.",
           }
         : {
             title: "Subcircuit size",
@@ -2421,11 +2421,11 @@ export function Canvas({
       const stroke = "var(--muted-foreground)"
       if (drawn.nodes.some((n) => n.kind === "unit")) {
         wired.push({
-          label: "Proof unit",
+          label: "Proof block",
           color: stroke,
           frame: true,
           detail:
-            "An outline is one proof unit: the gates in it are checked together, and every gate is in exactly one. Values are committed where they cross its boundary. A component that is many units says how many in its hover card.",
+            "An outline is one proof block: the gates in it are checked together, and every gate is in exactly one. Values are committed where they cross its boundary. A part that is many proof blocks says how many in its hover card.",
         })
       }
       if (view.nodes.some((n) => n.kind === "input") || unitInputs.size) {
@@ -2761,7 +2761,7 @@ export function Canvas({
       ) : null}
       {showGates && fromModule && boolNode?.children.length && gateList?.id === level?.id ? (
         <div className="absolute bottom-14 left-1/2 z-10 -translate-x-1/2 rounded-lg bg-background shadow-xs">
-          <ButtonGroup aria-label="Open or close its components">
+          <ButtonGroup aria-label="Open or close its parts">
             <Button
               data-open-parts="all"
               disabled={openParts.id === level!.id && openParts.all}
@@ -2785,13 +2785,13 @@ export function Canvas({
       ) : null}
       {boolNode && !showGates && boolNode.children.length && !boolNode.wires ? (
         <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 text-[11.5px] text-muted-foreground" data-unwired="">
-          {boolNode.kind === "composed" ? "Composed of its components by count: each opens down to its gates" : "Not wired in the export"}
+          {boolNode.kind === "composed" ? "Composed of its parts by count: each opens down to its gates" : "Not wired in the export"}
         </div>
       ) : null}
       {fromModule && boolNode?.children.length ? (
         <div className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-lg bg-background shadow-xs">
           <ToggleGroup
-            aria-label="Draw its components or its gates"
+            aria-label="Show its parts or its gates"
             onValueChange={(v) => {
               if (!v) return
               setGatesOn(v === "gates")
@@ -2804,7 +2804,7 @@ export function Canvas({
           >
             <ToggleGroupItem data-bool-view="components" value="components">
               <Workflow />
-              Components
+              Parts
             </ToggleGroupItem>
             <ToggleGroupItem data-bool-view="gates" value="gates">
               <Binary />

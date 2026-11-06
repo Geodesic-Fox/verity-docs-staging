@@ -98,10 +98,10 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
   },
 }
 
-/* C-Flock with zero knowledge off: Flock's block R1CS proof on the
+/* Flock with zero knowledge off: Flock's block R1CS proof on the
    challenger's fresh coins, replayed offline by the verifier. */
 export const C_FLOCK_PLAIN: Protocol = {
-  title: "C-Flock",
+  title: "Flock",
   intro:
     "The prover commits to its witness, then answers the challenger's fresh challenges round by round, in two repetitions. The verifier replays the challenger's record afterwards.",
   actors: ACTORS,
@@ -157,7 +157,7 @@ const kept = (leaf: Leaf): Leaf => ({ ...leaf, kept: true })
 /* The zero-knowledge mode: what changes reads at full strength, what the
    plain mode shares reads faded. */
 export const C_FLOCK_ZK: Protocol = {
-  title: "C-Flock, zero-knowledge mode",
+  title: "Flock, zero-knowledge mode",
   intro:
     "The plain protocol, with every challenge of the session committed at its start and every algebraic message masked.",
   actors: ACTORS,

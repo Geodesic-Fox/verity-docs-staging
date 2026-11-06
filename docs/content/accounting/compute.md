@@ -10,7 +10,7 @@ $$
 
 except with PoUW's error, $(1-\varepsilon_s)^K + \eta(q, N)$ (`Pouw.Guarantees.SpareCapacityAtDeadline`, and `PearlCSm120Rev1Cap1000ByDeadline_*` per cell for Pearl-C on sm_120). The headroom splits in two:
 
-- **Honest overhead**, $F(t_d - t_s) - W$: what the declared work leaves unused even when run honestly, from the scheme's noise and hashing and from running below peak.
+- **Honest overhead**, $F(t_d - t_s) - W$: what the registered work leaves unused even when run honestly, from the scheme's noise and hashing and from running below peak.
 - **Soundness slack**, $W - W_{\mathrm{cert}} = (1 - (1-\gamma)(1-\varepsilon_s))W$: what the bound concedes to a cheating prover, at most $\gamma + \varepsilon_s$ of the work.
 
 Shrinking the first is engineering, faster kernels; shrinking the second is cryptography, a smaller $\gamma$ or $\varepsilon_s$.
@@ -32,7 +32,7 @@ The work bound is stated in the cost model's units. These connect it to a device
 | Quantity | Value, `pearl-c-sm120-v1-h3` on the RTX PRO 6000 |
 | --- | --- |
 | $\gamma$ | 0.36949% at $8192^3$; 0.38912% for Llama-3.1-8B served |
-| $\varepsilon_s$, $\delta$, $K$ | 0.1%, $2^{-40}$, 27,713 draws |
+| $\varepsilon_s$, $\delta$, $K$ | 0.1%, $2^{-40}$, 27,713 samples |
 | Soundness slack | about 0.47% of $W$ |
 | Pearl-C chain against native FP8 | 3.0–18.4× slower, 1.27–6.4× without hashing; hashing costs about 0.5 ms a call |
 | Uncertified at $8192^3$ | 75.8–89.3% of native compute, of which 0.05–0.12% is soundness slack and the rest honest overhead |
@@ -45,4 +45,4 @@ The harness numbers are from [#1813](https://github.com/danielreuter/verity/pull
 - **Proved:** the work bound and its Pearl-C per-cell form at $8192^3$, $16384^3$ and the Llama-3.1-8B linears; the deadline form at sm_120; completeness from the honest cap rate.
 - **Conjectured:** TT_OUT rev1, Pearl-C's assumption, in two forms: per unit, and per audit tile, which the per-cell and deadline forms use.
 - **In review:** the device model and the covert residual over it, in [#1807](https://github.com/danielreuter/verity/pull/1807), a worst case over each audit's coins; a per-run form is being proved.
-- **Open:** measuring $F$ and $\varepsilon_{\mathrm{cap}}$; binding the drawn tiles' zero-knowledge proofs to their committed leaves: they are proved on a stand-in unit that doesn't yet read the tile's leaf (TileRead), and until it does, acceptance is checked by a replay that opens rows in the clear, a development shortcut; matching Lean's whole-tile draw weights to the audit's credited cells; the forming debit, a stub that returns 0.
+- **Open:** measuring $F$ and $\varepsilon_{\mathrm{cap}}$; binding the sampled tiles' zero-knowledge proofs to their committed leaves: they are proved on a stand-in proof block that doesn't yet read the tile's leaf (TileRead), and until it does, acceptance is checked by a replay that opens rows in the clear, a development shortcut; matching Lean's whole-tile sampling weights to the audit's credited cells; the forming debit, a stub that returns 0.

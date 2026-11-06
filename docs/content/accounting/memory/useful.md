@@ -8,7 +8,7 @@ Proof of useful space (PoUS) bounds from below how much of an encoding of the co
 | --- | --- | --- |
 | Server | $\mathcal{S}$ | The developer's machine. It commits to $W$, encodes it into $C$, holds $C$, and answers each challenge with a block. |
 | Memory challenger | $\mathcal{M}$ | The auditor's device, on a machine the prover doesn't control and never on the prover's node (the `trusted-nebius-host` assumption). It commits its indices, reveals them one at a time, times each answer on its own clock, and signs the session. |
-| Verifier | $\mathcal{V}$ | Draws the salt, checks the setup, and checks the signed session. |
+| Verifier | $\mathcal{V}$ | Generates the salt, checks the setup, and checks the signed session. |
 
 ### Public parameters
 
@@ -23,7 +23,7 @@ Proof of useful space (PoUS) bounds from below how much of an encoding of the co
 
 | Input | Description |
 | --- | --- |
-| `W` | The weights, fixed before the salt is drawn. |
+| `W` | The weights, fixed before the salt is generated. |
 
 ### Outputs
 
@@ -44,7 +44,7 @@ Each line is run by the party beside it, and an arrow sends a value to another p
 
 ![Setup](/programs/pous#setup)
 
-The salt is drawn after the commitment, so the server can't choose $W$ to suit it. The encoder's output is public: the verifier decodes $C$ and refuses it unless it is exactly the committed $W$'s encoding, then publishes $C$'s root.
+The salt is generated after the commitment, so the server can't choose $W$ to suit it. The encoder's output is public: the verifier decodes $C$ and refuses it unless it is exactly the committed $W$'s encoding, then publishes $C$'s root.
 
 #### The encoding
 

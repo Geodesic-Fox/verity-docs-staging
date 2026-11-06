@@ -55,7 +55,7 @@ const CERTIFIER_FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "data",
     signature: "record(link, window, rows, status) -> bytes",
     body: [
-      `The link-window's record $R$: a fixed binary head (the link, its direction, the window, $T$, $r$, $B$, $\\tau_b$, the status and the parameters' digest), the occupancies $n_0, \\dots, n_{T-1}$, and the root of the tree of its real frames ([the record](${CERTIFIER}#the-record-and-the-certificate)).`,
+      `The transfer block's record $R$: a fixed binary head (the link, its direction, the window, $T$, $r$, $B$, $\\tau_b$, the status and the parameters' digest), the occupancies $n_0, \\dots, n_{T-1}$, and the root of the tree of its real frames ([the record](${CERTIFIER}#the-record-and-the-certificate)).`,
     ],
   },
   digest: {
@@ -67,21 +67,21 @@ const CERTIFIER_FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "data",
     signature: "message(I, session, link, direction, window, dg) -> bytes",
     body: [
-      "What the certificate signs: SHA-512 over the tag `verity/network-certificate-message/v2`, the key's identifier $I$, the challenger-drawn session, the link, its direction, the window and the record's digest, each variable-width field length-prefixed. It ties the digest to one session and link-window under one key.",
+      "What the certificate signs: SHA-512 over the tag `verity/network-certificate-message/v2`, the key's identifier $I$, the challenger-generated session, the link, its direction, the window and the record's digest, each variable-width field length-prefixed. It ties the digest to one session and link-window under one key.",
     ],
   },
   sign: {
     returns: "signature",
     signature: "sign(sk, m) -> Signature",
     body: [
-      "LMS-signs `m` with the next unused leaf. A certifier without its leaf state signs nothing, and the link-window has no record: it fails closed.",
+      "LMS-signs `m` with the next unused leaf. A certifier without its leaf state signs nothing, and the transfer block has no record: it fails closed.",
     ],
   },
   check: {
     returns: "data",
     signature: "check(cert, frames, syncs) -> bool",
     body: [
-      `One link-window's [check](${CERTIFIER}#the-check): exactly one record, settled by the deadline; its certificate verifies under the certifier's key and names its session, link, direction and window; its status is complete; its sync is in $\\Sigma_{\\mathrm{sync}}$ and is the spatial unit's for the window; and its record is the Program's grid, slot for slot. An ingress link-window needs only its record, signature, status and registered parameters.`,
+      `One transfer block's [check](${CERTIFIER}#the-check): exactly one record, settled by the deadline; its certificate verifies under the certifier's key and names its session, link, direction and window; its status is complete; its sync is in $\\Sigma_{\\mathrm{sync}}$ and is the spatial unit's for the window; and its record is the Program's grid, slot for slot. An ingress link-window needs only its record, signature, status and registered parameters.`,
     ],
   },
 }
@@ -105,7 +105,7 @@ const POUW_FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "coin",
     signature: "open(coins, label, after) -> bytes",
     body: [
-      "Opens one coin, live and once, after the verifier has recorded `after`, the root it keys. A second request for an opened coin is refused, so a retry never redraws.",
+      "Opens one coin, live and once, after the verifier has recorded `after`, the root it keys. A second request for an opened coin is refused, so a retry never flips new coins.",
     ],
   },
   commit: {
@@ -137,19 +137,19 @@ const POUW_FUNCTIONS: Record<string, FunctionEntry> = {
       "One 64 × 64 tile at full $k$: the rows formed into E4M3 under the noise, multiplied through the device's FP8 atom chain, and cleaned up by the BF16 peel into the useful output $U$. The leaf is the digest of the checked values $\\tilde C$ and $U$; the product the workload uses is $U$ rescaled.",
     ],
   },
-  draw: {
+  sample_from: {
     returns: "coin",
-    signature: "draw(coin, troot, salt, K) -> list[Tile]",
+    signature: "sample_from(coin, troot, salt, K) -> list[Tile]",
     tex: String.raw`\Pr[\text{tile } t] = W_{\mathrm{ref}}(t) / W`,
     body: [
-      `$K$ independent draws, each a tile with probability its share of the credited work, keyed by the draw coin, the transcript's root and the salt in the domain \`verity/pouw/pearl-c-draw/v1\` ([the draw](${POUW}#the-draw)).`,
+      `$K$ independent samples, each a tile with probability its share of the credited work, keyed by the sampling coin, the transcript's root and the salt in the domain \`verity/pouw/pearl-c-draw/v1\` ([the sample](${POUW}#the-sample)).`,
     ],
   },
   prove: {
     returns: "proof",
     signature: "prove(t) -> Proof",
     body: [
-      "Shows that tile `t` passes `check`: its rows open the committed roots, and recomputing it through the scheme gives its leaf. In the target protocol it is a C-Flock proof, in zero knowledge, whose header carries the identifier; served windows prove drawn tiles this way today, on a stand-in unit that doesn't yet read the tile's committed leaf (TileRead), and until it does, a replay that opens the rows checks acceptance, a development shortcut.",
+      "Shows that tile `t` passes `check`: its rows open the committed roots, and recomputing it through the scheme gives its leaf. In the target protocol it is a Flock proof, in zero knowledge, whose header carries the identifier; served windows prove sampled tiles this way today, on a stand-in proof block that doesn't yet read the tile's committed leaf (TileRead), and until it does, a replay that opens the rows checks acceptance, a development shortcut.",
     ],
   },
   check: {
@@ -170,18 +170,18 @@ const POUW_FUNCTIONS: Record<string, FunctionEntry> = {
 export const POUW_PROTOCOL: Protocol = {
   title: "Proof of useful work",
   intro:
-    "The prover commits the weights, gets a salt it couldn't predict, computes every tile of the declared products under noise from the salt, and commits the tiles; the verifier draws tiles by their work and checks them.",
+    "The prover commits the weights, gets a salt it couldn't predict, computes every tile of the registered products under noise from the salt, and commits the tiles; the verifier samples tiles by their work and checks them.",
   actors: [ACTOR.prover, ACTOR.challenger, ACTOR.verifier],
   params: [
     { code: "scheme", note: "How a tile is noised, computed and checked, with its cap and its γ." },
-    { code: "workload", note: "The declared matrix multiplications: index, shape (m, k, n) and the weight each reads." },
+    { code: "workload", note: "The registered matrix multiplications: index, shape (m, k, n) and the weight each reads." },
     { code: "eps_s, delta", note: "The share of the work the audit may leave unchecked, and the chance it leaves more. They fix K." },
   ],
   run: [
     {
       label: "Commit",
       steps: [
-        { actor: "challenger", code: "coins = random()  # one per label: salt, draw" },
+        { actor: "challenger", code: "coins = random()  # one per label: salt, sample" },
         { actor: "challenger", code: "coins_root = commit_coins(epoch, coins)" },
         { actor: "challenger", to: "verifier", code: "coins_root" },
         { actor: "prover", code: "wroot = commit(weights, bound_to=weight_ids)", gap: true },
@@ -216,19 +216,19 @@ export const POUW_PROTOCOL: Protocol = {
       ],
     },
     {
-      label: "Draw",
+      label: "Sample",
       steps: [
-        { actor: "challenger", code: "coin = open(coins, 'draw', after=troot)" },
+        { actor: "challenger", code: "coin = open(coins, 'sample', after=troot)" },
         { actor: "challenger", to: "verifier", code: "coin" },
-        { actor: "verifier", code: "drawn = draw(coin, troot, s, K)" },
-        { actor: "verifier", to: "prover", code: "drawn" },
+        { actor: "verifier", code: "tiles = sample_from(coin, troot, s, K)" },
+        { actor: "verifier", to: "prover", code: "tiles" },
       ],
     },
     {
       label: "Prove",
       steps: [
         {
-          loop: "for t in drawn",
+          loop: "for t in tiles",
           steps: [
             { actor: "prover", code: "proof[t] = prove(t)" },
             { actor: "prover", to: "verifier", code: "proof[t]" },
@@ -240,7 +240,7 @@ export const POUW_PROTOCOL: Protocol = {
       label: "Verify",
       steps: [
         {
-          loop: "if all(check(t, proof[t]) for t in drawn)",
+          loop: "if all(check(t, proof[t]) for t in tiles)",
           steps: [
             { actor: "verifier", code: "W = credited(records)" },
             { actor: "verifier", output: true, code: "accept, (1 - gamma) * (1 - eps_s) * W" },
@@ -263,7 +263,7 @@ export const NETWORK_CERTIFIER: Protocol = {
     { code: "grid", note: "T buckets of τ_b per window, r frames of B bytes per bucket, the queue capacity Q." },
     { code: "sigma", note: "Σ_sync, the clock-sync values a window may declare." },
     { code: "program", note: "Each egress frame's content, anchor and logical index, from the ingress and the content advice." },
-    { code: "session", note: "The 32-byte identifier the challenger draws for this certifier session." },
+    { code: "session", note: "The 32-byte identifier the challenger generates for this certifier session." },
   ],
   run: [
     {
@@ -369,9 +369,9 @@ const POUS_FUNCTIONS: Record<string, FunctionEntry> = {
     signature: "session() -> bytes",
     body: ["A 32-byte session id the auditor designates, one per audit. The session is bound to the setup's root; refusing a reused id is in progress."],
   },
-  draw: {
+  derive_indices: {
     returns: "commitment",
-    signature: "draw(secret, session, B, k) -> (list[int], Root)",
+    signature: "derive_indices(secret, session, B, k) -> (list[int], Root)",
     body: [
       "$k$ indices uniform over the $B$ blocks, with replacement, from the challenger's own secret, and a hiding coin tree over them. The tree is published; the indices stay hidden until each is asked.",
     ],
@@ -441,7 +441,7 @@ export const POUS_PROTOCOL: Protocol = {
       label: "Challenge",
       steps: [
         { actor: "verifier", to: "memory", code: "vk, session()" },
-        { actor: "memory", code: "I, coin_root = draw(secret, session, B, k)" },
+        { actor: "memory", code: "I, coin_root = derive_indices(secret, session, B, k)" },
         { actor: "memory", to: "verifier", code: "coin_root" },
         {
           gap: true,
@@ -506,13 +506,13 @@ const BANDWIDTH_FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "root",
     signature: "commit(σ, tags) -> Root",
     body: [
-      "An RFC 6962 SHA-512 tree over leaves of 16 tags each, every leaf prefixed by the seed. The root binds every tag before any sample is drawn.",
+      "An RFC 6962 SHA-512 tree over leaves of 16 tags each, every leaf prefixed by the seed. The root binds every tag before any sample is taken.",
     ],
   },
   samples: {
     returns: "coin",
     signature: "samples(key, N, s) -> list[int]",
-    body: ["$s$ indices uniform over the $N$ blocks, with replacement, from the window's key: drawn only for a root that arrived on time."],
+    body: ["$s$ indices uniform over the $N$ blocks, with replacement, from the window's key: derived only for a root that arrived on time."],
   },
   open: {
     returns: "data",

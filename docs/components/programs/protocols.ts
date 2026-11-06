@@ -163,7 +163,7 @@ const sample: Group = {
   label: "Sample",
   steps: [
     { actor: "challenger", code: "seed = random()" },
-    { actor: "challenger", code: "sample = draw(designs, seed)" },
+    { actor: "challenger", code: "sample = sample_from(designs, seed)" },
     { actor: "challenger", to: "zk_server", code: "sample" },
     { actor: "zk_server", to: "workers", code: "sample" },
   ],
@@ -218,14 +218,14 @@ const verify = (onsite: boolean): Group => ({
 
 const PARAMS: Param[] = [
   { code: "program", note: "The circuit the workers serve, every gate public." },
-  { code: "partition", note: "Its proof units." },
+  { code: "partition", note: "Its proof blocks." },
   {
     code: "designs",
-    note: "Each subprotocol's sampling design: integrity's over the program's proof units, compute accounting's over its tiles.",
+    note: "Each subprotocol's sampling design: integrity's over the program's proof blocks, compute accounting's over its tiles.",
   },
   {
     code: "scheme",
-    note: "Compute accounting's scheme, with the declared matrix multiplications, ε_s and δ.",
+    note: "Compute accounting's scheme, with the registered matrix multiplications, ε_s and δ.",
   },
   { code: "v_pi", note: "The verifier as a circuit, the statement of every outer proof." },
   { code: "schedule", note: "The slots at which the ZK server releases outer proofs." },
@@ -236,21 +236,21 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "seed",
     signature: "random() -> bytes",
     body: [
-      "Fresh uniform randomness from the drawing party's own source, with no beacon and no derivation from anything the developer sent.",
+      "Fresh uniform randomness from the sampling party's own source, with no beacon and no derivation from anything the developer sent.",
     ],
   },
   commit: {
     returns: "commitment",
     signature: "commit(x) -> Commitment",
     body: [
-      "A hiding, binding commitment to `x`. The workers commit values under the hiding leaves of SHA-512 Merkle trees (commitments). The ZK server commits each message under a salt it draws for that message alone. The challenger and the memory challenger commit their coins in coin trees.",
+      "A hiding, binding commitment to `x`. The workers commit values under the hiding leaves of SHA-512 Merkle trees (commitments). The ZK server commits each message under a salt it generates for that message alone. The challenger and the memory challenger commit their coins in coin trees.",
     ],
   },
   open: {
     returns: "coin",
     signature: "open(coins, label) -> Coin",
     body: [
-      "Opens one committed coin with its path, once. A second request for an opened coin is refused, so a retry never redraws.",
+      "Opens one committed coin with its path, once. A second request for an opened coin is refused, so a retry never flips new coins.",
     ],
   },
   check_coin: {
@@ -263,28 +263,28 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "data",
     signature: "serve(program, requests, salt) -> Trace",
     body: [
-      `Runs the program on the requests. Each declared matrix multiplication is computed as [compute accounting](${COMPUTE}/useful#compute)'s tiles, noised under \`salt\`, and the product the workload uses comes out of them. What stays behind is the trace.`,
+      `Runs the program on the requests. Each registered matrix multiplication is computed as [compute accounting](${COMPUTE}/useful#compute)'s tiles, noised under \`salt\`, and the product the workload uses comes out of them. What stays behind is the trace.`,
     ],
   },
   boundary_gates: {
     returns: "data",
     signature: "boundary_gates(program, partition) -> set[Gate]",
     body: [
-      `The values a unit's check reads: every input gate, and every gate read across a proof-unit boundary ([sampling](${SAMPLING}#commitment-phase)).`,
+      `The values a proof block's check reads: every input gate, and every gate read across a proof-block boundary ([sampling](${SAMPLING}#commitment-phase)).`,
     ],
   },
   log: {
     returns: "data",
     signature: "log(h_com) -> Receipt",
     body: [
-      "The challenger records what it received and logs a receipt naming it. Only then does it draw, and the draw names the receipt.",
+      "The challenger records what it received and logs a receipt naming it. Only then does it sample, and the sample names the receipt.",
     ],
   },
-  draw: {
+  sample_from: {
     returns: "coin",
-    signature: "draw(designs, seed) -> Sample",
+    signature: "sample_from(designs, seed) -> Sample",
     body: [
-      `One sample per subprotocol, each from its own sampling design, with \`seed\` as its only randomness: proof units of the program for [integrity](${SAMPLING}#challenge-phase), and tiles in proportion to their work for [compute accounting](${COMPUTE}/useful#compute).`,
+      `One sample per subprotocol, each from its own sampling design, with \`seed\` as its only randomness: proof blocks of the program for [integrity](${SAMPLING}#challenge-phase), and tiles in proportion to their work for [compute accounting](${COMPUTE}/useful#compute).`,
     ],
   },
   rounds: {
@@ -296,7 +296,7 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "proof",
     signature: "prove(sample, trace) -> bytes",
     body: [
-      `The workers' next inner message, with zero knowledge off: the proof that no sampled unit is faulty in the committed values, and that each drawn tile passes its check.`,
+      `The workers' next inner message, with zero knowledge off: the proof that no sampled proof block is incorrect in the committed trace, and that each sampled tile passes its check.`,
     ],
   },
   outer_prove: {
@@ -310,7 +310,7 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "proof",
     signature: "release(outer, slot) -> bytes",
     body: [
-      `The ZK server releases each value of the outer proof under the kind the statement's shape gives it: a commitment under a salt it draws, a value it recomputes from its own copy of the witness, a value masked by a pad the workers never see, or a constant. It checks every relation the verifier will check before anything that reads the pads leaves, and releases the proof at its slot ([the contract](${ZK}#the-contract)). The first value that breaks its rule stops the session.`,
+      `The ZK server releases each value of the outer proof under the kind the statement's shape gives it: a commitment under a salt it generates, a value it recomputes from its own copy of the witness, a value masked by a pad the workers never see, or a constant. It checks every relation the verifier will check before anything that reads the pads leaves, and releases the proof at its slot ([the contract](${ZK}#the-contract)). The first value that breaks its rule stops the session.`,
     ],
   },
   verify: {
@@ -342,7 +342,7 @@ const ONSITE_FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "signature",
     signature: "certify(frames, grid) -> Certificate",
     body: [
-      `The [network certifier](${NETWORK}/certification#release) releases each link's frames at a constant rate on the grid, and signs the link-window's record. Certificates go back to the workers as witness and never reach the auditor in the clear.`,
+      `The [network certifier](${NETWORK}/certification#release) releases each link's frames at a constant rate on the grid, and signs the transfer block's record. Certificates go back to the workers as witness and never reach the auditor in the clear.`,
     ],
   },
   challenge: {

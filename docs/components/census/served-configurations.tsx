@@ -181,7 +181,7 @@ export function ServedConfigurations() {
                       </td>
                       <td
                         className="px-3 pt-2.5 pb-1 text-right tabular-nums"
-                        title="Units of this subcircuit's definition drawn at random and replayed; all matched bit for bit"
+                        title="Instances of this subcircuit's definition sampled at random and replayed; all matched bit for bit"
                       >
                         {s.replay ? `${s.replay.replayed_equal} of ${s.replay.drawn}` : "—"}
                       </td>

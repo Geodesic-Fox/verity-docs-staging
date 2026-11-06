@@ -9,7 +9,7 @@ const SPEC = "/proof-systems/sampling"
 export const SAMPLED_PROOFS: Protocol = {
   title: "Sampled proofs",
   intro:
-    "The prover commits to its trace at the boundary gates, the verifier draws a sample of proof units, and the prover proves that no sampled unit is faulty in the committed values.",
+    "The prover commits to its trace at the boundary gates, the verifier samples proof blocks, and the prover proves that no sampled proof block is incorrect in the committed trace.",
   actors: [
     {
       id: "prover",
@@ -30,11 +30,11 @@ export const SAMPLED_PROOFS: Protocol = {
     { code: "circuit", note: "The computation, every gate public." },
     {
       code: "partition",
-      note: "The circuit's gates cut into proof units, the population the sample is drawn from.",
+      note: "The circuit's gates cut into proof blocks, the population the sample is taken from.",
     },
     {
       code: "design",
-      note: "The sampling design: a probability distribution over sets of proof units.",
+      note: "The sampling design: a probability distribution over sets of proof blocks.",
     },
   ],
   run: [
@@ -54,7 +54,7 @@ export const SAMPLED_PROOFS: Protocol = {
       label: "Sample",
       steps: [
         { actor: "verifier", code: "seed = random()" },
-        { actor: "verifier", code: "sample = draw(design, seed)" },
+        { actor: "verifier", code: "sample = sample_from(design, seed)" },
         { actor: "verifier", to: "prover", code: "sample" },
       ],
     },
@@ -115,7 +115,7 @@ export const SAMPLED_PROOFS: Protocol = {
       signature: "boundary_gates(region, partition) -> set[Gate]",
       tex: String.raw`\mathrm{in}(C) \;\cup\; \bigcup\, \big\{\, \mathrm{in}(u) \cup \mathrm{out}(u) \;:\; u \in \mathit{partition},\ u \subseteq \mathit{region} \,\big\}`,
       body: [
-        `The [boundary gates](${SPEC}#commitment-phase) of the units of \`partition\` inside \`region\`, with every input gate of the circuit. \`region\` is the whole circuit, or the replay units drawn under lazy commitments.`,
+        `The [boundary gates](${SPEC}#commitment-phase) of the proof blocks of \`partition\` inside \`region\`, with every input gate of the circuit. \`region\` is the whole circuit, or the replay blocks sampled under lazy commitments.`,
       ],
     },
     commit: {
@@ -132,11 +132,11 @@ export const SAMPLED_PROOFS: Protocol = {
         "Fresh uniform randomness, unseen by the prover until it is sent.",
       ],
     },
-    draw: {
+    sample_from: {
       returns: "coin",
-      signature: "draw(design, seed) -> set[Unit]",
+      signature: "sample_from(design, seed) -> set[ProofBlock]",
       body: [
-        "Samples a set of units with the probabilities `design` assigns, using `seed` as its only randomness.",
+        "Samples a set of proof blocks with the probabilities `design` assigns, using `seed` as its only randomness.",
       ],
     },
     statement: {
@@ -144,7 +144,7 @@ export const SAMPLED_PROOFS: Protocol = {
       signature: "statement(circuit, partition, sample, com) -> Statement",
       tex: String.raw`\exists \tau:\ \mathrm{opens}\big(\mathit{com}, \tau|_{\partial U}\big) \;\wedge\; \forall u \in \mathit{sample}:\ \tau_{\mathrm{out}(u)} = f_u\big(\tau_{\mathrm{in}(u)}\big)`,
       body: [
-        `The claim to be proved: some trace whose boundary values open \`com\`, and in which no unit of \`sample\` is [faulty](${SPEC}#verification-phase). Each party builds it from its own copies.`,
+        `The claim to be proved: some trace whose boundary values open \`com\`, and in which no proof block of \`sample\` is [incorrect](${SPEC}#verification-phase). Each party builds it from its own copies.`,
       ],
     },
     rounds: {
@@ -169,9 +169,9 @@ export const SAMPLED_PROOFS: Protocol = {
   },
 }
 
-/* Lazy commitments: the prover commits the replay units' boundary, the
-   verifier draws replay units, the prover commits their interiors, and the
-   verifier draws proof units inside them. Proving and verifying are the
+/* Lazy commitments: the prover commits the replay blocks' boundary, the
+   verifier samples replay blocks, the prover commits their interiors, and the
+   verifier samples proof blocks inside them. Proving and verifying are the
    one-stage protocol's, against both commitments. */
 const againstBoth = (steps: Step[]): Step[] =>
   JSON.parse(
@@ -183,14 +183,14 @@ export const SAMPLED_PROOFS_LAZY: Protocol = {
   title: "Sampled proofs, lazy commitments",
   params: [
     { code: "circuit", note: "The computation, every gate public." },
-    { code: "partition", note: "The circuit's gates cut into proof units." },
+    { code: "partition", note: "The circuit's gates cut into proof blocks." },
     {
       code: "replay",
-      note: "The replay units, a partition that `partition` refines.",
+      note: "The replay blocks, a partition that `partition` refines.",
     },
     {
       code: "first_stage",
-      note: "The first stage's sampling design, over sets of replay units.",
+      note: "The first stage's sampling design, over sets of replay blocks.",
     },
   ],
   run: [
@@ -206,17 +206,17 @@ export const SAMPLED_PROOFS_LAZY: Protocol = {
     {
       label: "Sample",
       steps: [
-        { actor: "verifier", code: "drawn = draw(first_stage, random())" },
-        { actor: "verifier", to: "prover", code: "drawn" },
+        { actor: "verifier", code: "picked = sample_from(first_stage, random())" },
+        { actor: "verifier", to: "prover", code: "picked" },
         {
           actor: "prover",
-          code: "interior = boundary_gates(drawn, partition) - boundary",
+          code: "interior = boundary_gates(picked, partition) - boundary",
         },
         { actor: "prover", code: "com_interior = commit(trace, interior)" },
         { actor: "prover", to: "verifier", code: "com_interior" },
         {
           actor: "verifier",
-          code: "sample = draw(second_stage(drawn), random())",
+          code: "sample = sample_from(second_stage(picked), random())",
         },
         { actor: "verifier", to: "prover", code: "sample" },
       ],
@@ -227,9 +227,9 @@ export const SAMPLED_PROOFS_LAZY: Protocol = {
     ...SAMPLED_PROOFS.functions,
     second_stage: {
       returns: "data",
-      signature: "second_stage(drawn) -> Design",
+      signature: "second_stage(picked) -> Design",
       body: [
-        "The second stage's sampling design: in each drawn replay unit, a design over its proof units that depends on that replay unit alone, drawn independently across replay units. It never reads an interior.",
+        "The second stage's sampling design: in each sampled replay block, a design over its proof blocks that depends on that replay block alone, sampled independently across replay blocks. It never reads an interior.",
       ],
     },
   },

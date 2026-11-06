@@ -1,8 +1,8 @@
-The remote protocol checks a developer's serving from afar. The auditor places no hardware at the developer's site: it runs a challenger online and a verifier offline, and everything it learns arrives through the developer's ZK server as zero-knowledge proofs. The protocol composes two subprotocols, [sampling](/proof-systems/sampling) for integrity and [compute accounting](/accounting/compute) for work, and an accept means that both accepted: few proof units of the committed computation are faulty, and the prover spent at least a stated share of the declared work after a salt it couldn't predict. With nothing at the site, it says nothing about what else the developer's machines stored or sent. The [onsite](/protocols/onsite) protocol adds the auditor's devices, and the two subprotocols that need them.
+The remote protocol checks a developer's serving from afar. The auditor places no hardware at the developer's site: it runs a challenger online and a verifier offline, and everything it learns arrives through the developer's ZK server as zero-knowledge proofs. The protocol composes two subprotocols, [sampling](/proof-systems/sampling) for integrity and [compute accounting](/accounting/compute) for work, and an accept means that both accepted: few proof blocks of the committed computation are incorrect, and the prover spent at least a stated share of the registered work after a salt it couldn't predict. With nothing at the site, it says nothing about what else the developer's machines stored or sent. The [onsite](/protocols/onsite) protocol adds the auditor's devices, and the two subprotocols that need them.
 
 ## Physical architecture
 
-Both parties hold the circuit and its partition into proof units. On the developer's side are its *workers*, the servers and GPUs, behind a *ZK server* that is their only path to the auditor; on the auditor's, a *challenger* online and a *verifier* offline. One remote run goes like this:
+Both parties hold the circuit and its partition into proof blocks. On the developer's side are its *workers*, the servers and GPUs, behind a *ZK server* that is their only path to the auditor; on the auditor's, a *challenger* online and a *verifier* offline. One remote run goes like this:
 
 ~~~text
 developer                                  auditor
@@ -13,8 +13,8 @@ commit the weights and inputs    ------->  record the commitment
                                  <-------  open the salt
 serve, committing the trace at
 the boundary gates               ------->  log a receipt
-                                 <-------  draw proof units and tiles
-prove the draws; the ZK server
+                                 <-------  sample proof blocks and tiles
+prove the samples; the ZK server
 releases outer proofs            ------->  the verifier checks them, and
                                            the composition decides
 ~~~
@@ -30,8 +30,8 @@ The auditor never runs any part of the developer's computation. It only checks p
 | --- | --- | --- | --- |
 | Workers | Neither party | The developer's site | The developer's servers and GPUs. They serve, commit, and run nearly all of the proving, with zero knowledge off. |
 | ZK server | The developer | The developer's site, on CPUs it controls | The workers' only path to the auditor. It salts, recomputes or masks every value that leaves, under its [contract](/proof-systems/zero-knowledge#the-contract), and releases outer proofs on a fixed schedule. |
-| Challenger | The auditor | Online | Commits to every salt before the run and opens each once, answers each proof message with fresh coins, draws only after it has logged what it draws against, and keeps the record. It never sees the witness. |
-| Verifier | The auditor | Offline | Checks the challenger's record with [C-Flock's verifier](/proof-systems/c-flock#verification-phase), written in Lean, and decides. |
+| Challenger | The auditor | Online | Commits to every salt before the run and opens each once, answers each proof message with fresh coins, samples only after it has logged what it samples against, and keeps the record. It never sees the witness. |
+| Verifier | The auditor | Offline | Checks the challenger's record with [Flock's verifier](/proof-systems/c-flock#verification-phase), written in Lean, and decides. |
 
 In the subprotocols' statements the prover $\mathcal{P}$ is the workers behind the ZK server, and the verifier $\mathcal{V}$ is the challenger and the verifier together.
 
@@ -40,8 +40,8 @@ In the subprotocols' statements the prover $\mathcal{P}$ is the workers behind t
 | Parameter | Description |
 | --- | --- |
 | `program` | The circuit the workers serve, a program named by its digest. |
-| `partition` | Its partition into proof units. |
-| `designs` | Each subprotocol's [sampling design](/proof-systems/sampling#sampling-designs): integrity's over the program's proof units, and compute accounting's over its tiles. |
+| `partition` | Its partition into proof blocks. |
+| `designs` | Each subprotocol's [sampling design](/proof-systems/sampling#sampling-designs): integrity's over the program's proof blocks, and compute accounting's over its tiles. |
 | `scheme` | Compute accounting's scheme, with the declared matrix multiplications, $\varepsilon_s$ and $\delta$ ([public parameters](/accounting/compute/useful#public-parameters)). |
 | `v_pi` | The inner proofs' verifier as a circuit, $V_\Pi$, the statement of every outer proof ([zero knowledge](/proof-systems/zero-knowledge#public-parameters)). |
 | `schedule` | The slots at which the ZK server releases outer proofs. |
@@ -60,25 +60,25 @@ One serving window, then proving about it. Each line is run by the party beside 
 
 ### Registration
 
-Before serving, the challenger draws every salt the run opens and commits to them, so that none can be chosen after the developer's messages. The workers commit the registered inputs, the weights and a program's constants and tables, under hiding leaves. Whatever the workers send reaches the challenger only as the ZK server's commitment to it.
+Before serving, the challenger generates every salt the run opens and commits to them, so that none can be chosen after the developer's messages. The workers commit the registered inputs, the weights and a program's constants and tables, under hiding leaves. Whatever the workers send reaches the challenger only as the ZK server's commitment to it.
 
 ![Registration](/programs/remote#register)
 
 ### Serving
 
-The challenger opens the salt, and the ZK server passes it on once it has checked it against the coin commitment. The workers serve: each declared matrix multiplication is computed as compute accounting's tiles, noised under the salt, and the product the workload uses comes out of them. They commit the trace at the boundary gates, and the challenger logs a receipt for the commitment before anything is drawn.
+The challenger opens the salt, and the ZK server passes it on once it has checked it against the coin commitment. The workers serve: each declared matrix multiplication is computed as compute accounting's tiles, noised under the salt, and the product the workload uses comes out of them. They commit the trace at the boundary gates, and the challenger logs a receipt for the commitment before anything is sampled.
 
 ![Serving](/programs/remote#serve)
 
 ### Sampling
 
-The challenger draws each subprotocol's sample from its own sampling design, with fresh randomness read after the receipt: proof units of the program for integrity, and tiles in proportion to their work for compute accounting. The sample is sent in the clear.
+The challenger takes each subprotocol's sample from its own sampling design, with fresh randomness read after the receipt: proof blocks of the program for integrity, and tiles in proportion to their work for compute accounting. The sample is sent in the clear.
 
 ![Sampling](/programs/remote#sample)
 
 ### Proving
 
-The workers prove the samples in two layers ([zero knowledge](/proof-systems/zero-knowledge#protocol)). The inner proofs run with zero knowledge off: each message reaches the challenger only as the ZK server's commitment to it, and the challenger answers each commitment with fresh coins. In the outer proofs, the workers prove that the committed messages make $V_\Pi$ accept at the coins sent. The outer proofs run in [C-Flock's zero-knowledge mode](/proof-systems/c-flock#zero-knowledge-mode), whose coins the challenger commits when each session opens. The ZK server checks every value of an outer proof against its contract before anything leaves, and releases each proof at its slot in the schedule.
+The workers prove the samples in two layers ([zero knowledge](/proof-systems/zero-knowledge#protocol)). The inner proofs run with zero knowledge off: each message reaches the challenger only as the ZK server's commitment to it, and the challenger answers each commitment with fresh coins. In the outer proofs, the workers prove that the committed messages make $V_\Pi$ accept at the coins sent. The outer proofs run in [Flock's zero-knowledge mode](/proof-systems/c-flock#zero-knowledge-mode), whose coins the challenger commits when each session opens. The ZK server checks every value of an outer proof against its contract before anything leaves, and releases each proof at its slot in the schedule.
 
 ![Proving](/programs/remote#prove)
 
@@ -98,9 +98,9 @@ Each guarantee rests on a different part of the system, and each party relies on
 
 | Part | Trusted by | For | What it must do |
 | --- | --- | --- | --- |
-| Verifier | The auditor | Integrity and work | Accept only what the subprotocols' specifications accept. It is written in Lean, with one soundness theorem over everything it accepts ([C-Flock's verifier](/proof-systems/c-flock#verification-phase)). |
+| Verifier | The auditor | Integrity and work | Accept only what the subprotocols' specifications accept. It is written in Lean, with one soundness theorem over everything it accepts ([Flock's verifier](/proof-systems/c-flock#verification-phase)). |
 | $V_\Pi$ | The auditor | Integrity and work | Accept only inner transcripts the verifier accepts ([the verifier as a circuit](/proof-systems/c-flock#the-verifier-as-a-circuit)). |
-| Challenger | The auditor | Integrity and work | Draw its coins from its own fresh randomness, open each committed salt once, and draw only after logging the receipt. |
+| Challenger | The auditor | Integrity and work | Take its coins from its own fresh randomness, open each committed salt once, and sample only after logging the receipt. |
 | ZK server | The developer | Zero knowledge | Follow its contract, keep its pads from the workers, and release only at the schedule's slots. |
 | Workers | Neither party | Nothing | Integrity and work hold whatever they do, and so does zero knowledge, short of stopping sessions and choosing among accepting outputs ([what changes](/proof-systems/zero-knowledge#what-changes)). |
 
@@ -128,7 +128,7 @@ An honest developer is accepted except with compute accounting's completeness er
 
 ### Integrity and work
 
-An accept is an accept of both subprotocols, so its guarantee is the conjunction of theirs. Let $E_I$ be the event that the program's faulty set lies outside the [confidence set](/proof-systems/sampling#integrity), $B^\star \notin \mathcal{M}_\delta$, and $E_W$ the event that the prover spent less than the certified work after the salt, $T < (1-\gamma)(1-\varepsilon_s)\,W$ ([compute accounting](/accounting/compute/useful#work-bound)). For every prover,
+An accept is an accept of both subprotocols, so its guarantee is the conjunction of theirs. Let $E_I$ be the event that the program's incorrect set lies outside the [confidence set](/proof-systems/sampling#integrity), $B^\star \notin \mathcal{M}_\delta$, and $E_W$ the event that the prover spent less than the certified work after the salt, $T < (1-\gamma)(1-\varepsilon_s)\,W$ ([compute accounting](/accounting/compute/useful#work-bound)). For every prover,
 
 $$
 \Pr\big[\mathsf{accept} \,\wedge\, (E_I \vee E_W)\big] \;\le\; \varepsilon_I + \varepsilon_W + \varepsilon_{\mathrm{outer}}
@@ -141,7 +141,7 @@ $$
 | $\varepsilon_{\mathrm{outer}}$ | The outer proofs' | $\varepsilon_{\mathrm{ks}} + \sum_i \varepsilon_{\mathrm{bind},i}$, the outer argument's knowledge soundness and the binding of the ZK server's commitments ([soundness](/proof-systems/zero-knowledge#theorem)) |
 
 ~~~proof pending
-When the outer proofs are accepted, their extractor recovers openings of the ZK server's commitments that form inner transcripts C-Flock's verifier accepts, each message fixed before its round's coins, except with probability $\varepsilon_{\mathrm{outer}}$. So the workers behind the ZK server are a prover for each subprotocol, and each subprotocol's guarantee bounds its own event: $E_I$ by $\varepsilon_I$ ([integrity](/proof-systems/sampling#integrity)) and $E_W$ by $\varepsilon_W$ (compute accounting's composed bound). A union bound over the two events gives the sum. The two subprotocols draw separate samples, so their terms add.
+When the outer proofs are accepted, their extractor recovers openings of the ZK server's commitments that form inner transcripts Flock's verifier accepts, each message fixed before its round's coins, except with probability $\varepsilon_{\mathrm{outer}}$. So the workers behind the ZK server are a prover for each subprotocol, and each subprotocol's guarantee bounds its own event: $E_I$ by $\varepsilon_I$ ([integrity](/proof-systems/sampling#integrity)) and $E_W$ by $\varepsilon_W$ (compute accounting's composed bound). A union bound over the two events gives the sum. The two subprotocols take separate samples, so their terms add.
 ~~~
 
 ### Zero knowledge
@@ -158,7 +158,7 @@ With an accept, the protocol makes public each subprotocol's public outputs and 
 
 | Subprotocol | Its public outputs | Why they are public |
 | --- | --- | --- |
-| Integrity | The verdict, and the integrity profile: what was audited, the sampling design, how many units were drawn, and the error terms | The [bound on faulty units](/proof-systems/sampling#integrity) is read from the profile, at any $\delta$. |
+| Integrity | The verdict, and the integrity profile: what was audited, the sampling design, how many proof blocks were sampled, and the error terms | The [bound on incorrect proof blocks](/proof-systems/sampling#integrity) is read from the profile, at any $\delta$. |
 | Compute accounting | `verdict`, `work`, `check`, `sampling`, `drawn` and `root_W` | Each with its reason, in [its table](/accounting/compute/useful#public-outputs). |
 
 Every weight, activation, tile value and inner message stays hidden.

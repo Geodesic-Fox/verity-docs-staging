@@ -1,4 +1,4 @@
-The vLLM integration makes an LLM serving run auditable. It hooks a pinned vLLM engine so that, for each served workload, it builds the workload's circuit with an embedded Torch-to-circuit frontend, supplies the circuit's silicon-specific bindings, acquires and commits runtime values while serving, and runs proving through the ZK server, as the [remote](/protocols/remote) and [onsite](/protocols/onsite) protocols run it. It composes the components and owns none of their semantics. The program format belongs to circuits, the exact arithmetic to silicon, the leaves and trees to commitments, the draw and the guarantee to [sampled proofs](/proof-systems/sampling), and each accounting check to its own [protocol](/accounting).
+The vLLM integration makes an LLM serving run auditable. It hooks a pinned vLLM engine so that, for each served workload, it builds the workload's circuit with an embedded Torch-to-circuit frontend, supplies the circuit's silicon-specific bindings, acquires and commits runtime values while serving, and runs proving through the ZK server, as the [remote](/protocols/remote) and [onsite](/protocols/onsite) protocols run it. It composes the parts and owns none of their semantics. The program format belongs to circuits, the exact arithmetic to silicon, the leaves and trees to commitments, the sample and the guarantee to [sampled proofs](/proof-systems/sampling), and each accounting check to its own [protocol](/accounting).
 
 ## Parts
 
@@ -10,7 +10,7 @@ The vLLM integration makes an LLM serving run auditable. It hooks a pinned vLLM 
 | Runtime correspondence | Maps each Call to where vLLM runs it |
 | Acquisition | Reads each committed value where it is computed |
 | Commitment | Hashes the values into hiding leaves and trees while serving |
-| Proving | Proves the drawn units through the ZK server, as the [remote](/protocols/remote#proving) protocol runs it |
+| Proving | Proves the sampled proof blocks through the ZK server, as the [remote](/protocols/remote#proving) protocol runs it |
 
 The **engine profile** fixes the dtype, the tokenizer and the attention kernel, turns prefix caching off so that each request computes its own prompt, and runs vLLM batch-invariant, so that a request's values don't depend on what it was batched with. The program of a request is then the same however the scheduler groups it.
 
@@ -30,13 +30,13 @@ Each request becomes a program that covers its prefill and each of its decode st
 | Run inputs | Each request's prompt token ids, and its sampling parameters: temperature, top-p and the positions of its sampler's random stream | While serving |
 | Structure | The Calls, their dataflow and every shape | Never: it is the program itself, and public |
 
-The partition is `Q_word` v1 with $X = 16$ and $W = 32$. It cuts each Call's circuit into proof units whose committed outputs total at most 16 bits, or are one value of at most 32 bits. A value read across units is committed once, and no unit recomputes a value another unit computes. The [circuit browser](/integrations/vllm/circuits) draws the cut on the served configurations, with its Proof units toggle.
+The partition is `Q_word` v1 with $X = 16$ and $W = 32$. It cuts each Call's circuit into proof blocks whose committed outputs total at most 16 bits, or are one value of at most 32 bits. A value read across proof blocks is committed once, and no proof block recomputes a value another proof block computes. The [circuit browser](/integrations/vllm/circuits) shows the cut on the served configurations, with its Proof blocks toggle.
 
 ## What is committed, and when
 
 What is committed is the partition's boundary gates, fixed by the program and its partition before serving starts:
 
-- every value read across a proof-unit boundary, which includes every value one Call passes to another;
+- every value read across a proof-block boundary, which includes every value one Call passes to another;
 - the prescribed inputs: the weights and each request's prompt token ids;
 - the values the protocols need, such as the token ids sampled at each step.
 
@@ -54,9 +54,9 @@ sequenceDiagram
   Note over W: serve, commit at taps
   W->>Z: serving roots
   Z->>H: salted commitments to them
-  Note over H: draw proof units
-  H->>Z: drawn units
-  Z->>W: drawn units
+  Note over H: sample proof blocks
+  H->>Z: sampled proof blocks
+  Z->>W: sampled proof blocks
   W->>Z: inner and outer proof messages
   Z->>H: salted commitments, then outer proofs
   H->>V: record and transcript
@@ -65,14 +65,14 @@ sequenceDiagram
 
 1. **Before serving**, the registered inputs are committed under hiding leaves and registered with the program's digest and the partition. Their roots stay fixed for every later window.
 2. **While serving**, every boundary value is written into a hiding leaf as it is computed, under the `frame-v3-sha512/hm96-sha512` scheme. Each port's tree has a domain that binds the program, the partition, the port, its leaf schema, its leaf count and the run.
-3. **After the window, before any draw**, the serving roots are registered with the challenger, which logs a receipt and only then draws.
-4. **After the draw**, the drawn units' values, still on the workers, are the witness the workers prove over. Nothing else is opened.
+3. **After the window, before any coins are flipped**, the serving roots are registered with the challenger, which logs a receipt and only then samples.
+4. **After the sample**, the sampled proof blocks' values, still on the workers, are the witness the workers prove over. Nothing else is opened.
 
-[Sampling](/proof-systems/sampling) states the protocol these steps run, and [C-Flock](/proof-systems/c-flock#integrity) bounds its error terms.
+[Sampling](/proof-systems/sampling) states the protocol these steps run, and [Flock](/proof-systems/c-flock#integrity) bounds its error terms.
 
 ## The instrumented program
 
-What the engine runs while serving is the instrumented program: the program, plus a tap at every committed value, plus the leaf and tree hashing. It is derived from the program and its boundary gates, never written by hand, and no proof claims anything about it. If it commits a wrong value, the unit that computes that value is faulty against what was committed, and the audit counts it like any other faulty unit. Its correctness is what lets an honest developer's audits pass. The auditor's guarantee doesn't rest on it.
+What the engine runs while serving is the instrumented program: the program, plus a tap at every committed value, plus the leaf and tree hashing. It is derived from the program and its boundary gates, never written by hand, and no proof claims anything about it. If it commits a wrong value, the proof block that computes that value is incorrect against what was committed, and the audit counts it like any other incorrect proof block. Its correctness is what lets an honest developer's audits pass. The auditor's guarantee doesn't rest on it.
 
 ## Checks on the developer's side
 
@@ -95,13 +95,13 @@ $$
 \Delta_{\mathrm{commit}} = \frac{T_{\mathrm{serve+commit}}}{T_{\mathrm{serve}}} - 1.
 $$
 
-Proving overhead is the cost of proof generation relative to the computation it proves: the time the proof system takes to prove a set of units, over the time the serving hardware takes to compute them natively,
+Proving overhead is the cost of proof generation relative to the computation it proves: the time the proof system takes to prove a set of proof blocks, over the time the serving hardware takes to compute them natively,
 
 $$
-R_{\mathrm{prove}} = \frac{T_{\mathrm{prove}}(\text{units})}{T_{\mathrm{native}}(\text{units})}.
+R_{\mathrm{prove}} = \frac{T_{\mathrm{prove}}(\text{proof blocks})}{T_{\mathrm{native}}(\text{proof blocks})}.
 $$
 
-Serving overhead is paid on every request. Proving overhead is paid only on the drawn units, so a window's proving cost is $R_{\mathrm{prove}}$ times the native time of the units drawn, not of the whole window.
+Serving overhead is paid on every request. Proving overhead is paid only on the sampled proof blocks, so a window's proving cost is $R_{\mathrm{prove}}$ times the native time of the proof blocks sampled, not of the whole window.
 
 ## Composing protocols
 

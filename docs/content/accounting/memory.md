@@ -25,7 +25,7 @@ The space bound is stated in a ring model, where an answer takes at most $D = 16
 | Hardware class | CPU or GPU cores, cooperating within one chiplet. ASICs and FPGAs are outside it. | Declared. A GPU squaring takes 22–37 µs on one SM, so the CPU floor binds. |
 | Perfect isolation | During an audit the server gets no outside help: every bit it can reach, in device memory, host memory, disk, caches or other devices, counts toward its state. | Assumed; procedural, not enforced by the wire. |
 | Deadline and RTT | $\Delta = 500$ µs, and the allowance is measured on the same transport, capped at 354 µs. | Declared; on-node round trips are 10–22 µs at p99.9. |
-| One session per audit | The memory challenger runs one session per setup, with coins drawn after the state is fixed. | Partly in code ([#1815](https://github.com/danielreuter/verity/pull/1815)): the session is bound to the setup's root. Refusing a reused session id is in progress. |
+| One session per audit | The memory challenger runs one session per setup, with coins flipped after the state is fixed. | Partly in code ([#1815](https://github.com/danielreuter/verity/pull/1815)): the session is bound to the setup's root. Refusing a reused session id is in progress. |
 | The challenger runs as built | The memory challenger runs its stated code on its host. | Assumed; nothing attests it. |
 
 ## Numbers

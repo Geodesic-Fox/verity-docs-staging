@@ -46,7 +46,7 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
   random: {
     returns: "seed",
     signature: "random() -> bytes",
-    body: ["Fresh uniform randomness from the drawing party's own source."],
+    body: ["Fresh uniform randomness from the sampling party's own source."],
   },
   rounds: {
     returns: "data",
@@ -66,7 +66,7 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "commitment",
     signature: "Com(m, s) -> Commitment",
     body: [
-      "A hiding, binding commitment to one message under a salt drawn for it alone. The verifier answers it as it would the message: $\\Pi$ is public-coin, so its coins never depend on what a message says.",
+      "A hiding, binding commitment to one message under a salt generated for it alone. The verifier answers it as it would the message: $\\Pi$ is public-coin, so its coins never depend on what a message says.",
     ],
   },
   V_pi: {
@@ -251,7 +251,7 @@ export const RECURSION_PRIVATE: Protocol = {
 }
 
 /* The public-circuit run split across the workers and the ZK server, which
-   draws every salt and pad and is the workers' only path to the verifier. */
+   generates every salt and pad and is the workers' only path to the verifier. */
 export const RECURSION_DEPLOYED: Protocol = {
   title: "Zero knowledge, deployed",
   intro:

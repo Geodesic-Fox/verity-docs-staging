@@ -56,8 +56,8 @@ export function gateless({ fn, reason }: { template?: string | null; fn?: string
     reason && reason !== GENERIC
       ? sentence(reason)
       : family
-        ? `It's ${family}, which C-Flock's lowering doesn't cover yet.`
-        : "C-Flock's lowering has no Boolean circuit for it yet."
+        ? `It's ${family}, which Flock's lowering doesn't cover yet.`
+        : "Flock's lowering has no Boolean circuit for it yet."
   return {
     kind: "not-lowered",
     headline: "No gates below this yet.",

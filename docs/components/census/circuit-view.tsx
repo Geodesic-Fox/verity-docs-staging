@@ -168,7 +168,7 @@ export function CircuitView({
     ...(hasServing
       ? [["serving", "Serving", Network, "Lay the whole run out as vLLM runs it: by engine step, then request, then the model runner", serving, setServing] as const]
       : []),
-    ["units", "Proof units", Boxes, "Outline the proof units inside each Call", vuOn, setVuOn] as const,
+    ["units", "Proof blocks", Boxes, "Outline the proof blocks inside each Call", vuOn, setVuOn] as const,
     ["widths", "Widths", Ruler, "Label each wire with what it carries: how many elements, in what format", widths, setWidths] as const,
   ]
 
@@ -191,17 +191,17 @@ export function CircuitView({
             ? " Between Calls, a width is what one read carries."
             : " This config's reads weren't kept, so edges between Calls have no widths."
           : ""}
-        {boolUrl ? " Below a Call's primitives, the AND, XOR and NOT gates are C-Flock's IR lowering, derived for this site: not a proof statement." : ""}
+        {boolUrl ? " Below a Call's primitives, the AND, XOR and NOT gates are Flock's Boolean lowering, derived for this site: not a proof statement." : ""}
       </span>
     </>
   ) : (
     <>
-      <span>Click a component to open it, down to its gates. Scroll to zoom. The hierarchy lists every level, and goes to any.</span>
+      <span>Click a part to open it, down to its gates. Scroll to zoom. The hierarchy lists every level, and goes to any.</span>
       <span className="opacity-70">
         One Definition on its own, from the vLLM integration&apos;s export of its Definitions. Its static parameters are bound; pick
         another specialization above.
         {boolUrl
-          ? " Below its primitives, the AND, XOR and NOT gates are C-Flock's IR lowering of a template that applies it, derived for this site: not a proof statement."
+          ? " Below its primitives, the AND, XOR and NOT gates are Flock's Boolean lowering of a template that applies it, derived for this site: not a proof statement."
           : ""}
       </span>
     </>

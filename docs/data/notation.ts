@@ -19,7 +19,7 @@ export const notation = {
   digestBits: { tex: "n", meaning: "the digest length in bits" },
   funcs: {
     tex: String.raw`\mathsf{Funcs}(A, B)`,
-    meaning: "the set of all functions from $A$ to $B$, from which $H$ is drawn uniformly",
+    meaning: "the set of all functions from $A$ to $B$, from which $H$ is sampled uniformly",
   },
   seed: { tex: "s", meaning: "a secret, uniformly random seed of $\\lambda$ bits" },
   uniform: { tex: "U", meaning: "a uniformly random string of the same length" },

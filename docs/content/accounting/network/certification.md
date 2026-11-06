@@ -7,8 +7,8 @@ The network certifier fixes when a node's frames leave. It is a device of the au
 | Party | Symbol | Description |
 | --- | --- | --- |
 | Node | $\mathcal{N}$ | The developer's machines behind the certifiers, the *spatial unit*. It runs the Program and hands each egress frame to its link's certifier. |
-| Certifier | $\mathcal{C}$ | The auditor's device on one uplink. It releases the link's frames on the grid and signs one record per link-window. |
-| Verifier | $\mathcal{V}$ | Checks each link-window's certificate and record. |
+| Certifier | $\mathcal{C}$ | The auditor's device on one uplink. It releases the link's frames on the grid and signs one record per transfer block. |
+| Verifier | $\mathcal{V}$ | Checks each transfer block's certificate and record. |
 
 ### Public parameters
 
@@ -19,13 +19,13 @@ The network certifier fixes when a node's frames leave. It is a device of the au
 | `program` | | Each egress frame's content, its anchor (the bucket of the request it answers) and its logical index $\lambda$ in its session, computed from the ingress and the content advice. |
 | `advice` | $\mathcal{A}$ | The content advice the audit admits, fixed before the run; $A_c = \log_2 \lvert\mathcal{A}\rvert$. |
 | `ingress` | $r_{\mathrm{in}}, \tau_{\mathrm{in}}$ | The ingress links' allocation and bucket width. |
-| `session` | | The 32-byte identifier the challenger draws for this certifier session. |
+| `session` | | The 32-byte identifier the challenger generates for this certifier session. |
 
 ### Outputs
 
 | Value | Description |
 | --- | --- |
-| `accept` | Every link-window of the run passed its check. |
+| `accept` | Every transfer block of the run passed its check. |
 | `reject` | Otherwise. A rejected window shows only that it was rejected; later windows are still checked. |
 | `charge` | With an accept, the timing bits the run is charged: $\log_2 \lvert\Sigma_{\mathrm{sync}}\rvert$ per window, and $A_c$ once. |
 
@@ -65,7 +65,7 @@ message     SHA-512([tag] || I || [[session] || [link] || [direction] || u64be w
             tag = "verity/network-certificate-message/v2", [x] = u64be len(x) || x
 ~~~
 
-The status is complete, or the first fault's reason, with no time or count. The frame tree holds the window's real frames in grid order, then empty leaves, at depth $\lceil \log_2(Tr) \rceil$, so padding never enters it. The message binds every certificate to the challenger-drawn session as well as its link-window. The signature is LMS over SHA-512 ($n = 64$, $w = 1$, $h = 20$), and a certifier never reuses a leaf.
+The status is complete, or the first fault's reason, with no time or count. The frame tree holds the window's real frames in grid order, then empty leaves, at depth $\lceil \log_2(Tr) \rceil$, so padding never enters it. The message binds every certificate to the challenger-generated session as well as its transfer block. The signature is LMS over SHA-512 ($n = 64$, $w = 1$, $h = 20$), and a certifier never reuses a leaf.
 
 ### Check
 
@@ -73,9 +73,9 @@ The status is complete, or the first fault's reason, with no time or count. The 
 
 #### The check
 
-An egress link-window passes when it has exactly one record, settled by the verdict deadline; its certificate verifies under the certifier's key and names its session, link, direction and window; its status is complete; its sync is in $\Sigma_{\mathrm{sync}}$ and is the spatial unit's for the window; and its record is the Program's grid, slot for slot. An ingress link-window passes when it has one record by the deadline, its certificate verifies, its status is complete and its parameters are the registered ones.
+An egress transfer block passes when it has exactly one record, settled by the verdict deadline; its certificate verifies under the certifier's key and names its session, link, direction and window; its status is complete; its sync is in $\Sigma_{\mathrm{sync}}$ and is the spatial unit's for the window; and its record is the Program's grid, slot for slot. An ingress transfer block passes when it has one record by the deadline, its certificate verifies, its status is complete and its parameters are the registered ones.
 
-Certificates are witness. In the protocols the developer is to prove in zero knowledge that each passes the check; today the verifier of record is a stand-in that reads the records itself.
+Certificates are witness. In the protocols the developer is to prove in zero knowledge that each passes the check; today the verifier is a stand-in that reads the records itself.
 
 ## Security
 
@@ -86,7 +86,7 @@ The bound is stated about what the wire carries, and takes two facts about the d
 ### Assumptions
 
 - **Collision resistance.** Equal record digests mean equal records: [CR · SHA-512](/assumptions/cr/sha-512).
-- **Unforgeable certificates.** No one but the certifier signs a message under its key: EUF-CMA for LMS over SHA-512. The message names the challenger-drawn session, and the certifier refuses to start a session identifier it has started before.
+- **Unforgeable certificates.** No one but the certifier signs a message under its key: EUF-CMA for LMS over SHA-512. The message names the challenger-generated session, and the certifier refuses to start a session identifier it has started before.
 - **Fixed advice.** The content advice, the Program's frames and $\Sigma_{\mathrm{sync}}$ are fixed before the run, independently of any secret, and the audit refuses advice outside $\mathcal{A}$.
 
 ### Completeness
@@ -101,16 +101,16 @@ $$
 \log_2 |Z| \;\le\; A_c + \min(W, m)\,\log_2 \lvert\Sigma_{\mathrm{sync}}\rvert + n \log_2 D
 $$
 
-$W$ is the number of windows the audit checks and $m$ the number the horizon reaches. The bound has no error term, and holds under W2 and J (`NetTiming.Guarantees.EncardDecodableLeConstantRate`). At $16 \times 8$ sync values and $D = 1$ it is $A_c$ plus 7 bits per window. Two forms refine it:
+$W$ is the number of windows the audit checks and $m$ the number the monitoring period reaches. The bound has no error term, and holds under W2 and J (`NetTiming.Guarantees.EncardDecodableLeConstantRate`). At $16 \times 8$ sync values and $D = 1$ it is $A_c$ plus 7 bits per window. Two forms refine it:
 
 - **Per window.** Over the run's first $m$ whole windows: $A_c$ once, then $\log_2 \lvert\Sigma_{\mathrm{sync}}\rvert + T \log_2 D$ bits per window, counted from the run's first window.
-- **Ingress.** What arrival times can deliver into the unit: $T \log_2(r_{\mathrm{in}} + 1)$ bits per link-window, plus $T \log_2 D$ of jitter, on runs whose statuses are all complete. This is the unit of NCI's charge.
+- **Ingress.** What arrival times can deliver into the spatial unit: $T \log_2(r_{\mathrm{in}} + 1)$ bits per transfer block, plus $T \log_2 D$ of jitter, on runs whose statuses are all complete. This is the unit the inference-only policy charges.
 
 A rejected window carries no bound: it may already have carried the link's whole capacity, about $8TrB$ bits.
 
 ### From the check to the bound
 
-The theorem is about accepted runs of the model. Two more connect it to the check's code, with nothing assumed of SHA-512 or LMS, for a unit of one link pair (one certifier, one egress and one ingress link): if the Lean check accepts and the certifier runs its code (`DeviceIntact`), every observation of the run is an accepted run of the model under the declared advice, or the run's own data holds a SHA-512 collision or a certificate the certifier never signed in this session (`AcceptedRunsAreProgramRuns`, `EncardAcceptedObservationsLe`). The bound in the model holds for any number of links sharing one sync; its connection to the code is proved only for one link pair so far. Because the signed message binds the challenger-drawn session and the certifier refuses to start the same identifier twice, a certificate it never signed in that session is an LMS forgery.
+The theorem is about accepted runs of the model. Two more connect it to the check's code, with nothing assumed of SHA-512 or LMS, for a spatial unit of one link pair (one certifier, one egress and one ingress link): if the Lean check accepts and the certifier runs its code (`DeviceIntact`), every observation of the run is an accepted run of the model under the reported advice, or the run's own data holds a SHA-512 collision or a certificate the certifier never signed in this session (`AcceptedRunsAreProgramRuns`, `EncardAcceptedObservationsLe`). The bound in the model holds for any number of links sharing one sync; its connection to the code is proved only for one link pair so far. Because the signed message binds the challenger-generated session and the certifier refuses to start the same identifier twice, a certificate it never signed in that session is an LMS forgery.
 
 ## Parameters
 
@@ -118,6 +118,6 @@ The theorem is about accepted runs of the model. Two more connect it to the chec
 | --- | --- | --- |
 | Egress, $A_c$ left out | 7 bits | 10,080 bits |
 | Egress, with 8 capacity profiles fixed per audit (proposed) | 7 bits, plus 3 bits once | 10,083 bits |
-| Ingress, at $r_{\mathrm{in}} = 34$ | 3,077.6 bits per link-window | 4.4 Mbit per link |
+| Ingress, at $r_{\mathrm{in}} = 34$ | 3,077.6 bits per transfer block | 4.4 Mbit per link |
 
 The content advice is not yet declared: today the schedule is the workload manifest's arrival steps, which $A_c$ doesn't bound.

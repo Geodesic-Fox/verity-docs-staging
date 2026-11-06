@@ -1,4 +1,4 @@
-The onsite protocol is the [remote](/protocols/remote) protocol with the auditor's devices at the developer's site: a network certifier on every uplink, and a memory challenger beside each one. The devices let it account for the two resources that remote can't see. It composes four subprotocols: [sampling](/proof-systems/sampling) for integrity, [compute accounting](/accounting/compute) for work, [memory accounting](/accounting/memory) for space and [network accounting](/accounting/network) for communication. An accept means that all four accepted: few proof units of the committed computation are faulty, the prover spent at least a stated share of the declared work, each node held an encoding of the committed weights when challenged, and what left each node can carry only a bounded amount beyond the committed computation's output, in its content and in its timing.
+The onsite protocol is the [remote](/protocols/remote) protocol with the auditor's devices at the developer's site: a network certifier on every uplink, and a memory challenger beside each one. The devices let it account for the two resources that remote can't see. It composes four subprotocols: [sampling](/proof-systems/sampling) for integrity, [compute accounting](/accounting/compute) for work, [memory accounting](/accounting/memory) for space and [network accounting](/accounting/network) for communication. An accept means that all four accepted: few proof blocks of the committed computation are incorrect, the prover spent at least a stated share of the registered work, each node held an encoding of the committed weights when challenged, and what left each node can carry only a bounded amount beyond the committed computation's output, in its content and in its timing.
 
 ## Physical architecture
 
@@ -22,8 +22,8 @@ The remote protocol's parties, and two devices of the auditor's:
 | ZK server | The developer | The developer's site, on CPUs it controls | The workers' only path to the auditor. It salts, recomputes or masks every value that leaves, under its [contract](/proof-systems/zero-knowledge#the-contract), and releases outer proofs on a fixed schedule. |
 | Network certifier | The auditor | On each uplink of each node | Releases the node's traffic at a constant rate on a fixed grid, and attests what crossed the link in network certificates. |
 | Memory challenger | The auditor | Beside each node's network certifier, inside its isolation boundary | Runs memory accounting's timed rounds on its own clock, and signs each session. |
-| Challenger | The auditor | Online | Commits to every salt before the run and opens each once, answers each proof message with fresh coins, draws only after it has logged what it draws against, and keeps the record. It never sees the witness. |
-| Verifier | The auditor | Offline | Checks the challenger's record and the memory challengers' openings with [C-Flock's verifier](/proof-systems/c-flock#verification-phase), written in Lean, and decides. |
+| Challenger | The auditor | Online | Commits to every salt before the run and opens each once, answers each proof message with fresh coins, samples only after it has logged what it samples against, and keeps the record. It never sees the witness. |
+| Verifier | The auditor | Offline | Checks the challenger's record and the memory challengers' openings with [Flock's verifier](/proof-systems/c-flock#verification-phase), written in Lean, and decides. |
 
 The devices are the auditor's and the developer doesn't trust them, so what they record of the developer's traffic and memory never reaches the auditor in the clear. Certificates and signed sessions go to the workers as witness, and the developer proves in zero knowledge that they pass their checks.
 
@@ -46,13 +46,13 @@ The remote protocol's run, with the devices' steps added. Each line is run by th
 
 ### Registration
 
-As in remote, the challenger commits to every coin and the workers commit the registered inputs through the ZK server. Each memory challenger commits its block indices in a coin tree drawn from its own secret, never from a public source, so that a node can't compute the challenged blocks in advance. Once the weights' commitment is recorded, the challenger opens the encoding's salt, and the workers encode the weights and commit the encoding.
+As in remote, the challenger commits to every coin and the workers commit the registered inputs through the ZK server. Each memory challenger commits its block indices in a coin tree derived from its own secret, never from a public source, so that a node can't compute the challenged blocks in advance. Once the weights' commitment is recorded, the challenger opens the encoding's salt, and the workers encode the weights and commit the encoding.
 
 ![Registration](/programs/onsite#register)
 
 ### Serving
 
-The workers serve from the encoding, decoding each tensor on every use. Every frame a node sends or receives passes its network certifier, which releases it at its bucket on the grid and signs each link-window's record. Interleaved with serving, the memory challenger reveals its indices one at a time, each answer due within the deadline, and signs the session's round records once it closes. The workers commit the certificates and the signed sessions with the trace, as witness.
+The workers serve from the encoding, decoding each tensor on every use. Every frame a node sends or receives passes its network certifier, which releases it at its bucket on the grid and signs each transfer block's record. Interleaved with serving, the memory challenger reveals its indices one at a time, each answer due within the deadline, and signs the session's round records once it closes. The workers commit the certificates and the signed sessions with the trace, as witness.
 
 ![Serving](/programs/onsite#serve)
 
@@ -76,7 +76,7 @@ The remote protocol's [trusted base](/protocols/remote#trusted-base), and the de
 
 | Part | Trusted by | For | What it must do |
 | --- | --- | --- | --- |
-| Network certifier | The auditor | Communication | Release every frame by its rule, regenerate its link from its record alone, record one untimed status per link-window, and fail closed ([the certifier](/accounting/network/certification#protocol)). |
+| Network certifier | The auditor | Communication | Release every frame by its rule, regenerate its link from its record alone, record one untimed status per transfer block, and fail closed ([the certifier](/accounting/network/certification#protocol)). |
 | Memory challenger | The auditor | Space | Keep its indices secret until it reveals each one, time each answer on its own clock, and refuse an audit its guarantee doesn't cover ([the memory challenger](/accounting/memory/useful#challenge)). |
 
 Neither device is in the developer's trusted base: zero knowledge holds whatever they do, since nothing they record reaches the auditor except through the ZK server's outer proofs.
@@ -111,7 +111,7 @@ An accept is an accept of all four subprotocols, so its guarantee is the conjunc
 
 | Subprotocol | What an accept means | Error |
 | --- | --- | --- |
-| Integrity | The program's faulty set lies in the confidence set, $B^\star \in \mathcal{M}_\delta$ ([integrity](/proof-systems/sampling#integrity)). | $\varepsilon_I = \delta + \varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$ |
+| Integrity | The program's incorrect set lies in the confidence set, $B^\star \in \mathcal{M}_\delta$ ([integrity](/proof-systems/sampling#integrity)). | $\varepsilon_I = \delta + \varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$ |
 | Work | The prover spent at least $(1-\gamma)(1-\varepsilon_s)\,W$ after the salt ([compute accounting](/accounting/compute/useful#work-bound)). | $\varepsilon_W$, as in [remote](/protocols/remote#integrity-and-work) |
 | Space | Each node's state held at least $\lfloor \rho \lvert C\rvert \rfloor$ bits when challenged ([memory accounting](/accounting/memory/useful#space-bound)). | $\varepsilon_M = \delta_{\mathrm{mem}} + \varepsilon_{\mathrm{mem}}$, memory accounting's $\delta$ and $\varepsilon$ |
 | Communication, timing | A covert sender carries at most $A_c + \min(W, m)\log_2\lvert\Sigma_{\mathrm{sync}}\rvert + n \log_2 D$ bits out through when frames leave ([network certifier](/accounting/network/certification#timing-bound)). | None: it holds on every accepted run |
@@ -126,7 +126,7 @@ $$
 with $\varepsilon_{\mathrm{outer}}$ the outer proofs' term, as in [remote](/protocols/remote#integrity-and-work). The content bound reads the same accept as integrity, so its $\delta + \varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$ is integrity's error and an application that reads both pays it once: a receiver recovers an $L$-bit message from an accepted run with probability at most $2^{b-L} + \varepsilon_I + \delta_{\mathrm{in}} + \varepsilon_{\mathrm{outer}}$.
 
 ~~~proof pending
-As in remote: when the outer proofs are accepted, their extractor recovers inner transcripts that C-Flock's verifier accepts, except with probability $\varepsilon_{\mathrm{outer}}$, so the workers behind the ZK server are a prover for each subprotocol and each subprotocol's guarantee bounds its own event. A union bound over the events gives the sum. Integrity, work and space draw separate samples, so their terms add; the content bound is a reading of integrity's accept by [accounting's exfiltration rule](/accounting#reading-integrity), so it adds no sample of its own. The timing bound counts the secrets an accepted run can carry, and adds no probability.
+As in remote: when the outer proofs are accepted, their extractor recovers inner transcripts that Flock's verifier accepts, except with probability $\varepsilon_{\mathrm{outer}}$, so the workers behind the ZK server are a prover for each subprotocol and each subprotocol's guarantee bounds its own event. A union bound over the events gives the sum. Integrity, work and space take separate samples, so their terms add; the content bound is a reading of integrity's accept by [accounting's exfiltration rule](/accounting#reading-integrity), so it adds no sample of its own. The timing bound counts the secrets an accepted run can carry, and adds no probability.
 ~~~
 
 ### Zero knowledge
@@ -147,7 +147,7 @@ Every certificate, record, occupancy, signed session and on-time bit stays hidde
 
 ## Inference-only
 
-The composition establishes faithfulness: the committed values are what the circuits compute, and the compute, memory and network the developer used are the ones its records account for. Inference-only is NCI's policy, checked over the declared circuit from its structure alone. It reads the onsite protocol's network certifiers: each isolation unit's read cap is charged the covert ingress capacity since its node's last memory wipe, which the certifiers' ingress bound counts. NCI is not one of the composition's subprotocols, so the onsite verdict doesn't include its verdict.
+The composition establishes faithfulness: the committed values are what the circuits compute, and the compute, memory and network the developer used are the ones its records account for. The inference-only policy is checked over the registered circuit from its structure alone. It reads the onsite protocol's network certifiers: each inference block's read cap is charged the covert ingress capacity since its node's last memory wipe, which the certifiers' ingress bound counts. The inference-only policy is not one of the composition's subprotocols, so the onsite verdict doesn't include its verdict.
 
 ## Overhead
 
