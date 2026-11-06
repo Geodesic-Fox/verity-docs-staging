@@ -2,14 +2,11 @@
  * The documentation tree: the one place that decides the sidebar, the
  * breadcrumbs, the previous/next order and which pages exist.
  *
- * The sidebar lists sections, each under its heading (if it has one), with a
- * divider between sections. A node with an `href` is a page, whose body is
- * the markdown file at content/<href>.md; without one it renders as a blank
- * placeholder. A top-level node with `children` is a section: its row opens
- * its page and swaps the sidebar for the section's own list, where each child
- * with children of its own is a heading over its pages. A hidden page (a construction too long for its abstract's page, a browser) is
- * routed but left out of the sidebar and the previous/next order: the page it
- * belongs to links to it.
+ * The sidebar lists sections, each under its heading (if it has one). A node
+ * with an `href` is a page, whose body is the markdown file at
+ * content/<href>.md; without one it renders as a blank placeholder. A hidden
+ * page (a browser) is routed but left out of the sidebar and the
+ * previous/next order: the page it belongs to links to it.
  */
 
 export type TreeNode = {
@@ -17,8 +14,6 @@ export type TreeNode = {
   href?: string
   // The page's h1, when it differs from the sidebar label (e.g. "Overview").
   title?: string
-  // The row's label inside its section's list, when the title is too long for it.
-  nav?: string
   description?: string
   icon?: TreeIcon
   hidden?: boolean
@@ -27,24 +22,17 @@ export type TreeNode = {
 
 export type TreeIcon =
   | "overview"
+  | "architecture"
   | "remote"
   | "onsite"
-  | "proof-systems"
   | "basic-proofs"
   | "sampling"
   | "zero-knowledge"
   | "recursion"
-  | "accounting"
   | "compute"
-  | "useful-compute"
-  | "useless-compute"
   | "network"
-  | "certification"
   | "memory"
-  | "useful-storage"
-  | "useless-storage"
-  | "reads"
-  | "classification"
+  | "inference"
   | "vllm"
 
 export type TreeSection = { label?: string; nodes: TreeNode[] }
@@ -59,151 +47,94 @@ export const tree: TreeSection[] = [
         title: "Verity",
         description: "What Verity proves, its two protocols, and where to start.",
       },
-    ],
-  },
-  {
-    label: "Protocols",
-    nodes: [
+      {
+        label: "Architecture",
+        href: "/architecture",
+        icon: "architecture",
+        description:
+          "The parties and the auditor's devices, the components Verity is built from, and how a protocol composes them into one accept.",
+      },
       {
         label: "Remote protocol",
         href: "/protocols/remote",
         icon: "remote",
         description:
-          "Integrity and work, checked with no hardware of the auditor's at the site: its physical architecture, the run, the trusted base, the premises and the composed guarantee.",
+          "Integrity and work, checked with no hardware of the auditor's at the site: the run, the trusted base, the premises and the composed guarantee.",
       },
       {
         label: "Onsite protocol",
         href: "/protocols/onsite",
         icon: "onsite",
         description:
-          "Remote with the auditor's network certifiers and memory challengers at the site, which add space and communication: their placement, their premises and the composed guarantee.",
+          "Remote with the auditor's network certifiers and memory challengers at the site, which add space and communication: their premises and the composed guarantee.",
       },
     ],
   },
   {
-    label: "Subprotocols",
+    label: "Proof systems",
     nodes: [
       {
-        label: "Proof systems",
-        icon: "proof-systems",
-        children: [
-          {
-            label: "Basic proofs",
-            href: "/proof-systems/basic-proofs",
-            icon: "basic-proofs",
-            description:
-              "Commit-and-prove arguments: statements, the methods sampling and zero knowledge call, the properties each needs, and C-Flock, the construction.",
-          },
-          {
-            label: "Flock",
-            href: "/proof-systems/flock",
-            hidden: true,
-            description:
-              "The proof system: Flock over GF(2^128) on live coins, its verifier in Lean, its knowledge soundness and integrity, a zero-knowledge mode, and its verifier as a circuit.",
-          },
-          {
-            label: "Sampling",
-            href: "/proof-systems/sampling",
-            icon: "sampling",
-            description:
-              "Integrity from a random sample, over any commit-and-prove argument: the protocol, its integrity, and two-stage sampling with lazy commitments.",
-          },
-          {
-            label: "Zero-knowledge",
-            href: "/proof-systems/zero-knowledge",
-            icon: "zero-knowledge",
-            description:
-              "The verifier learns only whether a subprotocol's verifier would accept, and its public outputs: the contract, public and private circuits, what still leaks, and what it costs.",
-          },
-          { label: "Recursion", href: "/proof-systems/recursion", icon: "recursion" },
-        ],
+        label: "Basic proofs",
+        href: "/proof-systems/basic-proofs",
+        icon: "basic-proofs",
+        description:
+          "The commit-and-prove argument the compilers take: statements, methods and properties, and Flock, the construction, with its verifier in Lean.",
       },
       {
-        label: "Resource accounting",
-        href: "/accounting",
-        icon: "accounting",
+        label: "Sampling",
+        href: "/proof-systems/sampling",
+        icon: "sampling",
         description:
-          "Bounds on the compute, memory and network a deployment used, checked against what it registered, and how the subprotocols that give them compose.",
-        children: [
-          {
-            label: "Compute",
-            href: "/accounting/compute",
-            title: "Compute accounting",
-            icon: "compute",
-            description:
-              "The useful work an audit certifies, against the work the registered hardware could have done: the headroom left for unregistered compute.",
-            children: [
-              {
-                label: "Forced matrix multiplication",
-                children: [
-                  {
-                    label: "Useful",
-                    href: "/accounting/compute/useful",
-                    title: "Forced matrix multiplication (useful)",
-                    nav: "Forced matmul (useful)",
-                    icon: "useful-compute",
-                    description:
-                      "Each tile computed under noise from a salt the prover couldn't predict, a work-weighted sample proved in zero knowledge, and the lower bound on work an accept gives; and Dither, for int8 products.",
-                  },
-                  {
-                    label: "Useless",
-                    href: "/accounting/compute/useless",
-                    title: "Forced matrix multiplication (useless)",
-                    nav: "Forced matmul (useless)",
-                    icon: "useless-compute",
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            label: "Network",
-            href: "/accounting/network",
-            title: "Network accounting",
-            icon: "network",
-            description:
-              "What a node's traffic can carry beyond the committed computation's output, in its timing and its content, against what its links could carry.",
-            children: [
-              {
-                label: "Network certification",
-                href: "/accounting/network/certification",
-                icon: "certification",
-                description:
-                  "The auditor's device on each uplink: constant-rate release on a fixed grid, signed records, and the bound on what frame timing can carry.",
-              },
-            ],
-          },
-          {
-            label: "Memory",
-            href: "/accounting/memory",
-            title: "Memory accounting",
-            icon: "memory",
-            description:
-              "The state an audit certifies a server holds, against the memory its hardware has: the headroom left for unregistered state.",
-            children: [
-              {
-                label: "Forced storage",
-                children: [
-                  {
-                    label: "Useful",
-                    href: "/accounting/memory/useful",
-                    title: "Forced storage (useful)",
-                    icon: "useful-storage",
-                    description:
-                      "The weights kept only as a slow-to-encode, fast-to-decode encoding, timed challenges for random blocks, and the lower bound on held state an accept gives.",
-                  },
-                  { label: "Useless", href: "/accounting/memory/useless", title: "Forced storage (useless)", icon: "useless-storage" },
-                ],
-              },
-              { label: "Forced reads", href: "/accounting/memory/reads", icon: "reads" },
-            ],
-          },
-        ],
+          "Integrity from a random sample of proof blocks, over any commit-and-prove argument: the protocol, its integrity, reading an accept, and two-stage sampling.",
+      },
+      {
+        label: "Zero-knowledge",
+        href: "/proof-systems/zero-knowledge",
+        icon: "zero-knowledge",
+        description:
+          "VEIL's masking, applied to Flock: the zero-knowledge mode, and its zero knowledge against honest and malicious verifiers.",
+      },
+      {
+        label: "Recursion",
+        href: "/proof-systems/recursion",
+        icon: "recursion",
+        description:
+          "Plain proofs on commitments, and a zero-knowledge proof that they would verify: the theorem, the verifier as a circuit, private circuits, and the ZK server.",
       },
     ],
   },
   {
-    nodes: [{ label: "Workload classification", href: "/workload-classification", icon: "classification" }],
+    label: "Resource accounting",
+    nodes: [
+      {
+        label: "Compute",
+        href: "/accounting/compute",
+        title: "Compute accounting",
+        icon: "compute",
+        description:
+          "Proof of useful work, and the headroom it leaves: the work the registered hardware could have done beyond what an audit certifies.",
+      },
+      {
+        label: "Network",
+        href: "/accounting/network",
+        title: "Network accounting",
+        icon: "network",
+        description:
+          "What a node's traffic can carry beyond the committed computation's output: the content bound, the network certifier, and the headroom on the wire.",
+      },
+      {
+        label: "Memory",
+        href: "/accounting/memory",
+        title: "Memory accounting",
+        icon: "memory",
+        description:
+          "Proof of useful space, and the headroom it leaves: the memory a server has beyond the encoding of the weights an audit certifies it held.",
+      },
+    ],
+  },
+  {
+    label: "Workload classification",
+    nodes: [{ label: "Inference vs. training", href: "/workload-classification/inference-vs-training", icon: "inference" }],
   },
   {
     label: "Integrations",

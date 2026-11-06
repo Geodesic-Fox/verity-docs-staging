@@ -1,4 +1,4 @@
-Sampling lets a verifier check a large computation by proving only a random sample of its parts. The prover commits to what it computed, the verifier samples proof blocks, and the prover proves that each sampled proof block was computed correctly on the committed trace. An accept then bounds how many proof blocks can be incorrect, sampled or not. This page states the protocol over any commit-and-prove argument, and asks of it only the [properties below](#assumptions). Hiding what the prover computed is a separate layer, [zero knowledge](/proof-systems/zero-knowledge), and [compute](/accounting/compute) and [network](/accounting/network) accounting read sampling's guarantee.
+Sampling lets a verifier check a large computation by proving only a random sample of its parts. The prover commits to what it computed, the verifier samples proof blocks, and the prover proves that each sampled proof block was computed correctly on the committed trace. An accept then bounds how many proof blocks can be incorrect, sampled or not. This page states the protocol over any commit-and-prove argument, and asks of it only the [properties below](#assumptions). Hiding what the prover computed is a separate compiler, [recursion](/proof-systems/recursion), and [compute](/accounting/compute) and [network](/accounting/network) accounting read sampling's guarantee.
 
 ## Interface
 
@@ -154,7 +154,7 @@ With *lazy commitments* the prover commits in two steps as well: the replay bloc
 
 ![Lazy commitments](/programs/sampled-proofs-lazy#commit,sample)
 
-Before the first sample only the replay blocks' boundary is committed, so integrity is about $B^\star_I \subseteq U_I$, the replay blocks incorrect in the committed boundary trace. A sampled incorrect replay block holds a incorrect proof block whatever interior the prover commits, since its proof blocks' functions compose to its own. For every prover $\mathcal{P}^*$ and every family $\mathcal{B}$ of sets of replay blocks:
+Before the first sample only the replay blocks' boundary is committed, so integrity is about $B^\star_I \subseteq U_I$, the replay blocks incorrect in the committed boundary trace. A sampled incorrect replay block holds an incorrect proof block whatever interior the prover commits, since its proof blocks' functions compose to its own. For every prover $\mathcal{P}^*$ and every family $\mathcal{B}$ of sets of replay blocks:
 
 $$
 \Pr\big[\mathsf{accept} \,\wedge\, B^\star_I \in \mathcal{B}\big] \;\le\; \max_{B \in \mathcal{B}} \bar P_a(B) + \varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}
@@ -172,6 +172,25 @@ $\bar P_a(B)$ is an upper bound on the acceptance probability, not its value, si
 The committed boundary trace is a function of the prover's strategy after it sends `com_boundary`, so $B^\star_I$ is fixed before the first sample. Given the first sample $S_I$, each sampled replay block in $B^\star_I$ holds a proof block incorrect in the committed trace of both commitments. That trace is fixed before the second sample, because `com_interior` arrives first, and the second stage doesn't read it, so the second stage misses that proof block with probability at most $1 - \min_{u \in U_i} \pi_{u|i}$, independently across replay blocks. Averaging over $S_I$ gives $\bar P_a(B)$, and a hit followed by an accept costs $\varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$, taken at the proof blocks, as in the one-stage proof.
 ~~~
 
+## Reading integrity
+
+An accept doesn't say which proof blocks are incorrect. [Integrity](#integrity) gives a *confidence set* $\mathcal{M}_\delta$, the candidate sets of incorrect proof blocks that the sample misses with probability more than $\delta$, computed from the sampling design alone, and an accept means the incorrect set $B^\star$ is in it, except with probability at most $\delta + \varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$. A consumer charges each proof block $u$ a nonnegative quantity $y_u$, such as its work or its output bits, and reads the accept by one of two rules:
+
+- **A total.** An upper confidence bound on the incorrect proof blocks' total is the largest total of any set in the confidence set:
+
+$$
+\Pr\Big[\mathsf{accept} \,\wedge\, \sum_{u \in B^\star} y_u > \max_{B \in \mathcal{M}_\delta} \sum_{u \in B} y_u\Big] \;\le\; \delta + \varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}
+$$
+
+- **Exfiltration.** A bound on what incorrect proof blocks can deliver counts every output value that some set in $\mathcal{M}_\delta$ could deliver, since an accept doesn't say which set it was: the largest total of the sets' output bits, plus the bits that name the set.
+
+| Consumer | $y_u$ | Rule |
+| --- | --- | --- |
+| Compute accounting | The proof block's work | A total |
+| Network accounting | The proof block's output bits | Exfiltration |
+
+The confidence sets shrink as $\delta$ grows, so consumers that read one accept at levels $\delta_i$ fail together with probability at most $\max_i \delta_i + \varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$: an application that composes several of them pays the error once. Network accounting's content bound reads the same accept as integrity, the audit of the served program; compute accounting reads an accept of its own, over its tiles, so its terms add ([remote](/protocols/remote#integrity-and-work)).
+
 ## With Flock
 
-[Flock](/proof-systems/flock) provides `commit`, `prove` and `verify`, with $\varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$ evaluated at about $t \cdot 2^{-209}$ for a prover making $t$ SHA-512 evaluations on an audit whose sampled proof blocks read $2^{24}$ commit strings ([its bound](/proof-systems/flock#integrity)).
+[Flock](/proof-systems/basic-proofs#flock) provides `commit`, `prove` and `verify`, with $\varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$ evaluated at about $t \cdot 2^{-209}$ for a prover making $t$ SHA-512 evaluations on an audit whose sampled proof blocks read $2^{24}$ commit strings ([its bound](/proof-systems/basic-proofs#integrity)).

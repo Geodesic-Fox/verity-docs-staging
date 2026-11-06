@@ -8,7 +8,7 @@ import type {
   Step,
 } from "@/components/programs/types"
 
-const ZK = "/proof-systems/zero-knowledge"
+const ZK = "/proof-systems/recursion"
 
 const PROVER: Actor = {
   id: "prover",

@@ -2,7 +2,7 @@ import { Cpu, Dices, MemoryStick, Network, Server, ShieldCheck } from "lucide-re
 
 import type { Actor, FunctionEntry, Protocol } from "@/components/programs/types"
 
-const CERTIFIER = "/accounting/network/certification"
+const CERTIFIER = "/accounting/network"
 
 const ACTOR = {
   node: { id: "node", name: "Node", side: "developer", icon: Server, shade: "#f05252", colorKey: "workers" },
@@ -86,7 +86,7 @@ const CERTIFIER_FUNCTIONS: Record<string, FunctionEntry> = {
   },
 }
 
-const POUW = "/accounting/compute/useful"
+const POUW = "/accounting/compute"
 
 const POUW_FUNCTIONS: Record<string, FunctionEntry> = {
   random: {
@@ -324,7 +324,7 @@ export const NETWORK_CERTIFIER: Protocol = {
   functions: CERTIFIER_FUNCTIONS,
 }
 
-const POUS = "/accounting/memory/useful"
+const POUS = "/accounting/memory"
 
 const POUS_FUNCTIONS: Record<string, FunctionEntry> = {
   commit: {
@@ -474,7 +474,7 @@ export const POUS_PROTOCOL: Protocol = {
   functions: POUS_FUNCTIONS,
 }
 
-const BANDWIDTH = "/accounting/memory/reads"
+const BANDWIDTH = "/accounting/memory"
 
 const BANDWIDTH_FUNCTIONS: Record<string, FunctionEntry> = {
   window_key: {
@@ -499,7 +499,7 @@ const BANDWIDTH_FUNCTIONS: Record<string, FunctionEntry> = {
     signature: "tag(σ, j, E_j) -> bytes",
     tex: String.raw`y_j = \mathrm{BLAKE3}_{K}(j \,\Vert\, E_j), \qquad K = \mathrm{SHA512}(\mathit{prefix}(\sigma))[0{:}32]`,
     body: [
-      `\`ro-blake3/v1\`: keyed BLAKE3 over the block's index and the whole block, under a key from the seed ([the tag](${BANDWIDTH}#the-tag)). The seed comes first, so no midstate can be computed ahead of it.`,
+      `\`ro-blake3/v1\`: keyed BLAKE3 over the block's index and the whole block, under a key from the seed ([the tag](${BANDWIDTH})). The seed comes first, so no midstate can be computed ahead of it.`,
     ],
   },
   commit: {

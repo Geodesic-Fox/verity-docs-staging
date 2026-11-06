@@ -1,4 +1,4 @@
-The vLLM integration makes an LLM serving run auditable. It hooks a pinned vLLM engine so that, for each served workload, it builds the workload's circuit with an embedded Torch-to-circuit frontend, supplies the circuit's silicon-specific bindings, acquires and commits runtime values while serving, and runs proving through the ZK server, as the [remote](/protocols/remote) and [onsite](/protocols/onsite) protocols run it. It composes the parts and owns none of their semantics. The program format belongs to circuits, the exact arithmetic to silicon, the leaves and trees to commitments, the sample and the guarantee to [sampled proofs](/proof-systems/sampling), and each accounting check to its own [protocol](/accounting).
+The vLLM integration makes an LLM serving run auditable. It hooks a pinned vLLM engine so that, for each served workload, it builds the workload's circuit with an embedded Torch-to-circuit frontend, supplies the circuit's silicon-specific bindings, acquires and commits runtime values while serving, and runs proving through the ZK server, as the [remote](/protocols/remote) and [onsite](/protocols/onsite) protocols run it. It composes the parts and owns none of their semantics. The program format belongs to circuits, the exact arithmetic to silicon, the leaves and trees to commitments, the sample and the guarantee to [sampled proofs](/proof-systems/sampling), and each accounting check to its own [protocol](/architecture#resource-accounting).
 
 ## Parts
 
@@ -68,7 +68,7 @@ sequenceDiagram
 3. **After the window, before any coins are flipped**, the serving roots are registered with the challenger, which logs a receipt and only then samples.
 4. **After the sample**, the sampled proof blocks' values, still on the workers, are the witness the workers prove over. Nothing else is opened.
 
-[Sampling](/proof-systems/sampling) states the protocol these steps run, and [Flock](/proof-systems/flock#integrity) bounds its error terms.
+[Sampling](/proof-systems/sampling) states the protocol these steps run, and [Flock](/proof-systems/basic-proofs#integrity) bounds its error terms.
 
 ## The instrumented program
 
@@ -105,4 +105,4 @@ Serving overhead is paid on every request. Proving overhead is paid only on the 
 
 ## Composing protocols
 
-The integration can install the [accounting](/accounting) protocols on the same engine, innermost first. [Compute accounting](/accounting/compute) runs the linear layers' GEMMs under its useful-work scheme, [memory accounting](/accounting/memory) decodes the weights those GEMMs read, and sampled proofs commits what the model computed. A run admits only the protocols its program describes. Memory accounting's decode is bit-identical to the plain weights, and compute accounting's scheme must have a circuit in the program, so the committed values remain the program's values. Each protocol keeps its own checks, and the integration only installs them in order.
+The integration can install the [accounting](/architecture#resource-accounting) protocols on the same engine, innermost first. [Compute accounting](/accounting/compute) runs the linear layers' GEMMs under its useful-work scheme, [memory accounting](/accounting/memory) decodes the weights those GEMMs read, and sampled proofs commits what the model computed. A run admits only the protocols its program describes. Memory accounting's decode is bit-identical to the plain weights, and compute accounting's scheme must have a circuit in the program, so the committed values remain the program's values. Each protocol keeps its own checks, and the integration only installs them in order.

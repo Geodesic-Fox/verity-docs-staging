@@ -1,6 +1,6 @@
 /*
  * A Call's primitives lowered to AND, XOR and NOT gates. The input is
- * data/boolean/<row>.json from scripts/import-boolean-circuits.mjs: C-Flock's
+ * data/boolean/<row>.json from scripts/import-boolean-circuits.mjs: Flock's
  * IR lowering, per template, its proof units and the gates outside them,
  * each a tree of circuit types (named subcircuits) wired part to part, whose
  * content lib/circuit-modules.ts expands to gates on demand.

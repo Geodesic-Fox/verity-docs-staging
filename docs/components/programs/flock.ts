@@ -8,7 +8,7 @@ import type {
   Protocol,
 } from "@/components/programs/types"
 
-const FLOCK = "/proof-systems/flock"
+const FLOCK = "/proof-systems/basic-proofs"
 
 const ACTORS: Actor[] = [
   {
@@ -255,7 +255,7 @@ export const FLOCK_ZK: Protocol = {
       returns: "proof",
       signature: "prove(stmt, z, pads, coins) -> bytes",
       body: [
-        `The next Flock message, with each algebraic value $v$ sent as $v + h$ for a pad $h$. The final rounds of each repetition prove that the masked values pass Flock's checks, so the verifier can check them without seeing the values ([zero-knowledge mode](${FLOCK}#zero-knowledge-mode)).`,
+        `The next Flock message, with each algebraic value $v$ sent as $v + h$ for a pad $h$. The final rounds of each repetition prove that the masked values pass Flock's checks, so the verifier can check them without seeing the values ([zero-knowledge mode](/proof-systems/zero-knowledge)).`,
       ],
     },
     verify: {

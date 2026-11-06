@@ -3,15 +3,15 @@ Verity is a system for verifying how AI datacenters are used. It aims for securi
 - **Faithfulness:** the records accurately and comprehensively reflect the developer's actual computations.
 - **Inference-only:** the records reflect only having performed inference, not training.
 
-Verity has two protocols, remote and onsite, which differ in one thing: whether the auditor has hardware at the developer's site. [Architecture](/protocols/remote#physical-architecture) shows the layers they're built from.
+Verity has two protocols, remote and onsite, which differ in one thing: whether the auditor has hardware at the developer's site. [Architecture](/architecture) shows the components they're built from.
 
 ## Where to start
 
-- **What an accept means**, and who has to trust what: Protocols, then [Remote](/protocols/remote) and [Onsite](/protocols/onsite).
+- **What an accept means**, and who has to trust what: [Architecture](/architecture), then [Remote](/protocols/remote) and [Onsite](/protocols/onsite).
 - **The vocabulary every page shares**, such as proof blocks, boundary gates and incorrect proof blocks: Circuit declaration.
-- **Why a sample bounds the faults**: [Sampling](/proof-systems/sampling). **What the auditor learns**: [Zero knowledge](/proof-systems/zero-knowledge).
+- **Why a sample bounds the faults**: [Sampling](/proof-systems/sampling). **What the auditor learns**: [Zero-knowledge](/proof-systems/zero-knowledge) and [Recursion](/proof-systems/recursion).
 - **What it costs**: each page's *Overhead* section, and Performance.
-- **Inference-only**: the inference-only policy.
+- **Inference-only**: [Inference vs. training](/workload-classification/inference-vs-training).
 - **Figures for estimates**: Hardware and Workloads.
 - **A term you don't know**: the Glossary.
 
