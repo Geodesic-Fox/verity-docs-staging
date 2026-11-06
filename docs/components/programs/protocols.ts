@@ -262,7 +262,7 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "data",
     signature: "serve(program, requests, salt) -> Trace",
     body: [
-      `Runs the program on the requests. Each registered matrix multiplication is computed as [compute accounting](${COMPUTE}#compute)'s tiles, noised under \`salt\`, and the product the workload uses comes out of them. What stays behind is the trace.`,
+      `Runs the program on the requests. Each registered matrix multiplication is computed as [compute accounting](${COMPUTE}/pouw#compute)'s tiles, noised under \`salt\`, and the product the workload uses comes out of them. What stays behind is the trace.`,
     ],
   },
   boundary_gates: {
@@ -283,7 +283,7 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "coin",
     signature: "sample_from(designs, seed) -> Sample",
     body: [
-      `One sample per subprotocol, each from its own sampling design, with \`seed\` as its only randomness: proof blocks of the program for [integrity](${SAMPLING}#challenge-phase), and tiles in proportion to their work for [compute accounting](${COMPUTE}#compute).`,
+      `One sample per subprotocol, each from its own sampling design, with \`seed\` as its only randomness: proof blocks of the program for [integrity](${SAMPLING}#challenge-phase), and tiles in proportion to their work for [compute accounting](${COMPUTE}/pouw#compute).`,
     ],
   },
   rounds: {
@@ -302,7 +302,7 @@ const FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "proof",
     signature: "outer_prove(v_pi, slot) -> bytes",
     body: [
-      `The outer proof due at \`slot\`: the ZK server's commitments open to messages on which $V_\\Pi$ accepts at the coins sent ([recursion](${ZK}#outer-phase)). The workers compute it without its pads. It runs its own rounds in [Flock's zero-knowledge mode](/proof-systems/zero-knowledge), on live coins that the challenger commits when the session opens.`,
+      `The outer proof due at \`slot\`: the ZK server's commitments open to messages on which $V_\\Pi$ accepts at the coins sent ([recursion](${ZK}#outer-phase)). The workers compute it without its pads. It runs its own rounds in [Flock's zero-knowledge mode](/proof-systems/zero-knowledge/veil), on live coins that the challenger commits when the session opens.`,
     ],
   },
   release: {
@@ -334,14 +334,14 @@ const ONSITE_FUNCTIONS: Record<string, FunctionEntry> = {
     returns: "data",
     signature: "encode(weights, encoding_salt) -> C",
     body: [
-      `[Memory accounting](${MEMORY}#the-encoding)'s encoding of the weights, which the workers serve from, decoding each tensor on every use.`,
+      `[Memory accounting](${MEMORY}/pous#the-encoding)'s encoding of the weights, which the workers serve from, decoding each tensor on every use.`,
     ],
   },
   certify: {
     returns: "signature",
     signature: "certify(frames, grid) -> Certificate",
     body: [
-      `The [network certifier](${NETWORK}#release) releases each link's frames at a constant rate on the grid, and signs the transfer block's record. Certificates go back to the workers as witness and never reach the auditor in the clear.`,
+      `The [network certifier](${NETWORK}/certifier#release) releases each link's frames at a constant rate on the grid, and signs the transfer block's record. Certificates go back to the workers as witness and never reach the auditor in the clear.`,
     ],
   },
   challenge: {

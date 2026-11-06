@@ -68,7 +68,7 @@ sequenceDiagram
 3. **After the window, before any coins are flipped**, the serving roots are registered with the challenger, which logs a receipt and only then samples.
 4. **After the sample**, the sampled proof blocks' values, still on the workers, are the witness the workers prove over. Nothing else is opened.
 
-[Sampling](/proof-systems/sampling) states the protocol these steps run, and [Flock](/proof-systems/basic-proofs#integrity) bounds its error terms.
+[Sampling](/proof-systems/sampling) states the protocol these steps run, and [Flock](/proof-systems/basic-proofs/flock#integrity) bounds its error terms.
 
 ## The instrumented program
 

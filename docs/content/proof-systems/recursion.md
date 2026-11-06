@@ -78,7 +78,7 @@ The protocol assumes the following of its primitives only.
 - **$\Pi$** is complete and sound with error $\varepsilon_\Pi$: for every prover, $V_\Pi$ outputs $(1, o)$ on a false claim, $(x, o) \notin L$, with probability at most $\varepsilon_\Pi$.
 - **Fresh randomness.** The salts and $P_{\mathsf{Arg}}$'s randomness are uniform, and the verifier's coins are uniform and unseen until sent.
 
-$\mathsf{Arg}$'s zero knowledge has to hold however $V^*$ picks its coins. A construction that has it for each fixed sequence of coins, as a VEIL-style one does, gets it from a commitment to its coins and Goldreich–Kahan rewinding, which belong to the construction: Flock's are on [the zero-knowledge page](/proof-systems/zero-knowledge#malicious-verifiers).
+$\mathsf{Arg}$'s zero knowledge has to hold however $V^*$ picks its coins. A construction that has it for each fixed sequence of coins, as a VEIL-style one does, gets it from a commitment to its coins and Goldreich–Kahan rewinding, which belong to the construction: Flock's are on [the zero-knowledge page](/proof-systems/zero-knowledge/veil#malicious-verifiers).
 
 ### Theorem
 
@@ -128,7 +128,7 @@ For a public circuit, $x = (C, U, \mathcal{D})$: the circuit, its partition into
 
 ## The verifier as a circuit
 
-Recursion uses Flock twice: for its inner proofs, without zero knowledge, and for its outer proofs, in the [zero-knowledge mode](/proof-systems/zero-knowledge). The outer proofs check `verify` expressed as a circuit, $V_\Pi$. $V_\Pi$ is a set of public Boolean circuits, each proved in its own outer session: one for each level of the Ligerito opening (seven at $m = 35$), which verifies that level's SHA-512 Merkle paths, and others that check the field arithmetic. These circuits depend only on the shape of the inner statement, so padding every inner statement to a public number of instances gives every outer proof the same circuits. Each inner message is committed as the hiding leaf of its SHA-512 digest under a fresh 192-byte salt, which hides it within $2^{-193}$ under the key assumption of [the zero-knowledge mode](/proof-systems/zero-knowledge#zero-knowledge).
+Recursion uses Flock twice: for its inner proofs, without zero knowledge, and for its outer proofs, in the [zero-knowledge mode](/proof-systems/zero-knowledge/veil). The outer proofs check `verify` expressed as a circuit, $V_\Pi$. $V_\Pi$ is a set of public Boolean circuits, each proved in its own outer session: one for each level of the Ligerito opening (seven at $m = 35$), which verifies that level's SHA-512 Merkle paths, and others that check the field arithmetic. These circuits depend only on the shape of the inner statement, so padding every inner statement to a public number of instances gives every outer proof the same circuits. Each inner message is committed as the hiding leaf of its SHA-512 digest under a fresh 192-byte salt, which hides it within $2^{-193}$ under the key assumption of [the zero-knowledge mode](/proof-systems/zero-knowledge/veil#zero-knowledge).
 
 The outer sessions establish that the commitments have openings on which $V_\Pi$ accepts. This implies the inner statement only if $V_\Pi$ accepts no more than `verify` does, which is the assumption `VBridge`. It has four parts:
 
@@ -188,7 +188,7 @@ The ZK server can't afford to compute the outer proof itself: that is the work t
 3. **A masked value**, an algebraic message plus a pad the ZK server generated and never shows the workers, with a relation the ZK server can check on the unmasked message.
 4. **A constant**: labels, lengths, counts.
 
-A VEIL-style argument has this form, and [Flock's zero-knowledge mode](/proof-systems/zero-knowledge) does.
+A VEIL-style argument has this form, and [Flock's zero-knowledge mode](/proof-systems/zero-knowledge/veil) does.
 
 ### The run
 

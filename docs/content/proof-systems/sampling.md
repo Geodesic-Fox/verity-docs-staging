@@ -193,4 +193,4 @@ The confidence sets shrink as $\delta$ grows, so consumers that read one accept 
 
 ## With Flock
 
-[Flock](/proof-systems/basic-proofs#flock) provides `commit`, `prove` and `verify`, with $\varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$ evaluated at about $t \cdot 2^{-209}$ for a prover making $t$ SHA-512 evaluations on an audit whose sampled proof blocks read $2^{24}$ commit strings ([its bound](/proof-systems/basic-proofs#integrity)).
+[Flock](/proof-systems/basic-proofs/flock) provides `commit`, `prove` and `verify`, with $\varepsilon_{\mathrm{ks}} + \varepsilon_{\mathrm{bind}}$ evaluated at about $t \cdot 2^{-209}$ for a prover making $t$ SHA-512 evaluations on an audit whose sampled proof blocks read $2^{24}$ commit strings ([its bound](/proof-systems/basic-proofs/flock#integrity)).

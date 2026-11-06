@@ -4,7 +4,8 @@
  *
  * The sidebar lists sections, each under its heading (if it has one). A node
  * with an `href` is a page, whose body is the markdown file at
- * content/<href>.md; without one it renders as a blank placeholder. A hidden
+ * content/<href>.md; without one it renders as a blank placeholder. A page's
+ * children are its constructions, shown beneath it in the sidebar. A hidden
  * page (a browser) is routed but left out of the sidebar and the
  * previous/next order: the page it belongs to links to it.
  */
@@ -78,7 +79,15 @@ export const tree: TreeSection[] = [
         href: "/proof-systems/basic-proofs",
         icon: "basic-proofs",
         description:
-          "The commit-and-prove argument the compilers take: statements, methods and properties, and Flock, the construction, with its verifier in Lean.",
+          "The commit-and-prove argument the compilers take: its statements, methods and properties, and how Flock implements them.",
+        children: [
+          {
+            label: "Flock",
+            href: "/proof-systems/basic-proofs/flock",
+            description:
+              "The construction: Flock over GF(2^128) on live coins, its verifier in Lean, its knowledge soundness and integrity, and its parameters.",
+          },
+        ],
       },
       {
         label: "Sampling",
@@ -92,7 +101,14 @@ export const tree: TreeSection[] = [
         href: "/proof-systems/zero-knowledge",
         icon: "zero-knowledge",
         description:
-          "VEIL's masking, applied to Flock: the zero-knowledge mode, and its zero knowledge against honest and malicious verifiers.",
+          "What a zero-knowledge argument hides, against which verifiers, what it asks of the prover, and where Verity uses it.",
+        children: [
+          {
+            label: "VEIL",
+            href: "/proof-systems/zero-knowledge/veil",
+            description: "VEIL's masking applied to Flock: the zero-knowledge mode, and its zero knowledge against honest and malicious verifiers.",
+          },
+        ],
       },
       {
         label: "Recursion",
@@ -112,7 +128,15 @@ export const tree: TreeSection[] = [
         title: "Compute accounting",
         icon: "compute",
         description:
-          "Proof of useful work, and the headroom it leaves: the work the registered hardware could have done beyond what an audit certifies.",
+          "The headroom proof of useful work leaves: the work the registered hardware could have done beyond what an audit certifies.",
+        children: [
+          {
+            label: "Proof of useful work",
+            href: "/accounting/compute/pouw",
+            description:
+              "Each tile computed under noise from a salt the prover couldn't predict, a work-weighted sample proved in zero knowledge, and the lower bound on work an accept gives; and Dither, for int8 products.",
+          },
+        ],
       },
       {
         label: "Network",
@@ -120,7 +144,20 @@ export const tree: TreeSection[] = [
         title: "Network accounting",
         icon: "network",
         description:
-          "What a node's traffic can carry beyond the committed computation's output: the content bound, the network certifier, and the headroom on the wire.",
+          "What a node's traffic can carry beyond the committed computation's output, in its content and its timing, against what its links could carry.",
+        children: [
+          {
+            label: "Content bound",
+            href: "/accounting/network/content-bound",
+            description: "What leaves must be the delivered output of the committed circuit, so only incorrect proof blocks add to it, charged their output bits.",
+          },
+          {
+            label: "Network certifier",
+            href: "/accounting/network/certifier",
+            description:
+              "The auditor's device on each uplink: constant-rate release on a fixed grid, signed records, and the bound on what frame timing can carry.",
+          },
+        ],
       },
       {
         label: "Memory",
@@ -128,7 +165,15 @@ export const tree: TreeSection[] = [
         title: "Memory accounting",
         icon: "memory",
         description:
-          "Proof of useful space, and the headroom it leaves: the memory a server has beyond the encoding of the weights an audit certifies it held.",
+          "The headroom proof of useful space leaves: the memory a server has beyond the encoding of the weights an audit certifies it held.",
+        children: [
+          {
+            label: "Proof of useful space",
+            href: "/accounting/memory/pous",
+            description:
+              "The weights kept only as a slow-to-encode, fast-to-decode encoding, timed challenges for random blocks, and the lower bound on held state an accept gives.",
+          },
+        ],
       },
     ],
   },
