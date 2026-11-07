@@ -1,7 +1,7 @@
 "use client"
 
 import type { ComponentType, CSSProperties, ReactNode, SVGAttributes } from "react"
-import { Fragment } from "react"
+import { Fragment, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -45,10 +45,10 @@ import { cn } from "@/lib/utils"
 /*
  * The Vercel-dashboard shell: a fixed, full-height sidebar and a top bar with
  * breadcrumbs. The sidebar is one list of the tree's pages, each section under
- * its heading. Every row has an icon; none is bold. A page's constructions
- * show beneath it, indented, while the reader is on it or one of them. As in
- * Vercel's dashboard, a row is one link: its chevron only shows that it has
- * pages beneath it.
+ * its heading. Every row has an icon; none is bold. A page with constructions
+ * beneath it has a chevron button beside its link, each with its own hover.
+ * They start shown, and each chevron shows or hides its own until the reader
+ * toggles it again; the link opens the page and shows them.
  */
 
 const icons: Record<TreeIcon, ComponentType<SVGAttributes<SVGSVGElement>>> = {
@@ -83,24 +83,34 @@ const rowClass =
 function Row({ node, pathname, depth = 0 }: { node: TreeNode; pathname: string; depth?: number }) {
   const Icon = node.icon ? icons[node.icon] : null
   const children = (node.children ?? []).filter((child) => !child.hidden)
-  const open = [node, ...children].some((n) => n.href === pathname)
+  const [toggled, setToggled] = useState<boolean | null>(null)
+  const open = toggled ?? true
   return (
     <li>
-      <Link
-        className={cn(rowClass, depth ? "pl-7" : "pl-0.5")}
-        data-active={pathname === node.href ? "" : undefined}
-        href={node.href ?? "/"}
-      >
-        <span className="grid size-9 flex-none place-content-center">
-          {Icon ? <Icon aria-hidden className="size-4" /> : null}
-        </span>
-        <span className="min-w-0 flex-1 truncate">{node.label}</span>
-        {children.length ? (
-          <span className="mr-1.5 grid size-6 flex-none place-content-center">
-            <ChevronRight aria-hidden className={cn("size-3 transition-transform duration-150", open ? "rotate-90" : null)} />
+      <div className="flex gap-0.5">
+        <Link
+          className={cn(rowClass, "flex-1", depth ? "pl-7" : "pl-0.5")}
+          data-active={pathname === node.href ? "" : undefined}
+          href={node.href ?? "/"}
+          onClick={() => setToggled(true)}
+        >
+          <span className="grid size-9 flex-none place-content-center">
+            {Icon ? <Icon aria-hidden className="size-4" /> : null}
           </span>
+          <span className="min-w-0 flex-1 truncate">{node.label}</span>
+        </Link>
+        {children.length ? (
+          <button
+            aria-expanded={open}
+            aria-label={`${open ? "Hide" : "Show"} pages under ${node.label}`}
+            className="grid size-9 flex-none place-content-center rounded-[6px] text-sidebar-muted outline-hidden ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2"
+            onClick={() => setToggled(!open)}
+            type="button"
+          >
+            <ChevronRight aria-hidden className={cn("size-3 transition-transform duration-150", open ? "rotate-90" : null)} />
+          </button>
         ) : null}
-      </Link>
+      </div>
       {children.length && open ? (
         <ul className="mt-(--sidebar-row-gap) flex flex-col gap-(--sidebar-row-gap)">
           {children.map((child) => (
