@@ -2,7 +2,7 @@ import { Cpu, Dices, MemoryStick, Network, Server, ShieldCheck } from "lucide-re
 
 import type { Actor, FunctionEntry, Protocol } from "@/components/programs/types"
 
-const CERTIFIER = "/accounting/network/certification"
+const CERTIFIER = "/accounting/network-certification"
 
 const ACTOR = {
   node: { id: "node", name: "Node", side: "developer", icon: Server, shade: "#f05252", colorKey: "workers" },
@@ -86,7 +86,7 @@ const CERTIFIER_FUNCTIONS: Record<string, FunctionEntry> = {
   },
 }
 
-const POUW = "/accounting/compute/pouw"
+const POUW = "/accounting/pouw"
 
 const POUW_FUNCTIONS: Record<string, FunctionEntry> = {
   random: {
@@ -324,7 +324,7 @@ export const NETWORK_CERTIFIER: Protocol = {
   functions: CERTIFIER_FUNCTIONS,
 }
 
-const POUS = "/accounting/memory/pous"
+const POUS = "/accounting/pous"
 
 const POUS_FUNCTIONS: Record<string, FunctionEntry> = {
   commit: {
@@ -474,7 +474,7 @@ export const POUS_PROTOCOL: Protocol = {
   functions: POUS_FUNCTIONS,
 }
 
-const BANDWIDTH = "/accounting/memory"
+const BANDWIDTH = "/accounting/poub"
 
 const BANDWIDTH_FUNCTIONS: Record<string, FunctionEntry> = {
   window_key: {

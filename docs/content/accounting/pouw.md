@@ -1,4 +1,4 @@
-Proof of useful work (PoUW) bounds from below the work a prover spent on the matrix multiplications it registered. After a salt it couldn't predict, the prover computes every tile of every product under noise derived from the salt and its committed operands, and commits the tiles; the verifier samples tiles in proportion to their work and checks them. The registered products still come out of the tiles for the workload to use, which is what makes the work useful. An accept certifies that the prover spent at least $(1-\gamma)(1-\varepsilon_s)W$ after the salt. This page states the protocol and that bound; what it leaves of a device's capacity is [compute accounting](/accounting/compute)'s.
+Proof of useful work (PoUW) bounds from below the work a prover spent on the matrix multiplications it registered. After a salt it couldn't predict, the prover computes every tile of every product under noise derived from the salt and its committed operands, and commits the tiles; the verifier samples tiles in proportion to their work and checks them. The registered products still come out of the tiles for the workload to use, which is what makes the work useful. An accept certifies that the prover spent at least $(1-\gamma)(1-\varepsilon_s)W$ after the salt. This page states the protocol and that bound; what it leaves of a device's capacity is on [accelerators](/accounting/physical/accelerators#compute-headroom).
 
 ## Interface
 
@@ -157,6 +157,13 @@ PoUW makes public the verdict, the work level, the check (the tile template, its
 | 1%, $2^{-128}$ | 8,828 | 9,937 |
 
 The number of samples is fixed by $\varepsilon_s$ and $\delta$, not by the workload's size, so proving's share of an audit's cost falls as the workload grows.
+
+## Status
+
+- **Proved:** the work bound and its Pearl-C per-cell form at $8192^3$, $16384^3$ and the Llama-3.1-8B linears; the deadline form at sm_120; completeness from the honest cap rate.
+- **Conjectured:** TT_OUT rev1, Pearl-C's assumption, in two forms: per unit, and per audit tile, which the per-cell and deadline forms use.
+- **In review:** the device model and the covert residual over it, in [#1807](https://github.com/danielreuter/verity/pull/1807), a worst case over each audit's coins; a per-run form is being proved.
+- **Open:** measuring $F$ and $\varepsilon_{\mathrm{cap}}$; binding the sampled tiles' zero-knowledge proofs to their committed leaves: they are proved on a stand-in proof block that doesn't yet read the tile's leaf (TileRead), and until it does, acceptance is checked by a replay that opens rows in the clear, a development shortcut; matching Lean's whole-tile sampling weights to the audit's credited cells; the forming debit, a stub that returns 0.
 
 ## Dither
 

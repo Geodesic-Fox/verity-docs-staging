@@ -4,7 +4,7 @@ Flock ([Bünz, Rothblum and Wang](https://eprint.iacr.org/2026/1329)) proves the
 2. **Increased soundness via repetition:** Flock runs twice against one committed witness, with independent challenges, which roughly squares the soundness error, from about $2^{-97.8}$ to about $2^{-195.5}$.
 3. **Hiding commitment scheme:** The Merkle trees use SHA-512 with hiding leaves, instead of SHA-256 or BLAKE3 with plain leaves.
 4. **Including commitments in the statement:** The statement includes the SHA-512 computations that produce the commitments to the circuit's inputs and hidden outputs, so a proof is about the committed values and Flock is a commit-and-prove argument. Values known to the verifier are checked as additional evaluation claims on the witness, batched into Flock's opening.
-5. **Optional zero-knowledge variant:** In the [zero-knowledge mode](/proof-systems/zero-knowledge/veil), every prover message is masked, following VEIL, and the challenger commits to its challenges in advance.
+5. **Optional zero-knowledge variant:** In the [zero-knowledge mode](/proof-systems/zero-knowledge), every prover message is masked, following VEIL, and the challenger commits to its challenges in advance.
 
 Flock's polynomial IOP is unchanged: the zerocheck, the lincheck, ring switching and the Ligerito opening, over the binary field $\mathrm{GF}(2^{128})$, with Flock's 100-bit parameters. A binary field suits Boolean circuits: a bit is a field element and XOR is field addition, so both the gates of a circuit and the bitwise rounds of SHA-512 have small arithmetizations.
 
@@ -17,7 +17,7 @@ This page covers:
 - [Security](#security): the assumptions, completeness, knowledge soundness and integrity, and what is proved in Lean.
 - [Parameters](#parameters): the field, the profile, the witness sizes and the commitment schemes.
 
-Its [zero-knowledge mode](/proof-systems/zero-knowledge/veil) and its [verifier as a circuit](/proof-systems/recursion#the-verifier-as-a-circuit) are on the pages that use them. Measured costs are on Performance.
+Its [zero-knowledge mode](/proof-systems/zero-knowledge) and its [verifier as a circuit](/proof-systems/recursion#the-verifier-as-a-circuit) are on the pages that use them. Measured costs are on Performance.
 
 ## Interface
 

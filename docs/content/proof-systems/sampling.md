@@ -1,4 +1,4 @@
-Sampling lets a verifier check a large computation by proving only a random sample of its parts. The prover commits to what it computed, the verifier samples proof blocks, and the prover proves that each sampled proof block was computed correctly on the committed trace. An accept then bounds how many proof blocks can be incorrect, sampled or not. This page states the protocol over any commit-and-prove argument, and asks of it only the [properties below](#assumptions). Hiding what the prover computed is a separate compiler, [recursion](/proof-systems/recursion), and [compute](/accounting/compute) and [network](/accounting/network) accounting read sampling's guarantee.
+Sampling lets a verifier check a large computation by proving only a random sample of its parts. The prover commits to what it computed, the verifier samples proof blocks, and the prover proves that each sampled proof block was computed correctly on the committed trace. An accept then bounds how many proof blocks can be incorrect, sampled or not. This page states the protocol over any commit-and-prove argument, and asks of it only the [properties below](#assumptions). Hiding what the prover computed is a separate compiler, [recursion](/proof-systems/recursion), and [compute](/accounting/pouw) and [network](/proof-systems/sampling#exfiltration) accounting read sampling's guarantee.
 
 ## Interface
 
@@ -209,7 +209,7 @@ $$
 
 $\varepsilon_{\mathrm{ks}}$ and $\delta_{\mathrm{link}}$ are the proof system's knowledge-soundness and binding terms, and $\delta_{\mathrm{in}}$ is the chance that the committed inputs differ from the anchors' values. It holds for any Boolean circuit, partition and one-stage sampling design (`FlockSoundness.Audit.Partition.audit_exfiltration`); the two-stage audit has only an influence form, not this one, and takes the proof system's knowledge soundness and binding as hypotheses, which are not yet proved of Flock's audit. Because it reads the same accept as integrity, an application that reads both pays $\delta + \varepsilon_{\mathrm{ks}} + \delta_{\mathrm{link}}$ once.
 
-The exfiltration bound and the [timing bound](/accounting/network/certification#timing-bound) are separate statements over different models; no theorem adds them. That the frames on the wire are the delivered values of the committed circuit is checked only as far as the certifier's check reads them.
+The exfiltration bound and the [timing bound](/accounting/network-certification#timing-bound) are separate statements over different models; no theorem adds them. That the frames on the wire are the delivered values of the committed circuit is checked only as far as the certifier's check reads them.
 
 ## With Flock
 

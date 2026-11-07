@@ -1,4 +1,4 @@
-The remote protocol checks a developer's serving from afar. The auditor places no hardware at the developer's site: it runs a challenger online and a verifier offline, and everything it learns arrives through the developer's ZK server as zero-knowledge proofs. The protocol composes two subprotocols, [sampling](/proof-systems/sampling) for integrity and [compute accounting](/accounting/compute) for work, and an accept means that both accepted: few proof blocks of the committed computation are incorrect, and the prover spent at least a stated share of the registered work after a salt it couldn't predict. With nothing at the site, it says nothing about what else the developer's machines stored or sent. The [onsite](/protocols/onsite) protocol adds the auditor's devices, and the two subprotocols that need them.
+The remote protocol checks a developer's serving from afar. The auditor places no hardware at the developer's site: it runs a challenger online and a verifier offline, and everything it learns arrives through the developer's ZK server as zero-knowledge proofs. The protocol composes two subprotocols, [sampling](/proof-systems/sampling) for integrity and [compute accounting](/accounting/pouw) for work, and an accept means that both accepted: few proof blocks of the committed computation are incorrect, and the prover spent at least a stated share of the registered work after a salt it couldn't predict. With nothing at the site, it says nothing about what else the developer's machines stored or sent. The [onsite](/protocols/onsite) protocol adds the auditor's devices, and the two subprotocols that need them.
 
 ## Physical architecture
 
@@ -42,7 +42,7 @@ In the subprotocols' statements the prover $\mathcal{P}$ is the workers behind t
 | `program` | The circuit the workers serve, a program named by its digest. |
 | `partition` | Its partition into proof blocks. |
 | `designs` | Each subprotocol's [sampling design](/proof-systems/sampling#sampling-designs): integrity's over the program's proof blocks, and compute accounting's over its tiles. |
-| `scheme` | Compute accounting's scheme, with the registered matrix multiplications, $\varepsilon_s$ and $\delta$ ([public parameters](/accounting/compute/pouw#public-parameters)). |
+| `scheme` | Compute accounting's scheme, with the registered matrix multiplications, $\varepsilon_s$ and $\delta$ ([public parameters](/accounting/pouw#public-parameters)). |
 | `v_pi` | The inner proofs' verifier as a circuit, $V_\Pi$, the statement of every outer proof ([recursion](/proof-systems/recursion#public-parameters)). |
 | `schedule` | The slots at which the ZK server releases outer proofs. |
 
@@ -78,7 +78,7 @@ The challenger takes each subprotocol's sample from its own sampling design, wit
 
 ### Proving
 
-The workers prove the samples in two layers ([recursion](/proof-systems/recursion#protocol)). The inner proofs run with zero knowledge off: each message reaches the challenger only as the ZK server's commitment to it, and the challenger answers each commitment with fresh coins. In the outer proofs, the workers prove that the committed messages make $V_\Pi$ accept at the coins sent. The outer proofs run in [Flock's zero-knowledge mode](/proof-systems/zero-knowledge/veil), whose coins the challenger commits when each session opens. The ZK server checks every value of an outer proof against its contract before anything leaves, and releases each proof at its slot in the schedule.
+The workers prove the samples in two layers ([recursion](/proof-systems/recursion#protocol)). The inner proofs run with zero knowledge off: each message reaches the challenger only as the ZK server's commitment to it, and the challenger answers each commitment with fresh coins. In the outer proofs, the workers prove that the committed messages make $V_\Pi$ accept at the coins sent. The outer proofs run in [Flock's zero-knowledge mode](/proof-systems/zero-knowledge), whose coins the challenger commits when each session opens. The ZK server checks every value of an outer proof against its contract before anything leaves, and releases each proof at its slot in the schedule.
 
 ![Proving](/programs/remote#prove)
 
@@ -112,7 +112,7 @@ Beyond its subprotocols' assumptions, the protocol rests on facts about the depl
 
 - **The ZK server is the only path out.** Nothing the workers compute leaves the site except through the ZK server. It is a property of the developer's network, such as its isolation, and it is the developer's premise: zero knowledge needs it, and integrity and work don't.
 - **The challenger's coins are its own.** Its randomness is uniform, and unseen by the developer until each coin is opened.
-- **The registered hardware and an honest clock**, for compute accounting's [deadline form](/accounting/compute#headroom): how much the developer's hardware can compute between the salt and the deadline, and that nothing computed after the deadline is stamped as received by it.
+- **The registered hardware and an honest clock**, for compute's [deadline form](/accounting/physical/accelerators#compute-headroom): how much the developer's hardware can compute between the salt and the deadline, and that nothing computed after the deadline is stamped as received by it.
 
 No device of the auditor's watches the developer's site, so the protocol bounds neither the memory the developer used nor what crossed its network.
 
@@ -120,7 +120,7 @@ No device of the auditor's watches the developer's site, so the protocol bounds 
 
 ### Assumptions
 
-Those of its subprotocols, [sampling](/proof-systems/sampling#assumptions) and [compute accounting](/accounting/compute/pouw#assumptions), with [recursion's](/proof-systems/recursion#assumptions) for the outer proofs.
+Those of its subprotocols, [sampling](/proof-systems/sampling#assumptions) and [compute accounting](/accounting/pouw#assumptions), with [recursion's](/proof-systems/recursion#assumptions) for the outer proofs.
 
 ### Completeness
 
@@ -128,7 +128,7 @@ An honest developer is accepted except with compute accounting's completeness er
 
 ### Integrity and work
 
-An accept is an accept of both subprotocols, so its guarantee is the conjunction of theirs. Let $E_I$ be the event that the program's incorrect set lies outside the [confidence set](/proof-systems/sampling#integrity), $B^\star \notin \mathcal{M}_\delta$, and $E_W$ the event that the prover spent less than the certified work after the salt, $T < (1-\gamma)(1-\varepsilon_s)\,W$ ([compute accounting](/accounting/compute/pouw#work-bound)). For every prover,
+An accept is an accept of both subprotocols, so its guarantee is the conjunction of theirs. Let $E_I$ be the event that the program's incorrect set lies outside the [confidence set](/proof-systems/sampling#integrity), $B^\star \notin \mathcal{M}_\delta$, and $E_W$ the event that the prover spent less than the certified work after the salt, $T < (1-\gamma)(1-\varepsilon_s)\,W$ ([compute accounting](/accounting/pouw#work-bound)). For every prover,
 
 $$
 \Pr\big[\mathsf{accept} \,\wedge\, (E_I \vee E_W)\big] \;\le\; \varepsilon_I + \varepsilon_W + \varepsilon_{\mathrm{outer}}
@@ -159,7 +159,7 @@ With an accept, the protocol makes public each subprotocol's public outputs and 
 | Subprotocol | Its public outputs | Why they are public |
 | --- | --- | --- |
 | Integrity | The verdict, and the integrity profile: what was audited, the sampling design, how many proof blocks were sampled, and the error terms | The [bound on incorrect proof blocks](/proof-systems/sampling#integrity) is read from the profile, at any $\delta$. |
-| Compute accounting | `verdict`, `work`, `check`, `sampling`, `drawn` and `root_W` | Each with its reason, in [its table](/accounting/compute/pouw#public-outputs). |
+| Compute accounting | `verdict`, `work`, `check`, `sampling`, `drawn` and `root_W` | Each with its reason, in [its table](/accounting/pouw#public-outputs). |
 
 Every weight, activation, tile value and inner message stays hidden.
 

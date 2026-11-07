@@ -2,10 +2,10 @@
  * The documentation tree: the one place that decides the sidebar, the
  * breadcrumbs, the previous/next order and which pages exist.
  *
- * The sidebar lists sections, each under its heading (if it has one). A node
+ * The sidebar lists the unlabeled section's pages first, then each labeled
+ * section as a group that opens and closes, with its pages beneath it. A node
  * with an `href` is a page, whose body is the markdown file at
- * content/<href>.md; without one it renders as a blank placeholder. A page's
- * children are its constructions, shown beneath it in the sidebar. A hidden
+ * content/<href>.md. A page's children show beneath it in the sidebar. A hidden
  * page (a browser) is routed but left out of the sidebar and the
  * previous/next order: the page it belongs to links to it.
  */
@@ -26,23 +26,27 @@ export type TreeIcon =
   | "architecture"
   | "remote"
   | "onsite"
+  | "proof-systems"
   | "basic-proofs"
+  | "flock"
   | "sampling"
   | "zero-knowledge"
   | "recursion"
-  | "compute"
-  | "network"
-  | "memory"
-  | "inference"
-  | "flock"
-  | "veil"
+  | "accounting"
+  | "physical"
+  | "accelerators"
+  | "servers"
+  | "datacenters"
   | "pouw"
   | "pous"
   | "poub"
   | "certification"
+  | "classification"
+  | "inference"
+  | "integrations"
   | "vllm"
 
-export type TreeSection = { label?: string; nodes: TreeNode[] }
+export type TreeSection = { label?: string; icon?: TreeIcon; nodes: TreeNode[] }
 
 export const tree: TreeSection[] = [
   {
@@ -79,6 +83,7 @@ export const tree: TreeSection[] = [
   },
   {
     label: "Proof systems",
+    icon: "proof-systems",
     nodes: [
       {
         label: "Basic proofs",
@@ -108,15 +113,7 @@ export const tree: TreeSection[] = [
         href: "/proof-systems/zero-knowledge",
         icon: "zero-knowledge",
         description:
-          "What a zero-knowledge argument hides, against which verifiers, what it asks of the prover, and where Verity uses it.",
-        children: [
-          {
-            label: "VEIL",
-            href: "/proof-systems/zero-knowledge/veil",
-            icon: "veil",
-            description: "VEIL's masking applied to Flock: the zero-knowledge mode, and its zero knowledge against honest and malicious verifiers.",
-          },
-        ],
+          "VEIL's masking applied to Flock: what the zero-knowledge mode hides, its protocol, its zero knowledge against honest and malicious verifiers, and where Verity uses it.",
       },
       {
         label: "Recursion",
@@ -129,70 +126,73 @@ export const tree: TreeSection[] = [
   },
   {
     label: "Resource accounting",
+    icon: "accounting",
     nodes: [
       {
-        label: "Compute accounting",
-        href: "/accounting/compute",
-        icon: "compute",
+        label: "Physical modeling",
+        href: "/accounting/physical",
+        icon: "physical",
         description:
-          "The headroom proof of useful work leaves: the work the registered hardware could have done beyond what an audit certifies.",
+          "The other side of each resource protocol's bound: what the hardware can do, and the headroom between that and what an audit certifies.",
         children: [
           {
-            label: "Proof of useful work",
-            href: "/accounting/compute/pouw",
-            icon: "pouw",
-            description:
-              "Each tile computed under noise from a salt the prover couldn't predict, a work-weighted sample proved in zero knowledge, and the lower bound on work an accept gives; and Dither, for int8 products.",
+            label: "Accelerators",
+            href: "/accounting/physical/accelerators",
+            icon: "accelerators",
+            description: "One GPU: its peak rate against proof of useful work, its device memory against proof of useful space, and its share of the node's bandwidth.",
+          },
+          {
+            label: "Servers",
+            href: "/accounting/physical/servers",
+            icon: "servers",
+            description: "The node as one prover: its whole state, the timing assumptions behind proof of useful space, and its read capacity against proof of useful bandwidth.",
+          },
+          {
+            label: "Datacenters",
+            href: "/accounting/physical/datacenters",
+            icon: "datacenters",
+            description: "The links out of the spatial unit: what an accepted run's traffic can carry, the assumptions that make a deployment the certifier's model, and the line rates.",
           },
         ],
       },
       {
-        label: "Network accounting",
-        href: "/accounting/network",
-        icon: "network",
+        label: "Proof of useful work",
+        href: "/accounting/pouw",
+        icon: "pouw",
         description:
-          "What a node's traffic can carry beyond the committed computation's output, in its content and its timing, against what its links could carry.",
-        children: [
-          {
-            label: "Network certification",
-            href: "/accounting/network/certification",
-            icon: "certification",
-            description:
-              "The auditor's device on each uplink: constant-rate release on a fixed grid, signed records, and the bound on what frame timing can carry.",
-          },
-        ],
+          "Each tile computed under noise from a salt the prover couldn't predict, a work-weighted sample proved in zero knowledge, and the lower bound on work an accept gives; and Dither, for int8 products.",
       },
       {
-        label: "Memory accounting",
-        href: "/accounting/memory",
-        icon: "memory",
+        label: "Proof of useful space",
+        href: "/accounting/pous",
+        icon: "pous",
         description:
-          "The headroom proofs of useful space and bandwidth leave: the memory a server has beyond what an audit certifies it held, and the reads beyond what it certifies it made.",
-        children: [
-          {
-            label: "Proof of useful space",
-            href: "/accounting/memory/pous",
-            icon: "pous",
-            description:
-              "The weights kept only as a slow-to-encode, fast-to-decode encoding, timed challenges for random blocks, and the lower bound on held state an accept gives.",
-          },
-          {
-            label: "Proof of useful bandwidth",
-            href: "/accounting/memory/poub",
-            icon: "poub",
-            description:
-              "A registered store read in chained passes, receipts drawn and opened after each window's roots, and the lower bound on a node's reads an accept gives.",
-          },
-        ],
+          "The weights kept only as a slow-to-encode, fast-to-decode encoding, timed challenges for random blocks, and the lower bound on held state an accept gives.",
+      },
+      {
+        label: "Proof of useful bandwidth",
+        href: "/accounting/poub",
+        icon: "poub",
+        description:
+          "A registered store read in chained passes, receipts drawn and opened after each window's roots, and the lower bound on a node's reads an accept gives.",
+      },
+      {
+        label: "Network certification",
+        href: "/accounting/network-certification",
+        icon: "certification",
+        description:
+          "The auditor's device on each uplink: constant-rate release on a fixed grid, signed records, and the bound on what frame timing can carry.",
       },
     ],
   },
   {
     label: "Workload classification",
+    icon: "classification",
     nodes: [{ label: "Inference vs. training", href: "/workload-classification/inference-vs-training", icon: "inference" }],
   },
   {
     label: "Integrations",
+    icon: "integrations",
     nodes: [
       {
         label: "vLLM",

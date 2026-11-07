@@ -1,4 +1,4 @@
-The network certifier fixes when a node's frames leave. It is a device of the auditor's on each uplink: it releases exactly $r$ frames of $B$ bytes in every bucket, real frames first, and signs a record of each window. The check accepts a window only if its record is the grid the Program schedules, so a covert sender's only say over timing is the clock sync each window declares. This page states the protocol and the bound an accept gives in the certifier's model; whether a real link meets that model, and what the bound leaves of a link's capacity, is [network accounting](/accounting/network)'s.
+The network certifier fixes when a node's frames leave. It is a device of the auditor's on each uplink: it releases exactly $r$ frames of $B$ bytes in every bucket, real frames first, and signs a record of each window. The check accepts a window only if its record is the grid the Program schedules, so a covert sender's only say over timing is the clock sync each window declares. This page states the protocol and the bound an accept gives in the certifier's model; whether a real link meets that model, and what the bound leaves of a link's capacity, is on [datacenters](/accounting/physical/datacenters).
 
 ## Interface
 
@@ -81,7 +81,7 @@ Certificates are witness. In the protocols the developer is to prove in zero kno
 
 ### The model
 
-The bound is stated about what the wire carries, and takes two facts about the device as its model: everything the certifier puts on the wire is a function of its record (*regeneration*, W2), and each bucket's timing falls in one of $D$ classes (*bounded jitter*, J). Whether a physical certifier meets them is a question about hardware, taken up on [network accounting](/accounting/network#physical-assumptions). The certifier's own rules (frames of $B$ bytes, left-packed rows, an untimed status, fail-closed faults) are enforced by its code.
+The bound is stated about what the wire carries, and takes two facts about the device as its model: everything the certifier puts on the wire is a function of its record (*regeneration*, W2), and each bucket's timing falls in one of $D$ classes (*bounded jitter*, J). Whether a physical certifier meets them is a question about hardware, taken up on [datacenters](/accounting/physical/datacenters#physical-assumptions). The certifier's own rules (frames of $B$ bytes, left-packed rows, an untimed status, fail-closed faults) are enforced by its code.
 
 ### Assumptions
 
@@ -121,3 +121,9 @@ The theorem is about accepted runs of the model. Two more connect it to the chec
 | Ingress, at $r_{\mathrm{in}} = 34$ | 3,077.6 bits per transfer block | 4.4 Mbit per link |
 
 The content advice is not yet reported: today the schedule is the workload manifest's arrival steps, which $A_c$ doesn't bound.
+
+## Status
+
+- **Proved:** the timing bounds, under W2 and J, for any number of links sharing one sync.
+- **Proved, under the trusted host (`DeviceIntact`), for one link pair:** that an accepted run of the check's code is an accepted run of the model, or exhibits a SHA-512 collision or a certificate the certifier didn't sign in its challenger-generated session, which is an LMS forgery; and that an honest certifier's output passes. A spatial unit of several certifiers sharing a clock isn't stated yet.
+- **Open:** declaring the content advice; and proving the check in zero knowledge, which a stand-in verifier does in the clear today.

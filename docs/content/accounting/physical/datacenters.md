@@ -1,9 +1,9 @@
-Network accounting bounds what a node's traffic can carry out beyond the committed computation's output. A node can say something in two ways, in what its frames contain and in when they leave, and each has its own protocol:
+A datacenter's links carry what its nodes send, and network accounting bounds what a node's traffic can carry out beyond the committed computation's output. A node can say something in two ways, in what its frames contain and in when they leave, and each has its own protocol:
 
 - **Content.** What leaves must be the delivered output of the committed circuit, so only incorrect proof blocks can add to it: sampling's [exfiltration bound](/proof-systems/sampling#exfiltration) charges them their output bits.
-- **Timing.** In [network certification](/accounting/network/certification), the auditor's network certifier on each uplink releases a constant number of frames per bucket on the grid the Program fixes, so the only timing freedom left is one clock sync per window.
+- **Timing.** In [network certification](/accounting/network-certification), the auditor's network certifier on each uplink releases a constant number of frames per bucket on the grid the Program fixes, so the only timing freedom left is one clock sync per window.
 
-Both bounds are proved in a model. This page says what has to be true of a deployment's hardware for the model to describe it, and what the bounds leave of the wire's capacity. Network accounting is used by the [onsite](/protocols/onsite) protocol, whose certifiers sit at the developer's site.
+Both bounds are proved in a model. This page says what has to be true of a deployment's links and devices for the model to describe it, and what the bounds leave of the wire's capacity. The [onsite](/protocols/onsite) protocol uses them, with its certifiers at the developer's site.
 
 ## Headroom
 
@@ -13,7 +13,7 @@ $$
 \underbrace{A_c + W \log_2 \lvert\Sigma_{\mathrm{sync}}\rvert + WT \log_2 D}_{\text{timing, over } W \text{ windows}} \;+\; \underbrace{b}_{\text{content}}
 $$
 
-The timing term is the certifier's [bound](/accounting/network/certification#timing-bound), and the content term is sampling's [exfiltration bound](/proof-systems/sampling#exfiltration). The two are separate theorems over different models, added here as a budget, not as one statement. The headroom is the gap between the wire's capacity and this: at the deployed calibration, a link carries about $3.3 \times 10^{10}$ bits a window, of which an accepted run's timing can say 7.
+The timing term is the certifier's [bound](/accounting/network-certification#timing-bound), and the content term is sampling's [exfiltration bound](/proof-systems/sampling#exfiltration). The two are separate theorems over different models, added here as a budget, not as one statement. The headroom is the gap between the wire's capacity and this: at the deployed calibration, a link carries about $3.3 \times 10^{10}$ bits a window, of which an accepted run's timing can say 7.
 
 ## Physical assumptions
 
@@ -37,10 +37,3 @@ The certifier enforces its own rules in code (frames of $B$ bytes, left-packed r
 | Ingress, $r_{\mathrm{in}} = 34$ | 11.1 Mbit/s | 3,077.6 bits per window |
 
 The content advice $A_c$ is not yet reported, so today's runs leave it unbounded; with eight registered capacity profiles fixed per audit it would be 3 bits.
-
-## Status
-
-- **Proved:** the timing bounds, under W2 and J, for any number of links sharing one sync.
-- **Proved, under the trusted host (`DeviceIntact`), for one link pair:** that an accepted run of the check's code is an accepted run of the model, or exhibits a SHA-512 collision or a certificate the certifier didn't sign in its challenger-generated session, which is an LMS forgery; and that an honest certifier's output passes. A spatial unit of several certifiers sharing a clock isn't stated yet.
-- **Conditional:** the exfiltration bound, on the proof system's knowledge soundness and binding.
-- **Open:** declaring the content advice; and proving the check in zero knowledge, which a stand-in verifier does in the clear today.

@@ -71,7 +71,7 @@ Verity asks three more things of every construction. Zero knowledge holds agains
 | Method | Flock |
 | --- | --- |
 | `commit` | SHA-512 Merkle trees over hiding leaves, `frame-v3-sha512/hm96-sha512` |
-| `prove`, `verify` | Flock: block R1CS with a Ligerito polynomial commitment over $\mathrm{GF}(2^{128})$, on the challenger's live coins, with a [zero-knowledge mode](/proof-systems/zero-knowledge/veil) for the outer proofs |
+| `prove`, `verify` | Flock: block R1CS with a Ligerito polynomial commitment over $\mathrm{GF}(2^{128})$, on the challenger's live coins, with a [zero-knowledge mode](/proof-systems/zero-knowledge) for the outer proofs |
 | `verify` as a circuit | Its verifier as public Boolean circuits, proved by the outer sessions ([the verifier as a circuit](/proof-systems/recursion#the-verifier-as-a-circuit)) |
 
 Its verifier is written in Lean, with upstream Flock's Rust verifier as a cross-check ([verification phase](/proof-systems/basic-proofs/flock#verification-phase)). Its page bounds $\varepsilon_{\mathrm{ks}}$ and $\varepsilon_{\mathrm{bind}}$ by the success of SHA-512 collision finders built from the prover ([integrity](/proof-systems/basic-proofs/flock#integrity)), and says how far Lean proves each property.

@@ -1,4 +1,4 @@
-Proof of useful space (PoUS) bounds from below how much of an encoding of the committed weights a server holds. The server keeps the weights $W$ only as an encoding $C$, slow to build and fast to decode, and a memory challenger asks for random blocks of $C$ one at a time, each due within a deadline too short to rebuild a block the server doesn't hold. An accept certifies that the server held more than $S = \lfloor \tfrac{18}{19}\lvert C\rvert \rfloor$ bits at some point between setup and the session's last round: a server that keeps at most $S$ bits throughout fails. This page states the protocol and that bound; where those bits sit, and what they leave of a device's memory, is [memory accounting](/accounting/memory)'s.
+Proof of useful space (PoUS) bounds from below how much of an encoding of the committed weights a server holds. The server keeps the weights $W$ only as an encoding $C$, slow to build and fast to decode, and a memory challenger asks for random blocks of $C$ one at a time, each due within a deadline too short to rebuild a block the server doesn't hold. An accept certifies that the server held more than $S = \lfloor \tfrac{18}{19}\lvert C\rvert \rfloor$ bits at some point between setup and the session's last round: a server that keeps at most $S$ bits throughout fails. This page states the protocol and that bound; where those bits sit, and what they leave of a device's memory, is on [accelerators](/accounting/physical/accelerators#memory-headroom) and [servers](/accounting/physical/servers#the-servers-whole-state).
 
 ## Interface
 
@@ -74,7 +74,7 @@ The session passes when its signature verifies under a trusted key and names thi
 
 ### The model
 
-The bound is stated in a ring model. A server keeps at most $S$ bits between setup, the session and each round, with unbounded preprocessing. Each answer is computed in at most $D$ sequential rounds that contain a multiplication modulo $p$, $Q$ key queries and $L$ ring operations; all other local computation is free. Whether a real responder fits $D$ within the deadline is a question about hardware, taken up on [memory accounting](/accounting/memory#physical-assumptions).
+The bound is stated in a ring model. A server keeps at most $S$ bits between setup, the session and each round, with unbounded preprocessing. Each answer is computed in at most $D$ sequential rounds that contain a multiplication modulo $p$, $Q$ key queries and $L$ ring operations; all other local computation is free. Whether a real responder fits $D$ within the deadline is a question about hardware, taken up on [servers](/accounting/physical/servers#memory-assumptions).
 
 ### Assumptions
 
@@ -117,3 +117,10 @@ The bound is about the ring game; four claims, outside the theorem, tie it to th
 | Storage | $C$ with its public parameters at most $1.05\,\lvert W\rvert$ |
 
 An earlier scheme, band-chain over a permutation $\Pi_2$, is still the registry's default; its guarantees hold only for an ideal $\Pi_2$, and at the concrete one a red team rebuilt any block from 1.53% of $C$ in about 24 µs.
+
+## Status
+
+- **Proved, in review ([#1790](https://github.com/danielreuter/verity/pull/1790)):** the space bound at the deployed point, from `P2RingAuditSecure` and the coins' hiding; completeness; that the conjecture fails from two roots' depth.
+- **Proved, on main:** the abstract rows the bound rests on, for every store size from $2^8$ to $2^{23}$ blocks.
+- **Conjectured:** that the ring game is hard (`P2RingAuditSecure`), and that P2 as deployed is no easier than the ring game (the instantiation claim).
+- **Open:** binding each audit's session id into the check, after [#1815](https://github.com/danielreuter/verity/pull/1815)'s binding to the setup's root; the composed check of a run, in review in [#1814](https://github.com/danielreuter/verity/pull/1814), whose setup half is unproved; a store that fills the card; and the time-averaged audit for P2.

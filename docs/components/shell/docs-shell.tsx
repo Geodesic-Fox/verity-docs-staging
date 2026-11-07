@@ -7,23 +7,27 @@ import { usePathname } from "next/navigation"
 import {
   BadgeCheck,
   Binary,
+  Blocks,
   Building2,
+  Calculator,
   ChevronRight,
-  Cpu,
   Dices,
   EyeOff,
   FileCheck,
   Gauge,
-  HardDrive,
   Globe,
+  HardDrive,
   Layers,
   LayoutGrid,
-  MemoryStick,
-  Network,
+  Microchip,
   Pickaxe,
   Repeat,
+  Ruler,
   Scale,
-  VenetianMask,
+  Server,
+  ShieldCheck,
+  Tags,
+  Warehouse,
 } from "lucide-react"
 
 import { BoundaryMark } from "@/components/boundary-mark"
@@ -40,16 +44,17 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
-import { tree, treePages, type TreeIcon, type TreeNode } from "@/lib/tree"
+import { tree, treePages, type TreeIcon, type TreeNode, type TreeSection } from "@/lib/tree"
 import { cn } from "@/lib/utils"
 
 /*
  * The Vercel-dashboard shell: a fixed, full-height sidebar and a top bar with
- * breadcrumbs. The sidebar is one list of the tree's pages, each section under
- * its heading. Every row has an icon; none is bold. A page with constructions
- * beneath it has a chevron button beside its link, each with its own hover.
- * They start shown, and each chevron shows or hides its own until the reader
- * toggles it again; the link opens the page and shows them.
+ * breadcrumbs. The sidebar is one list: the top pages, then each section as a
+ * group whose whole row opens and closes it. Every row has an icon; none is
+ * bold. A page with pages beneath it has a chevron button beside its link,
+ * each with its own hover. Everything starts open, and each group or chevron
+ * shows or hides its own until the reader toggles it again; a page's link
+ * opens the page and shows what is beneath it.
  */
 
 const icons: Record<TreeIcon, ComponentType<SVGAttributes<SVGSVGElement>>> = {
@@ -57,20 +62,24 @@ const icons: Record<TreeIcon, ComponentType<SVGAttributes<SVGSVGElement>>> = {
   architecture: Layers,
   remote: Globe,
   onsite: Building2,
+  "proof-systems": ShieldCheck,
   "basic-proofs": FileCheck,
+  flock: Binary,
   sampling: Dices,
   "zero-knowledge": EyeOff,
   recursion: Repeat,
-  compute: Cpu,
-  network: Network,
-  memory: MemoryStick,
-  inference: Scale,
-  flock: Binary,
-  veil: VenetianMask,
+  accounting: Calculator,
+  physical: Ruler,
+  accelerators: Microchip,
+  servers: Server,
+  datacenters: Warehouse,
   pouw: Pickaxe,
   pous: HardDrive,
   poub: Gauge,
   certification: BadgeCheck,
+  classification: Tags,
+  inference: Scale,
+  integrations: Blocks,
   vllm: VllmIcon,
 }
 
@@ -82,6 +91,9 @@ function breadcrumbs(pathname: string): string[] {
 const rowClass =
   "flex h-9 w-full min-w-0 items-center rounded-[6px] text-sm font-medium tracking-(--sidebar-label-tracking) text-sidebar-muted outline-hidden ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 data-active:bg-sidebar-active data-active:text-sidebar-accent-foreground"
 
+// Each level's icon sits under the label of the level above it.
+const indent = ["pl-0.5", "pl-7", "pl-[54px]"]
+
 function Row({ node, pathname, depth = 0 }: { node: TreeNode; pathname: string; depth?: number }) {
   const Icon = node.icon ? icons[node.icon] : null
   const children = (node.children ?? []).filter((child) => !child.hidden)
@@ -91,7 +103,7 @@ function Row({ node, pathname, depth = 0 }: { node: TreeNode; pathname: string; 
     <li>
       <div className="flex gap-0.5">
         <Link
-          className={cn(rowClass, "flex-1", depth ? "pl-7" : "pl-0.5")}
+          className={cn(rowClass, "flex-1", indent[depth])}
           data-active={pathname === node.href ? "" : undefined}
           href={node.href ?? "/"}
           onClick={() => setToggled(true)}
@@ -124,10 +136,27 @@ function Row({ node, pathname, depth = 0 }: { node: TreeNode; pathname: string; 
   )
 }
 
-function Heading({ children }: { children: ReactNode }) {
+function Group({ section, pathname }: { section: TreeSection; pathname: string }) {
+  const Icon = section.icon ? icons[section.icon] : null
+  const [open, setOpen] = useState(true)
   return (
-    <li className="h-[30px] px-2 pt-3 pb-0.5 text-xs leading-4 font-medium tracking-wider text-[hsla(0,0%,49%,1)] uppercase">
-      {children}
+    <li>
+      <button aria-expanded={open} className={cn(rowClass, indent[0])} onClick={() => setOpen(!open)} type="button">
+        <span className="grid size-9 flex-none place-content-center">
+          {Icon ? <Icon aria-hidden className="size-4" /> : null}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-left">{section.label}</span>
+        <span className="mr-1.5 grid size-6 flex-none place-content-center">
+          <ChevronRight aria-hidden className={cn("size-3 transition-transform duration-150", open ? "rotate-90" : null)} />
+        </span>
+      </button>
+      {open ? (
+        <ul className="mt-(--sidebar-row-gap) flex flex-col gap-(--sidebar-row-gap)">
+          {section.nodes.map((node) => (
+            <Row depth={1} key={node.href ?? node.label} node={node} pathname={pathname} />
+          ))}
+        </ul>
+      ) : null}
     </li>
   )
 }
@@ -180,10 +209,11 @@ export function DocsShell({
               <ul className="flex flex-col gap-(--sidebar-row-gap)">
                 {tree.map((section, i) => (
                   <Fragment key={section.label ?? i}>
-                    {section.label ? <Heading>{section.label}</Heading> : null}
-                    {section.nodes.map((node) => (
-                      <Row key={node.href ?? node.label} node={node} pathname={pathname} />
-                    ))}
+                    {section.label ? (
+                      <Group pathname={pathname} section={section} />
+                    ) : (
+                      section.nodes.map((node) => <Row key={node.href ?? node.label} node={node} pathname={pathname} />)
+                    )}
                   </Fragment>
                 ))}
               </ul>

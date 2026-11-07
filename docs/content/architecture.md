@@ -11,7 +11,7 @@ The auditor never runs any part of the developer's computation. It only checks p
 The [onsite](/protocols/onsite) protocol adds devices of the auditor's at the developer's site, each on a machine the developer doesn't control. They sit where their guarantees need them:
 
 - **A network certifier on every uplink of every node.** The machines behind the certifiers form a *spatial unit*, whose boundary they watch. Ingress links are certified the same way as egress.
-- **A memory challenger beside each node's network certifier**, inside the node's isolation boundary, close enough that an answer's round trip fits within the deadline's allowance: the deadline plus allowance must stay at most 854 µs ([memory accounting](/accounting/memory#physical-assumptions)).
+- **A memory challenger beside each node's network certifier**, inside the node's isolation boundary, close enough that an answer's round trip fits within the deadline's allowance: the deadline plus allowance must stay at most 854 µs ([servers](/accounting/physical/servers#memory-assumptions)).
 - **The challenger and the verifier stay with the auditor**, and the workers and the ZK server with the developer.
 
 ## Proof systems
@@ -24,10 +24,10 @@ Resource accounting bounds how much of a deployment's compute, memory, memory ba
 
 | Resource | Cryptographic layer | Physical layer | Used by |
 | --- | --- | --- | --- |
-| [Compute](/accounting/compute) | [Proof of useful work](/accounting/compute/pouw): the work spent after a salt | The device's peak rate over the audit's window | Remote, Onsite |
-| [Memory](/accounting/memory) | [Proof of useful space](/accounting/memory/pous): the bits held at each challenge | The device's memory | Onsite |
-| [Memory bandwidth](/accounting/memory#bandwidth) | [Proof of useful bandwidth](/accounting/memory/poub): the reads of a registered store in each window | The node's read bandwidth over HBM and host DRAM | Onsite |
-| [Network](/accounting/network) | [Network certification](/accounting/network/certification) and sampling's [exfiltration bound](/proof-systems/sampling#exfiltration): the most a run can say beyond its output | The links' line rate | Onsite |
+| Compute | [Proof of useful work](/accounting/pouw): the work spent after a salt | [Accelerators](/accounting/physical/accelerators#compute-headroom): the peak rate over the audit's window | Remote, Onsite |
+| Memory | [Proof of useful space](/accounting/pous): the bits held at each challenge | [Accelerators](/accounting/physical/accelerators#memory-headroom) and [servers](/accounting/physical/servers#the-servers-whole-state): the device's memory and the server's whole state | Onsite |
+| Memory bandwidth | [Proof of useful bandwidth](/accounting/poub): the reads of a registered store in each window | [Servers](/accounting/physical/servers#bandwidth-headroom): the node's read bandwidth over HBM and host DRAM | Onsite |
+| Network | [Network certification](/accounting/network-certification) and sampling's [exfiltration bound](/proof-systems/sampling#exfiltration): the most a run can say beyond its output | [Datacenters](/accounting/physical/datacenters): the links' line rate | Onsite |
 
 ## Composition
 
