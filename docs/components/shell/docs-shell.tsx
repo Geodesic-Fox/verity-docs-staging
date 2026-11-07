@@ -13,6 +13,7 @@ import {
   Dices,
   EyeOff,
   FileCheck,
+  Gauge,
   HardDrive,
   Globe,
   Layers,
@@ -68,6 +69,7 @@ const icons: Record<TreeIcon, ComponentType<SVGAttributes<SVGSVGElement>>> = {
   veil: VenetianMask,
   pouw: Pickaxe,
   pous: HardDrive,
+  poub: Gauge,
   certification: BadgeCheck,
   vllm: VllmIcon,
 }

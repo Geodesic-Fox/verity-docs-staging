@@ -1,4 +1,4 @@
-Memory accounting bounds how much of a device's memory could hold something other than the committed weights. It has two layers. The cryptographic one, [proof of useful space](/accounting/memory/pous), secures a lower bound: a server that keeps at most $S_{\mathrm{cert}} = \lfloor \tfrac{18}{19}\lvert C\rvert \rfloor$ bits throughout setup and the session fails, where $C$ is an encoding of the weights it serves from. The physical one, this page, takes an upper bound on the memory the device has, and the headroom is the difference. Memory accounting is used by the [onsite](/protocols/onsite) protocol, whose memory challengers sit at the developer's site.
+Memory accounting bounds how much of a device's memory could hold something other than the committed weights. It has two layers. The cryptographic one, [proof of useful space](/accounting/memory/pous), secures a lower bound: a server that keeps at most $S_{\mathrm{cert}} = \lfloor \tfrac{18}{19}\lvert C\rvert \rfloor$ bits throughout setup and the session fails, where $C$ is an encoding of the weights it serves from. The physical one, this page, takes an upper bound on the memory the device has, and the headroom is the difference. Memory bandwidth has the same two layers: [proof of useful bandwidth](/accounting/memory/poub) secures a lower bound on a node's reads of a registered store, and the node's read capacity is the upper bound ([below](#bandwidth)). Memory accounting is used by the [onsite](/protocols/onsite) protocol, whose memory challengers sit at the developer's site.
 
 ## Headroom
 
@@ -13,7 +13,17 @@ left for anything else at some point of the session, except with probability $\d
 - **Uncommitted memory**, $M - \lvert C\rvert$: what the store doesn't cover. Today the store is fixed at $2^{19}$ blocks, 1.078 GB, so on a 102 GB card nearly all of it is here. A larger store would close it, at the cost of setup: more roots to compute.
 - **Soundness slack**, $(1 - \rho)\lvert C\rvert$: what the bound concedes, $1/19$ of the store.
 
-The bound is on the server's whole state, host memory included. It doesn't say where $C$ sits: placing it in device memory is memory bandwidth accounting's job.
+The bound is on the server's whole state, host memory included. It doesn't say where $C$ sits: that it is read from device memory while serving is [proof of useful bandwidth](/accounting/memory/poub#on-pouss-store)'s, which onsite runs over the same store.
+
+## Bandwidth
+
+Over a session of span $\Sigma$, a node of read capacity $R$, its GPUs' HBM plus its host's DRAM, that passes proof of useful bandwidth made at most
+
+$$
+\underbrace{R\Sigma}_{\text{capacity, physical}} \;-\; \underbrace{(1 - \gamma) R\Sigma}_{\text{certified, cryptographic}} \;=\; \gamma R \Sigma
+$$
+
+reads of anything else, and each window alone at most $\gamma_t$ of its own span's. $R$ is the verifier's, reported twice: against the node's specified bandwidth, 13.60 TB/s, the headline, and its measured one, 12.92 TB/s, which every reading below uses. At the measured $R$ the worst window's $\gamma_t$ is under 1% with the store over every tier, and at the specified $R$ it is 5.82–5.85%, nearly all of it the gap between the two. The terms of $\gamma$ are on [proof of useful bandwidth](/accounting/memory/poub#bandwidth-bound).
 
 ## Physical assumptions
 
@@ -44,4 +54,5 @@ P2 can't decode at device-memory rate, about 30× short, and a narrower block th
 - **Proved, in review ([#1790](https://github.com/danielreuter/verity/pull/1790)):** the space bound at the deployed point, from `P2RingAuditSecure` and the coins' hiding; completeness; that the conjecture fails from two roots' depth.
 - **Proved, on main:** the abstract rows the bound rests on, for every store size from $2^8$ to $2^{23}$ blocks.
 - **Conjectured:** that the ring game is hard (`P2RingAuditSecure`), and that P2 as deployed is no easier than the ring game (the instantiation claim).
+- **Bandwidth:** proof of useful bandwidth's conservation bound is proved at its per-pass routes and conditional on the gap `binding-split`; its openings and plans are in the clear until the proof service proves them in zero knowledge.
 - **Open:** binding each audit's session id into the check, after [#1815](https://github.com/danielreuter/verity/pull/1815)'s binding to the setup's root; the composed check of a run, in review in [#1814](https://github.com/danielreuter/verity/pull/1814), whose setup half is unproved; a store that fills the card; and the time-averaged audit for P2.

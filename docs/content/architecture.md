@@ -26,7 +26,7 @@ Resource accounting bounds how much of a deployment's compute, memory, memory ba
 | --- | --- | --- | --- |
 | [Compute](/accounting/compute) | [Proof of useful work](/accounting/compute/pouw): the work spent after a salt | The device's peak rate over the audit's window | Remote, Onsite |
 | [Memory](/accounting/memory) | [Proof of useful space](/accounting/memory/pous): the bits held at each challenge | The device's memory | Onsite |
-| Memory bandwidth | Bandwidth audit: the bytes read from device memory in a window | The memory interface's peak bandwidth | Proposed |
+| [Memory bandwidth](/accounting/memory#bandwidth) | [Proof of useful bandwidth](/accounting/memory/poub): the reads of a registered store in each window | The node's read bandwidth over HBM and host DRAM | Onsite |
 | [Network](/accounting/network) | [Network certification](/accounting/network/certification) and sampling's [exfiltration bound](/proof-systems/sampling#exfiltration): the most a run can say beyond its output | The links' line rate | Onsite |
 
 ## Composition

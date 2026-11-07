@@ -38,6 +38,7 @@ export type TreeIcon =
   | "veil"
   | "pouw"
   | "pous"
+  | "poub"
   | "certification"
   | "vllm"
 
@@ -166,7 +167,7 @@ export const tree: TreeSection[] = [
         href: "/accounting/memory",
         icon: "memory",
         description:
-          "The headroom proof of useful space leaves: the memory a server has beyond the encoding of the weights an audit certifies it held.",
+          "The headroom proofs of useful space and bandwidth leave: the memory a server has beyond what an audit certifies it held, and the reads beyond what it certifies it made.",
         children: [
           {
             label: "Proof of useful space",
@@ -174,6 +175,13 @@ export const tree: TreeSection[] = [
             icon: "pous",
             description:
               "The weights kept only as a slow-to-encode, fast-to-decode encoding, timed challenges for random blocks, and the lower bound on held state an accept gives.",
+          },
+          {
+            label: "Proof of useful bandwidth",
+            href: "/accounting/memory/poub",
+            icon: "poub",
+            description:
+              "A registered store read in chained passes, receipts drawn and opened after each window's roots, and the lower bound on a node's reads an accept gives.",
           },
         ],
       },
