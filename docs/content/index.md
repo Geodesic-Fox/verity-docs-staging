@@ -5,7 +5,7 @@ Verity is a system for verifying how AI datacenters are used. It aims for securi
 
 Verity has two protocols, remote and onsite, which differ in one thing: whether the auditor has hardware at the developer's site. [Architecture](/architecture) shows the components they're built from.
 
-## Where to start
+## Where to start!!!
 
 - **What an accept means**, and who has to trust what: [Architecture](/architecture), then [Remote](/protocols/remote) and [Onsite](/protocols/onsite).
 - **The vocabulary every page shares**, such as proof blocks, boundary gates and incorrect proof blocks: Circuit declaration.
